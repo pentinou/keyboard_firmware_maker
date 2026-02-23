@@ -28,9 +28,8 @@ from PySide6.QtWidgets import (
 
 logger = logging.getLogger(__name__)
 
-# Version SHA verrouillée de Vial-QMK (NFR15)
-# TODO: remplacer par le SHA officiel vial-qmk lors du déploiement en production
-VIAL_QMK_SHA = "b0ec5a8e9f1c2d3a4b5c6d7e8f9a0b1c2d3e4f5a"
+# Version SHA verrouillée de Vial-QMK (NFR15) — branche vial @ 2026-02-22
+VIAL_QMK_SHA = "72fb6f1fed4de5fc4ac9ecda1952f5d126388d48"
 VIAL_QMK_URL = f"https://github.com/vial-kb/vial-qmk/archive/{VIAL_QMK_SHA}.zip"
 
 CACHE_DIR = Path.home() / ".keyboard_firmware_maker"
