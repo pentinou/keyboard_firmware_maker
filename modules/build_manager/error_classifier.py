@@ -107,6 +107,30 @@ _ERROR_PATTERNS: list[tuple[re.Pattern, str, str, str]] = [
         "Ce problème a été corrigé : RGB_MATRIX_DRIVER = WS2812 est maintenant défini.\n"
         "Regénérez le firmware depuis l'application.",
     ),
+    (
+        re.compile(r"RGB_DI_PIN.*no longer a valid option", re.IGNORECASE),
+        "rgb_di_pin_deprecated",
+        "RGB_DI_PIN dans config.h est obsolète (remplacé par WS2812_DI_PIN).",
+        "Ce problème a été corrigé dans les templates.\n"
+        "Regénérez le firmware depuis l'application.",
+    ),
+    (
+        re.compile(
+            r"rgb_matrix\.driver.*is not one of|Invalid API data.*rgb_matrix",
+            re.IGNORECASE,
+        ),
+        "rgb_matrix_driver_case",
+        "Valeur RGB_MATRIX_DRIVER invalide (casse incorrecte ou driver inconnu).",
+        "Ce problème a été corrigé : le driver 'ws2812' est maintenant en minuscules.\n"
+        "Regénérez le firmware depuis l'application.",
+    ),
+    (
+        re.compile(r"Platform not defined", re.IGNORECASE),
+        "platform_not_defined",
+        "Plateforme microcontrôleur non reconnue par QMK.",
+        "Vérifiez que le MCU (ex: RP2040) est correctement défini dans rules.mk.\n"
+        "Si l'erreur persiste après regénération, vérifiez les erreurs API ci-dessus.",
+    ),
 ]
 
 _GENERIC_MESSAGE = "La compilation a échoué."

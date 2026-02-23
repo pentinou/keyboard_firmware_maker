@@ -14,9 +14,9 @@
 #define RGB_MATRIX_LED_COUNT {{ leds_per_half * 2 }}
 #define RGB_MATRIX_SPLIT     { {{ leds_per_half }}, {{ leds_per_half }} }
 {% if mcu == "rp2040" %}
-#define RGB_DI_PIN GP6
+#define WS2812_DI_PIN GP6
 {% else %}
-#define RGB_DI_PIN D3
+#define WS2812_DI_PIN D3
 {% endif %}
 #define RGB_MATRIX_MAXIMUM_BRIGHTNESS 200
 #define RGB_MATRIX_STARTUP_MODE       RGB_MATRIX_SOLID_COLOR
