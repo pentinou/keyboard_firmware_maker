@@ -1,0 +1,16 @@
+model: test-kb
+display_name: "Test Keyboard"
+description: "Clavier de test minimal pour les tests unitaires."
+mcu_options:
+  - id: test_mcu
+    display_name: "Test MCU"
+    description: "MCU de test pour les tests unitaires."
+  - id: test_mcu_2
+    display_name: "Test MCU 2"
+    description: "Second MCU de test."
+capabilities:
+  oled: true
+  rgb: false
+matrix:
+  rows: 4
+  cols: 6

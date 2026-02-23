@@ -1,0 +1,19 @@
+model: corne
+display_name: "Corne (crkbd)"
+description: "Clavier split 40% compact à 42 touches avec colonnes décalées. Conçu par foostan. Idéal pour une utilisation minimaliste."
+mcu_options:
+  - id: pro_micro
+    display_name: "Pro Micro (ATmega32U4)"
+    description: "Microcontrôleur Arduino classique compatible QMK. 32 KB Flash, 2.5 KB RAM. Compatible avec la plupart des PCB Corne."
+  - id: elite_c
+    display_name: "Elite-C v4 (ATmega32U4)"
+    description: "Pro Micro amélioré avec connecteur USB-C et 5 pins supplémentaires. 32 KB Flash. Recommandé pour une utilisation durable."
+  - id: rp2040
+    display_name: "RP2040 (Nice!Nano v2 compatible)"
+    description: "Microcontrôleur RP2040 — plus de mémoire, plus rapide, compatible Vial-QMK. Requiert une version PCB supportant ce footprint."
+capabilities:
+  oled: true
+  rgb: false
+matrix:
+  rows: 4
+  cols: 6

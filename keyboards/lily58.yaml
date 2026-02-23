@@ -1,0 +1,19 @@
+model: lily58
+display_name: "Lily58"
+description: "Clavier split 60% à 58 touches avec colonnes décalées et touches pouces supplémentaires. Conçu par kata0510. Bonne transition depuis un clavier standard."
+mcu_options:
+  - id: pro_micro
+    display_name: "Pro Micro (ATmega32U4)"
+    description: "Microcontrôleur Arduino classique compatible QMK. 32 KB Flash, 2.5 KB RAM. Option la plus courante pour le Lily58."
+  - id: elite_c
+    display_name: "Elite-C v4 (ATmega32U4)"
+    description: "Pro Micro amélioré avec connecteur USB-C et 5 pins supplémentaires. 32 KB Flash. Recommandé pour une utilisation durable."
+  - id: rp2040
+    display_name: "RP2040 (Sea Picro / Pro Micro RP2040)"
+    description: "Microcontrôleur RP2040 — plus de mémoire, compatible Vial-QMK. Requiert une version PCB Pro compatible."
+capabilities:
+  oled: true
+  rgb: false
+matrix:
+  rows: 4
+  cols: 6

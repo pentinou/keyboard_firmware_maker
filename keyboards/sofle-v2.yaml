@@ -1,0 +1,17 @@
+model: sofle-v2
+display_name: "Sofle v2.1 RGB"
+description: "Clavier split 60% avec encodeurs rotatifs, afficheur OLED 128×64 et LEDs RGB addressables per-key. Conçu par Josef Adamcik."
+mcu_options:
+  - id: rp2040
+    display_name: "RP2040 (Sea Picro / Pro Micro RP2040)"
+    description: "Microcontrôleur dual-core ARM Cortex-M0+ à 133 MHz, 264 KB RAM, 2 MB Flash. Recommandé pour Vial-QMK avec support OLED et RGB complet."
+capabilities:
+  oled: true
+  rgb: true
+matrix:
+  rows: 5
+  cols: 6
+oled:
+  width: 64
+  height: 128
+  bits: 1

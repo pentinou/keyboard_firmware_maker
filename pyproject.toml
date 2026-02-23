@@ -1,0 +1,53 @@
+[project]
+name = "keyboard_firmware_maker"
+version = "0.1.0"
+description = "Desktop app to create and customize QMK/Vial-QMK firmware for split mechanical keyboards"
+authors = [{ name = "Pentinou" }]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "PySide6>=6.10.2",
+    "Pillow>=10.0",
+    "numpy>=1.26",
+    "jinja2>=3.1",
+    "pyinstaller>=6.0",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-qt>=4.0",
+    "ruff>=0.3",
+    "black>=24.0",
+]
+
+[project.scripts]
+keyboard-firmware-maker = "main:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tests*", "_bmad*", "_bmad-output*"]
+
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "modules"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v"

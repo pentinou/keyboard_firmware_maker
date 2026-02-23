@@ -1,0 +1,17 @@
+{
+    "name": "{{ keyboard_model }}",
+    "vendorId": "0xFEED",
+    "productId": "0x0001",
+    "matrix": {
+        "rows": {{ matrix_rows * 2 }},
+        "cols": {{ matrix_cols }}
+    },
+    "layouts": {
+        "keymap": [
+            {% for row in range(matrix_rows) %}
+            [{% for col in range(matrix_cols) %}{"matrix": [{{ row }}, {{ col }}], "x": {{ col }}, "y": {{ row }}}{% if not loop.last %}, {% endif %}{% endfor %}]{% if not loop.last %},{% endif %}
+
+            {% endfor %}
+        ]
+    }
+}

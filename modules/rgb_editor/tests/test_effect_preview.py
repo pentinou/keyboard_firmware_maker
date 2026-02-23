@@ -1,0 +1,207 @@
+"""Tests pytest-qt pour modules/rgb_editor/effect_preview.py — EffectPreview."""
+from __future__ import annotations
+
+import pytest
+from PySide6.QtWidgets import QPushButton
+
+from models.project_model import RgbEffect
+from modules.rgb_editor.effect_preview import EffectPreview
+
+
+@pytest.fixture
+def key_buttons(qtbot) -> dict[str, QPushButton]:
+    """Grille 3×3 pour les deux côtés (L/R), 18 boutons au total."""
+    buttons: dict[str, QPushButton] = {}
+    for side in ("L", "R"):
+        for r in range(3):
+            for c in range(3):
+                key_id = f"{side}_r{r}_c{c}"
+                btn = QPushButton()
+                qtbot.addWidget(btn)
+                buttons[key_id] = btn
+    return buttons
+
+
+@pytest.fixture
+def preview(key_buttons) -> EffectPreview:
+    return EffectPreview(key_buttons)
+
+
+# ─────────────────────────────────────────── Tests statique ──
+
+class TestEffectPreviewStatic:
+    def test_start_static_applies_colors(self, preview, key_buttons):
+        effect = RgbEffect(type="static", color_primary="#FF0000")
+        preview.start(effect)
+        for btn in key_buttons.values():
+            assert "#FF0000" in btn.styleSheet()
+
+    def test_start_static_timer_inactive(self, preview):
+        preview.start(RgbEffect(type="static"))
+        assert not preview.is_active()
+
+    def test_stop_clears_colors(self, preview, key_buttons):
+        preview.start(RgbEffect(type="static", color_primary="#FF0000"))
+        preview.stop()
+        for btn in key_buttons.values():
+            assert btn.styleSheet() == ""
+
+    def test_stop_timer_inactive(self, preview):
+        preview.start(RgbEffect(type="static"))
+        preview.stop()
+        assert not preview.is_active()
+
+    def test_update_static_changes_color(self, preview, key_buttons):
+        preview.start(RgbEffect(type="static", color_primary="#FF0000"))
+        preview.update(RgbEffect(type="static", color_primary="#0000FF"))
+        for btn in key_buttons.values():
+            assert "#0000FF" in btn.styleSheet()
+
+    def test_update_static_timer_stays_inactive(self, preview):
+        preview.start(RgbEffect(type="static"))
+        preview.update(RgbEffect(type="static", color_primary="#00FF00"))
+        assert not preview.is_active()
+
+
+# ─────────────────────────────────────────── Tests ripple ──
+
+class TestEffectPreviewRipple:
+    def test_start_ripple_timer_active(self, preview):
+        preview.start(RgbEffect(type="ripple"))
+        assert preview.is_active()
+        preview.stop()
+
+    def test_stop_ripple_timer_inactive(self, preview):
+        preview.start(RgbEffect(type="ripple"))
+        preview.stop()
+        assert not preview.is_active()
+
+    def test_stop_ripple_clears_colors(self, preview, key_buttons):
+        preview.start(RgbEffect(type="ripple"))
+        preview.stop()
+        for btn in key_buttons.values():
+            assert btn.styleSheet() == ""
+
+    def test_update_ripple_from_static_starts_timer(self, preview):
+        preview.start(RgbEffect(type="static"))
+        assert not preview.is_active()
+        preview.update(RgbEffect(type="ripple"))
+        assert preview.is_active()
+        preview.stop()
+
+    def test_update_ripple_keeps_timer_active(self, preview):
+        preview.start(RgbEffect(type="ripple"))
+        assert preview.is_active()
+        # update ne redémarre pas si déjà actif
+        preview.update(RgbEffect(type="ripple", color_primary="#00FF00"))
+        assert preview.is_active()
+        preview.stop()
+
+
+# ─────────────────────────────────────────── Tests _tick ──
+
+class TestEffectPreviewTick:
+    def test_tick_step0_colors_center_key(self, preview, key_buttons):
+        """Étape 0 : seule la touche centrale est colorée en primaire."""
+        effect = RgbEffect(type="ripple", color_primary="#FF0000")
+        preview._effect = effect
+        preview._center = ("L", 1, 1)
+        preview._step = 0
+        preview._tick()
+        assert "#FF0000" in key_buttons["L_r1_c1"].styleSheet()
+
+    def test_tick_step1_colors_center_and_neighbors(self, preview, key_buttons):
+        """Étape 1 : centre en primaire, voisins à distance 1 en secondaire."""
+        effect = RgbEffect(type="ripple", color_primary="#FF0000", color_secondary="#0000FF")
+        preview._effect = effect
+        preview._center = ("L", 1, 1)
+        preview._step = 1
+        preview._tick()
+        assert "#FF0000" in key_buttons["L_r1_c1"].styleSheet()
+        assert "#0000FF" in key_buttons["L_r0_c1"].styleSheet()
+        assert "#0000FF" in key_buttons["L_r1_c0"].styleSheet()
+        assert "#0000FF" in key_buttons["L_r2_c1"].styleSheet()
+        assert "#0000FF" in key_buttons["L_r1_c2"].styleSheet()
+
+    def test_tick_step2_colors_only_neighbors(self, preview, key_buttons):
+        """Étape 2 : seuls les voisins à distance 1 gardent la couleur secondaire."""
+        effect = RgbEffect(type="ripple", color_secondary="#0000FF")
+        preview._effect = effect
+        preview._center = ("L", 1, 1)
+        preview._step = 2
+        preview._tick()
+        assert "#0000FF" in key_buttons["L_r0_c1"].styleSheet()
+        # Le centre n'est pas recoloré (juste reset)
+        assert "#0000FF" not in key_buttons["L_r1_c1"].styleSheet()
+
+    def test_tick_increments_step(self, preview, key_buttons):
+        """_tick() doit incrémenter _step."""
+        effect = RgbEffect(type="ripple")
+        preview._effect = effect
+        preview._center = ("L", 1, 1)
+        preview._step = 0
+        preview._tick()
+        assert preview._step == 1
+
+    def test_distance_same_side(self, preview):
+        preview._center = ("L", 1, 1)
+        assert preview._distance("L_r0_c1") == 1
+        assert preview._distance("L_r1_c1") == 0
+        assert preview._distance("L_r2_c2") == 2
+
+    def test_distance_other_side_returns_999(self, preview):
+        preview._center = ("L", 1, 1)
+        assert preview._distance("R_r1_c1") == 999
+
+    def test_tick_step3_colors_new_center_immediately(self, preview, key_buttons):
+        """L3 — step 3 colore le nouveau centre (plus de frame vide de 200ms)."""
+        effect = RgbEffect(type="ripple", color_primary="#FF0000")
+        preview._effect = effect
+        preview._center = ("L", 1, 1)
+        preview._step = 3
+        # Force un centre prévisible
+        preview._pick_new_center = lambda: setattr(preview, "_center", ("R", 0, 0))
+        preview._tick()
+        assert "#FF0000" in key_buttons["R_r0_c0"].styleSheet()
+
+    def test_tick_step3_next_step_is_one(self, preview, key_buttons):
+        """L3 — après step 3, le prochain step est 1 (center + neighbors)."""
+        effect = RgbEffect(type="ripple")
+        preview._effect = effect
+        preview._center = ("L", 1, 1)
+        preview._step = 3
+        preview._tick()
+        assert preview._step == 1  # 0 (reset interne) + 1 (increment final)
+
+
+# ─────────────────────────────────────────── Tests robustesse ──
+
+class TestEffectPreviewRobustness:
+    def test_pick_new_center_ignores_malformed_key(self, qtbot):
+        """L1 — _pick_new_center ne plante pas sur un key_id malformé."""
+        btn = QPushButton()
+        qtbot.addWidget(btn)
+        preview = EffectPreview({"bad_key": btn})
+        preview._pick_new_center()  # ne doit pas lever d'exception
+        assert preview._center is None
+
+    def test_distance_returns_999_for_malformed_key(self, qtbot):
+        """L1 — _distance retourne 999 pour un key_id malformé."""
+        btn = QPushButton()
+        qtbot.addWidget(btn)
+        preview = EffectPreview({"bad_key": btn})
+        preview._center = ("L", 1, 1)
+        assert preview._distance("bad_key") == 999
+
+    def test_update_ripple_active_new_color_used_in_next_tick(self, preview, key_buttons):
+        """L4 — update() ripple actif : la nouvelle couleur est utilisée au prochain _tick()."""
+        preview.start(RgbEffect(type="ripple", color_primary="#FF0000"))
+        assert preview.is_active()
+        preview.update(RgbEffect(type="ripple", color_primary="#00FF00"))
+        # Forcer tick step 0 avec centre connu
+        preview._step = 0
+        preview._center = ("L", 1, 1)
+        preview._tick()
+        assert "#00FF00" in key_buttons["L_r1_c1"].styleSheet()
+        assert "#FF0000" not in key_buttons["L_r1_c1"].styleSheet()
+        preview.stop()
