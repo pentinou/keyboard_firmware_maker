@@ -67,6 +67,46 @@ _ERROR_PATTERNS: list[tuple[re.Pattern, str, str, str]] = [
         "Vérifiez les droits d'accès au répertoire de cache\n"
         "(~/.keyboard_firmware_maker/).",
     ),
+    (
+        re.compile(
+            r"VIAL_ENABLE in rules\.mk is no longer a valid option",
+            re.IGNORECASE,
+        ),
+        "vial_enable_deprecated",
+        "VIAL_ENABLE dans rules.mk n'est plus valide (Vial-QMK moderne).",
+        "Ce problème a été corrigé dans les templates.\n"
+        "Regénérez le firmware depuis l'application.",
+    ),
+    (
+        re.compile(
+            r"DESCRIPTION in config\.h is no longer a valid option",
+            re.IGNORECASE,
+        ),
+        "description_deprecated",
+        "DESCRIPTION dans config.h est obsolète (QMK moderne).",
+        "Ce problème a été corrigé dans les templates.\n"
+        "Regénérez le firmware depuis l'application.",
+    ),
+    (
+        re.compile(
+            r"No LAYOUTs defined|Need at least one layout defined in info\.json",
+            re.IGNORECASE,
+        ),
+        "no_layout_defined",
+        "Aucun layout défini dans info.json.",
+        "Ce problème a été corrigé : info.json est maintenant généré avec LAYOUT_sofle.\n"
+        "Regénérez le firmware depuis l'application.",
+    ),
+    (
+        re.compile(
+            r"Invalid RGB_MATRIX_DRIVER|RGB_MATRIX_DRIVER.*is not a valid matrix type",
+            re.IGNORECASE,
+        ),
+        "rgb_matrix_driver_invalid",
+        "RGB_MATRIX_DRIVER invalide ou manquant dans rules.mk.",
+        "Ce problème a été corrigé : RGB_MATRIX_DRIVER = WS2812 est maintenant défini.\n"
+        "Regénérez le firmware depuis l'application.",
+    ),
 ]
 
 _GENERIC_MESSAGE = "La compilation a échoué."

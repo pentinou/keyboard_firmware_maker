@@ -5,6 +5,8 @@
 MCU = {{ mcu | upper | replace("-", "_") }}
 BOOTLOADER = {{ bootloader }}
 
+SPLIT_KEYBOARD = yes
+
 {% if oled_enabled %}
 OLED_ENABLE = yes
 OLED_DRIVER = ssd1306
@@ -13,7 +15,7 @@ WPM_ENABLE = yes
 
 {% if rgb_enabled %}
 RGB_MATRIX_ENABLE = yes
+RGB_MATRIX_DRIVER = WS2812
 {% endif %}
 
-VIAL_ENABLE = yes
 LTO_ENABLE = yes

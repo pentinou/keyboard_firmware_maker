@@ -8,10 +8,13 @@
     },
     "layouts": {
         "keymap": [
-            {% for row in range(matrix_rows) %}
-            [{% for col in range(matrix_cols) %}{"matrix": [{{ row }}, {{ col }}], "x": {{ col }}, "y": {{ row }}}{% if not loop.last %}, {% endif %}{% endfor %}]{% if not loop.last %},{% endif %}
+            {% set half = matrix_rows - 1 %}
+            {% set gap = matrix_cols + 1 %}
+            {% for row in range(half) %}
+            [{% for col in range(matrix_cols) %}{"matrix": [{{ row }}, {{ col }}], "x": {{ col }}, "y": {{ row }}}{% if not loop.last %}, {% endif %}{% endfor %}, {% for col in range(matrix_cols) %}{"matrix": [{{ row + matrix_rows }}, {{ col }}], "x": {{ col + gap }}, "y": {{ row }}}{% if not loop.last %}, {% endif %}{% endfor %}]{% if not loop.last %},{% endif %}
 
-            {% endfor %}
+            {% endfor %},
+            [{% for col in range(1, matrix_cols) %}{"matrix": [{{ half }}, {{ col }}], "x": {{ col }}, "y": {{ half }}}{% if not loop.last %}, {% endif %}{% endfor %}, {% for col in range(matrix_cols - 1) %}{"matrix": [{{ half + matrix_rows }}, {{ col }}], "x": {{ col + gap }}, "y": {{ half }}}{% if not loop.last %}, {% endif %}{% endfor %}]
         ]
     }
 }

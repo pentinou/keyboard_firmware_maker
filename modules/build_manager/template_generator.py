@@ -19,6 +19,7 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader
 
 from models.project_model import ProjectModel
+from modules.hardware.keyboard_loader import load_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +35,12 @@ TEMPLATES_DIR = BASE_DIR / "templates"
 
 # (template_filename, output_path_relative_to_output_dir)
 TEMPLATE_FILES: list[tuple[str, str]] = [
-    ("keymap.c.j2",  "keymaps/default/keymap.c"),
-    ("config.h.j2",  "config.h"),
-    ("rules.mk.j2",  "rules.mk"),
-    ("vial.json.j2", "keymaps/default/vial.json"),
+    ("keyboard.c.j2", "keyboard_firmware_maker.c"),
+    ("keymap.c.j2",   "keymaps/default/keymap.c"),
+    ("config.h.j2",   "config.h"),
+    ("rules.mk.j2",   "rules.mk"),
+    ("info.json.j2",  "info.json"),
+    ("vial.json.j2",  "keymaps/default/vial.json"),
 ]
 
 
@@ -87,6 +90,9 @@ class TemplateGenerator:
         rgb_enabled = bool(model.rgb.effects or model.rgb.per_key)
 
         mcu = model.keyboard.mcu or "rp2040"
+        matrix_rows, matrix_cols = _load_keyboard_matrix(
+            model.keyboard.model, self._templates_dir.parent
+        )
         return {
             "keyboard_model": model.keyboard.model or "keyboard_firmware_maker",
             "mcu": mcu,
@@ -97,9 +103,27 @@ class TemplateGenerator:
             "oled_overlays": model.oled.overlays,
             "rgb_effects": [e.to_dict() for e in model.rgb.effects],
             "per_key_colors": model.rgb.per_key,
-            "matrix_rows": 4,   # Sofle V2 : 4 lignes par half (3 regular + 1 thumb)
-            "matrix_cols": 6,   # 6 colonnes par half
+            "matrix_rows": matrix_rows,
+            "matrix_cols": matrix_cols,
         }
+
+
+def _load_keyboard_matrix(model_name: str, project_root: Path) -> tuple[int, int]:
+    """Charge les dimensions de matrice depuis le YAML du clavier.
+
+    Returns:
+        (rows_per_half, cols) — défaut (5, 6) si le fichier est introuvable.
+    """
+    kb_file = project_root / "keyboards" / f"{model_name}.yaml"
+    try:
+        kb = load_keyboard(kb_file)
+        return kb.matrix["rows"], kb.matrix["cols"]
+    except Exception:
+        logger.warning(
+            "Impossible de lire la matrice pour '%s' depuis %s — défaut 5×6",
+            model_name, kb_file,
+        )
+        return 5, 6
 
 
 def _encode_oled_frames(frames: list[bytes]) -> list[str]:

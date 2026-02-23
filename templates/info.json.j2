@@ -1,0 +1,48 @@
+{%- set half_rows = matrix_rows - 1 -%}
+{%- set gap = matrix_cols + 1 -%}
+{%- set ns = namespace(keys=[]) -%}
+{%- for row in range(half_rows) -%}
+  {%- for col in range(matrix_cols) -%}
+    {%- set ns.keys = ns.keys + [[row, col, col, row]] -%}
+  {%- endfor -%}
+  {%- for col in range(matrix_cols) -%}
+    {%- set ns.keys = ns.keys + [[row + matrix_rows, col, col + gap, row]] -%}
+  {%- endfor -%}
+{%- endfor -%}
+{%- for col in range(1, matrix_cols) -%}
+  {%- set ns.keys = ns.keys + [[half_rows, col, col, half_rows]] -%}
+{%- endfor -%}
+{%- for col in range(matrix_cols - 1) -%}
+  {%- set ns.keys = ns.keys + [[half_rows + matrix_rows, col, col + gap, half_rows]] -%}
+{%- endfor -%}
+{
+    "keyboard_name": "{{ keyboard_model }}",
+    "url": "",
+    "maintainer": "keyboard_firmware_maker",
+    "manufacturer": "keyboard_firmware_maker",
+    "usb": {
+        "vid": "0xFEED",
+        "pid": "0x0001",
+        "device_version": "0.0.1"
+    },
+    "split": {
+        "enabled": true
+    },
+    "diode_direction": "COL2ROW",
+{% if mcu == "rp2040" %}
+    "matrix_pins": {
+        "rows": ["GP29", "GP28", "GP27", "GP26", "GP22"],
+        "cols": ["GP20", "GP23", "GP21", "GP19", "GP18", "GP17"]
+    },
+{% endif %}
+    "layouts": {
+        "LAYOUT_sofle": {
+            "layout": [
+{% for key in ns.keys %}
+                {"matrix": [{{ key[0] }}, {{ key[1] }}], "x": {{ key[2] }}, "y": {{ key[3] }}}{% if not loop.last %},{% endif %}
+
+{% endfor %}
+            ]
+        }
+    }
+}
