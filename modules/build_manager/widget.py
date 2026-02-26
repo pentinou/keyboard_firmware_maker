@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from i18n import tr
 from models.project_model import ProjectModel
 from modules.build_manager.builder import MCU_FLASH, BuildWorker
 from modules.build_manager.toolchain import INSTALL_GUIDE_MSG, detect_toolchain
@@ -60,18 +61,18 @@ class BuildWidget(QWidget):
 
         # Bouton générer + export + guide
         btn_row = QHBoxLayout()
-        self._btn_build = QPushButton("Générer firmware")
+        self._btn_build = QPushButton(tr("build.btn.generate"))
         self._btn_build.setObjectName("btn_build")
         self._btn_build.clicked.connect(self._on_build_clicked)
         btn_row.addWidget(self._btn_build)
 
-        self._btn_export = QPushButton("Exporter le firmware")
+        self._btn_export = QPushButton(tr("build.btn.export"))
         self._btn_export.setObjectName("btn_export")
         self._btn_export.setEnabled(False)  # activé seulement après succès (FR28)
         self._btn_export.clicked.connect(self._on_export_clicked)
         btn_row.addWidget(self._btn_export)
 
-        self._btn_guide = QPushButton("Guide de flash")
+        self._btn_guide = QPushButton(tr("build.btn.guide"))
         self._btn_guide.setObjectName("btn_guide")
         self._btn_guide.clicked.connect(self._on_guide_clicked)
         btn_row.addWidget(self._btn_guide)
@@ -110,10 +111,14 @@ class BuildWidget(QWidget):
         info = detect_toolchain()
         if info.is_available:
             self._lbl_toolchain.setText(
-                f"Toolchain : {info.gcc_path}  |  version {info.version}  |  source : {info.source}"
+                tr("build.toolchain_found").format(
+                    gcc_path=info.gcc_path, version=info.version, source=info.source
+                )
             )
         else:
-            self._lbl_toolchain.setText(f"⚠ Toolchain introuvable\n{INSTALL_GUIDE_MSG}")
+            self._lbl_toolchain.setText(
+                tr("build.toolchain_not_found").format(msg=INSTALL_GUIDE_MSG)
+            )
 
     # ─────────────────────────────────────────────────── Build ──
 
@@ -123,7 +128,7 @@ class BuildWidget(QWidget):
         if not toolchain.is_available:
             QMessageBox.warning(
                 self,
-                "Toolchain introuvable",
+                tr("build.toolchain_missing_title"),
                 INSTALL_GUIDE_MSG,
             )
             return
@@ -131,9 +136,8 @@ class BuildWidget(QWidget):
         if not VialQmkManager().is_ready():
             QMessageBox.warning(
                 self,
-                "Vial-QMK non initialisé",
-                "Vial-QMK n'est pas disponible dans le cache.\n"
-                "Relancez l'application pour le télécharger.",
+                tr("build.vial_not_init_title"),
+                tr("build.vial_not_init_msg"),
             )
             return
 
@@ -141,7 +145,7 @@ class BuildWidget(QWidget):
         self._progress.setValue(0)
         self._log.clear()
         self._lbl_size.setText("")
-        self._lbl_status.setText("Compilation en cours…")
+        self._lbl_status.setText(tr("build.compiling"))
 
         self._worker = BuildWorker(
             model=self._model,
@@ -167,25 +171,25 @@ class BuildWidget(QWidget):
 
         size_kb = size // 1024
         flash_kb = flash_capacity // 1024
-        self._lbl_size.setText(f"Firmware : {size_kb} KB / {flash_kb} KB utilisés")
+        self._lbl_size.setText(
+            tr("build.firmware_size").format(size_kb=size_kb, flash_kb=flash_kb)
+        )
 
         if size > flash_capacity:
             QMessageBox.warning(
                 self,
-                "Firmware trop volumineux",
-                f"Le firmware ({size_kb} KB) dépasse la capacité flash du MCU "
-                f"{mcu} ({flash_kb} KB).\n"
-                "Réduisez les fonctionnalités activées avant de flasher.",
+                tr("build.oversized_title"),
+                tr("build.oversized_msg").format(size_kb=size_kb, mcu=mcu, flash_kb=flash_kb),
             )
 
-        self._lbl_status.setText("Compilation réussie.")
+        self._lbl_status.setText(tr("build.success"))
         logger.info("Compilation réussie : %s (%s KB)", uf2_path, size_kb)
 
     def _on_build_error(self, msg: str) -> None:
         """Affiche l'erreur humanisée et réactive le bouton (NFR8)."""
         self._btn_build.setEnabled(True)
-        self._lbl_status.setText("Échec de la compilation.")
-        QMessageBox.critical(self, "Erreur de compilation", msg)
+        self._lbl_status.setText(tr("build.error"))
+        QMessageBox.critical(self, tr("build.error_title"), msg)
         logger.error("Erreur compilation : %s", msg)
 
     # ─────────────────────────────────────────────── Export + Guide ──
@@ -199,18 +203,17 @@ class BuildWidget(QWidget):
         if not src.exists():
             QMessageBox.warning(
                 self,
-                "Fichier introuvable",
-                "Le fichier firmware n'est plus disponible.\n"
-                "Relancez une compilation avant d'exporter.",
+                tr("build.file_not_found_title"),
+                tr("build.file_not_found_msg"),
             )
             self._btn_export.setEnabled(False)
             self._last_uf2 = None
             return
         dest, _ = QFileDialog.getSaveFileName(
             self,
-            "Exporter le firmware",
+            tr("build.export_dialog_title"),
             src.name,
-            "Firmware UF2 (*.uf2)",
+            tr("build.uf2_filter"),
         )
         if dest:
             try:
@@ -219,15 +222,15 @@ class BuildWidget(QWidget):
             except OSError as exc:
                 QMessageBox.critical(
                     self,
-                    "Erreur d'export",
-                    f"Impossible d'exporter le firmware :\n{exc}",
+                    tr("build.export_error_title"),
+                    tr("build.export_error_msg").format(exc=exc),
                 )
                 logger.error("Export firmware échoué : %s → %s : %s", src, dest, exc)
                 return
             QMessageBox.information(
                 self,
-                "Export réussi",
-                f"Firmware exporté vers :\n{dest}",
+                tr("build.export_success_title"),
+                tr("build.export_success_msg").format(dest=dest),
             )
             logger.info("Firmware exporté : %s → %s", src, dest)
 

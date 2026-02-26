@@ -6,6 +6,8 @@ import logging
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout
 
+from i18n import tr
+
 logger = logging.getLogger(__name__)
 
 APP_VERSION = "0.1.0"
@@ -17,7 +19,7 @@ class AboutDialog(QDialog):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(f"À propos — keyboard_firmware_maker {APP_VERSION}")
+        self.setWindowTitle(tr("about.title").format(version=APP_VERSION))
         self.setMinimumWidth(400)
         self._setup_ui()
 
@@ -29,14 +31,11 @@ class AboutDialog(QDialog):
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title_label)
 
-        version_label = QLabel(f"Version : {APP_VERSION}")
+        version_label = QLabel(tr("about.version").format(version=APP_VERSION))
         version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(version_label)
 
-        desc_label = QLabel(
-            "Application desktop pour créer et personnaliser des firmwares\n"
-            "QMK/Vial-QMK pour claviers mécaniques split."
-        )
+        desc_label = QLabel(tr("about.description"))
         desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         desc_label.setWordWrap(True)
         layout.addWidget(desc_label)
@@ -46,6 +45,6 @@ class AboutDialog(QDialog):
         github_label.setOpenExternalLinks(True)
         layout.addWidget(github_label)
 
-        close_button = QPushButton("Fermer")
+        close_button = QPushButton(tr("btn.close"))
         close_button.clicked.connect(self.accept)
         layout.addWidget(close_button)

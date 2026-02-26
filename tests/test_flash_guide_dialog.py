@@ -162,8 +162,8 @@ class TestFlashGuideAssets:
 
     def test_each_step_has_required_keys(self):
         for step in FLASH_GUIDE_STEPS:
-            assert "title" in step
-            assert "text" in step
+            assert "title_key" in step
+            assert "text_key" in step
             assert "image" in step
 
     def test_images_are_png(self):
@@ -173,12 +173,13 @@ class TestFlashGuideAssets:
     def test_missing_image_shows_fallback_text(self, qtbot):
         """Si une image est introuvable, le label affiche le texte de fallback (L4)."""
         from ui.widgets.flash_guide_dialog import _make_step_page
-        step = {"title": "Test", "text": "desc", "image": "nonexistent_image.png"}
+        step = {"title_key": "flash_guide.step1_title", "text_key": "flash_guide.step1_text",
+                "image": "nonexistent_image.png"}
         page = _make_step_page(step)
         qtbot.addWidget(page)
         lbl = page.findChild(QLabel, "lbl_img_nonexistent_image.png")
         assert lbl is not None
-        assert "manquante" in lbl.text() or "nonexistent_image.png" in lbl.text()
+        assert "nonexistent_image.png" in lbl.text()
 
 
 # ────────────────────────────────────────────── BuildWidget export/guide ──

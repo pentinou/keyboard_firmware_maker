@@ -141,6 +141,76 @@ class TestCapabilitiesSignal:
         assert blocker.args[0].get("rgb") is False
 
 
+class TestOledSidesSelector:
+    def _sofle_index(self, widget):
+        combo = widget.findChild(QComboBox, "keyboard_combo")
+        return next(
+            (i for i in range(combo.count()) if "Sofle" in combo.itemText(i)),
+            None,
+        )
+
+    def test_oled_combo_exists(self, widget):
+        combo = widget.findChild(QComboBox, "oled_combo")
+        assert combo is not None
+
+    def test_oled_combo_visible_for_sofle(self, widget, qtbot):
+        combo_kb = widget.findChild(QComboBox, "keyboard_combo")
+        sofle_idx = self._sofle_index(widget)
+        assert sofle_idx is not None
+        combo_kb.setCurrentIndex(sofle_idx)
+        combo = widget.findChild(QComboBox, "oled_combo")
+        assert not combo.isHidden()
+
+    def test_oled_combo_has_four_options(self, widget):
+        combo = widget.findChild(QComboBox, "oled_combo")
+        assert combo.count() == 4
+
+    def test_default_oled_sides_is_both(self, widget, model, qtbot):
+        combo_kb = widget.findChild(QComboBox, "keyboard_combo")
+        sofle_idx = self._sofle_index(widget)
+        assert sofle_idx is not None
+        combo_kb.setCurrentIndex(sofle_idx)
+        assert model.keyboard.oled_sides == ["left", "right"]
+
+    def test_oled_combo_left_only_updates_model(self, widget, model, qtbot):
+        combo_kb = widget.findChild(QComboBox, "keyboard_combo")
+        sofle_idx = self._sofle_index(widget)
+        assert sofle_idx is not None
+        combo_kb.setCurrentIndex(sofle_idx)
+        oled_combo = widget.findChild(QComboBox, "oled_combo")
+        oled_combo.setCurrentIndex(1)  # "Gauche seulement"
+        assert model.keyboard.oled_sides == ["left"]
+
+    def test_oled_combo_right_only_updates_model(self, widget, model, qtbot):
+        combo_kb = widget.findChild(QComboBox, "keyboard_combo")
+        sofle_idx = self._sofle_index(widget)
+        assert sofle_idx is not None
+        combo_kb.setCurrentIndex(sofle_idx)
+        oled_combo = widget.findChild(QComboBox, "oled_combo")
+        oled_combo.setCurrentIndex(2)  # "Droite seulement"
+        assert model.keyboard.oled_sides == ["right"]
+
+    def test_oled_sides_changed_signal(self, widget, model, qtbot):
+        combo_kb = widget.findChild(QComboBox, "keyboard_combo")
+        sofle_idx = self._sofle_index(widget)
+        assert sofle_idx is not None
+        combo_kb.setCurrentIndex(sofle_idx)
+        oled_combo = widget.findChild(QComboBox, "oled_combo")
+        with qtbot.waitSignal(widget.oled_sides_changed, timeout=1000) as blocker:
+            oled_combo.setCurrentIndex(1)
+        assert blocker.args[0] == ["left"]
+
+    def test_set_oled_sides_restores(self, widget, model, qtbot):
+        combo_kb = widget.findChild(QComboBox, "keyboard_combo")
+        sofle_idx = self._sofle_index(widget)
+        assert sofle_idx is not None
+        combo_kb.setCurrentIndex(sofle_idx)
+        widget.set_oled_sides(["right"])
+        assert model.keyboard.oled_sides == ["right"]
+        oled_combo = widget.findChild(QComboBox, "oled_combo")
+        assert oled_combo.currentIndex() == 2  # index of ["right"] in _OLED_SIDES_OPTIONS
+
+
 class TestHardwareWidgetTooltips:
     def test_keyboard_combo_items_have_tooltips(self, widget):
         from PySide6.QtCore import Qt

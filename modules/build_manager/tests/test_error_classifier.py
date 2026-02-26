@@ -211,7 +211,8 @@ class TestBuildWidgetStatus:
         with patch("modules.build_manager.widget.QMessageBox.critical"):
             widget._on_build_error("Erreur test")
         lbl = widget.findChild(QLabel, "lbl_build_status")
-        assert "Échec" in lbl.text() or "compilation" in lbl.text().lower()
+        from i18n import tr
+        assert lbl.text() == tr("build.error")
 
     def test_button_reenabled_after_error(self, widget):
         from unittest.mock import patch

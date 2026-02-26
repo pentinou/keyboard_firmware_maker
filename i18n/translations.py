@@ -19,6 +19,120 @@ STRINGS: dict[str, dict[str, str]] = {
         "tab.oled": "OLED",
         "tab.rgb": "RGB",
         "tab.build": "Build",
+        # Boutons génériques
+        "btn.close": "Fermer",
+        "btn.previous": "Pr\u00e9c\u00e9dent",
+        "btn.next": "Suivant",
+        # Onglet Matériel
+        "hardware.keyboard_model": "Mod\u00e8le de clavier :",
+        "hardware.mcu": "Microcontr\u00f4leur :",
+        "hardware.oled": "\u00c9crans OLED :",
+        "hardware.oled.none": "Aucun",
+        "hardware.oled.left_only": "Gauche seulement",
+        "hardware.oled.right_only": "Droite seulement",
+        "hardware.oled.both": "Gauche et droite",
+        # Onglet OLED
+        "oled.side.left": "Gauche",
+        "oled.side.right": "Droite",
+        "oled.import_btn": "Importer image\u2026",
+        "oled.overlay.layer": "Layer",
+        "oled.overlay.caps_lock": "Caps Lock",
+        "oled.overlay.wpm": "WPM",
+        "oled.overlay.luna": "Luna",
+        "oled.overlay.bongo": "Bongo Cat",
+        "oled.btn.negative": "N\u00e9gatif",
+        "oled.btn.rotate": "Rotation 90\u00b0",
+        "oled.import_dialog_title": "Importer une image",
+        "oled.image_filter": "Images (*.png *.bmp *.gif)",
+        "oled.import_error_title": "Erreur d\u2019import",
+        "oled.import_error_msg": "Impossible de charger l\u2019image : {msg}",
+        # Onglet Build
+        "build.btn.generate": "G\u00e9n\u00e9rer firmware",
+        "build.btn.export": "Exporter le firmware",
+        "build.btn.guide": "Guide de flash",
+        "build.toolchain_found": "Toolchain : {gcc_path}  |  version {version}  |  source : {source}",
+        "build.toolchain_not_found": "\u26a0 Toolchain introuvable\n{msg}",
+        "build.toolchain_missing_title": "Toolchain introuvable",
+        "build.vial_not_init_title": "Vial-QMK non initialis\u00e9",
+        "build.vial_not_init_msg": (
+            "Vial-QMK n\u2019est pas disponible dans le cache.\n"
+            "Relancez l\u2019application pour le t\u00e9l\u00e9charger."
+        ),
+        "build.compiling": "Compilation en cours\u2026",
+        "build.firmware_size": "Firmware : {size_kb} KB / {flash_kb} KB utilis\u00e9s",
+        "build.oversized_title": "Firmware trop volumineux",
+        "build.oversized_msg": (
+            "Le firmware ({size_kb} KB) d\u00e9passe la capacit\u00e9 flash du MCU "
+            "{mcu} ({flash_kb} KB).\n"
+            "R\u00e9duisez les fonctionnalit\u00e9s activ\u00e9es avant de flasher."
+        ),
+        "build.success": "Compilation r\u00e9ussie.",
+        "build.error": "\u00c9chec de la compilation.",
+        "build.error_title": "Erreur de compilation",
+        "build.file_not_found_title": "Fichier introuvable",
+        "build.file_not_found_msg": (
+            "Le fichier firmware n\u2019est plus disponible.\n"
+            "Relancez une compilation avant d\u2019exporter."
+        ),
+        "build.export_dialog_title": "Exporter le firmware",
+        "build.uf2_filter": "Firmware UF2 (*.uf2)",
+        "build.export_error_title": "Erreur d\u2019export",
+        "build.export_error_msg": "Impossible d\u2019exporter le firmware :\n{exc}",
+        "build.export_success_title": "Export r\u00e9ussi",
+        "build.export_success_msg": "Firmware export\u00e9 vers :\n{dest}",
+        # Dialogue À propos
+        "about.title": "\u00c0 propos \u2014 keyboard_firmware_maker {version}",
+        "about.version": "Version : {version}",
+        "about.description": (
+            "Application desktop pour cr\u00e9er et personnaliser des firmwares\n"
+            "QMK/Vial-QMK pour claviers m\u00e9caniques split."
+        ),
+        # Dialogue Guide de flash
+        "flash_guide.title": "Guide de flash du firmware",
+        "flash_guide.progress": "\u00c9tape {current} / {total}",
+        "flash_guide.missing_image": "[image manquante : {name}]",
+        "flash_guide.step1_title": "\u00c9tape 1 : Localiser le bouton BOOT",
+        "flash_guide.step1_text": (
+            "Sur le PCB de votre Sofle, rep\u00e9rez le bouton marqu\u00e9 BOOT\n"
+            "(souvent pr\u00e8s du microcontr\u00f4leur RP2040)."
+        ),
+        "flash_guide.step2_title": "\u00c9tape 2 : Entrer en mode bootloader",
+        "flash_guide.step2_text": (
+            "1. Maintenez le bouton BOOT appuy\u00e9\n"
+            "2. Branchez le c\u00e2ble USB \u00e0 votre clavier\n"
+            "3. Rel\u00e2chez le bouton BOOT"
+        ),
+        "flash_guide.step3_title": "\u00c9tape 3 : Lecteur RPI-RP2 d\u00e9tect\u00e9",
+        "flash_guide.step3_text": (
+            "Un lecteur nomm\u00e9 \u2018RPI-RP2\u2019 appara\u00eet dans votre explorateur de fichiers.\n"
+            "Si le lecteur n\u2019appara\u00eet pas, r\u00e9p\u00e9tez l\u2019\u00e9tape 2."
+        ),
+        "flash_guide.step4_title": "\u00c9tape 4 : Installer le firmware",
+        "flash_guide.step4_text": (
+            "Glissez-d\u00e9posez le fichier .uf2 dans le lecteur RPI-RP2.\n"
+            "Le clavier red\u00e9marre automatiquement.\n\n"
+            "Votre clavier est pr\u00eat ! Configurez les layers sur vial.rocks"
+        ),
+        # Dialogue configuration Vial-QMK
+        "vial_setup.title": "Initialisation de l\u2019environnement",
+        "vial_setup.downloading": "T\u00e9l\u00e9chargement de Vial-QMK\u2026",
+        "vial_setup.ready": "Vial-QMK pr\u00eat.",
+        "vial_setup.error_title": "Erreur de t\u00e9l\u00e9chargement",
+        # Dialogues
+        "dlg.error": "Erreur",
+        "dlg.save_error": "Impossible de sauvegarder : {e}",
+        "dlg.load_error": "Impossible de charger le projet : {e}",
+        "dlg.vial_unavailable": "Vial-QMK non disponible",
+        "dlg.vial_unavailable_msg": (
+            "La configuration de Vial-QMK a \u00e9chou\u00e9 ou a \u00e9t\u00e9 annul\u00e9e.\n"
+            "L\u2019onglet Build ne fonctionnera pas correctement.\n"
+            "Relancez l\u2019application pour r\u00e9essayer."
+        ),
+        "dlg.lang_change_title": "Langue modifi\u00e9e",
+        "dlg.lang_change_msg": "La langue sera appliqu\u00e9e au prochain d\u00e9marrage.",
+        "dlg.save_title": "Sauvegarder le projet",
+        "dlg.open_title": "Ouvrir un projet",
+        "dlg.file_filter": "Projet KFM (*.kfm.json)",
         # RGB widget
         "rgb.instructions": "Couleurs par touche \u2014 cliquez une touche pour assigner une couleur",
         "rgb.effects_group": "Effets RGB",
@@ -34,21 +148,6 @@ STRINGS: dict[str, dict[str, str]] = {
         "rgb.dialog.primary_color": "Couleur principale",
         "rgb.dialog.secondary_color": "Couleur secondaire",
         "rgb.key_color_fmt": "Couleur pour {key_id}",
-        # Dialogues
-        "dlg.error": "Erreur",
-        "dlg.save_error": "Impossible de sauvegarder : {e}",
-        "dlg.load_error": "Impossible de charger le projet : {e}",
-        "dlg.vial_unavailable": "Vial-QMK non disponible",
-        "dlg.vial_unavailable_msg": (
-            "La configuration de Vial-QMK a \u00e9chou\u00e9 ou a \u00e9t\u00e9 annul\u00e9e.\n"
-            "L'onglet Build ne fonctionnera pas correctement.\n"
-            "Relancez l'application pour r\u00e9essayer."
-        ),
-        "dlg.lang_change_title": "Langue modifi\u00e9e",
-        "dlg.lang_change_msg": "La langue sera appliqu\u00e9e au prochain d\u00e9marrage.",
-        "dlg.save_title": "Sauvegarder le projet",
-        "dlg.open_title": "Ouvrir un projet",
-        "dlg.file_filter": "Projet KFM (*.kfm.json)",
     },
     "en": {
         # Application
@@ -67,21 +166,105 @@ STRINGS: dict[str, dict[str, str]] = {
         "tab.oled": "OLED",
         "tab.rgb": "RGB",
         "tab.build": "Build",
-        # RGB widget
-        "rgb.instructions": "Per-key colors \u2014 click a key to assign a color",
-        "rgb.effects_group": "RGB Effects",
-        "rgb.static.color": "Uniform color:",
-        "rgb.static.tooltip": "Click to choose color",
-        "rgb.native.info": "Native QMK effect \u2014 adjustable via RGB_MOD / RGB_HUI / RGB_VAI on the keyboard.",
-        "rgb.ripple.primary": "Pressed key color:",
-        "rgb.ripple.secondary": "Neighbor keys color:",
-        "rgb.ripple.fade": "Fade speed (ms):",
-        "rgb.ripple.trigger_btn": "Choose trigger key",
-        "rgb.ripple.trigger_none": "Not defined",
-        "rgb.ripple.trigger_click": "Click a key\u2026",
-        "rgb.dialog.primary_color": "Primary color",
-        "rgb.dialog.secondary_color": "Secondary color",
-        "rgb.key_color_fmt": "Color for {key_id}",
+        # Generic buttons
+        "btn.close": "Close",
+        "btn.previous": "Previous",
+        "btn.next": "Next",
+        # Hardware tab
+        "hardware.keyboard_model": "Keyboard model:",
+        "hardware.mcu": "Microcontroller:",
+        "hardware.oled": "OLED screens:",
+        "hardware.oled.none": "None",
+        "hardware.oled.left_only": "Left only",
+        "hardware.oled.right_only": "Right only",
+        "hardware.oled.both": "Left and right",
+        # OLED tab
+        "oled.side.left": "Left",
+        "oled.side.right": "Right",
+        "oled.import_btn": "Import image\u2026",
+        "oled.overlay.layer": "Layer",
+        "oled.overlay.caps_lock": "Caps Lock",
+        "oled.overlay.wpm": "WPM",
+        "oled.overlay.luna": "Luna",
+        "oled.overlay.bongo": "Bongo Cat",
+        "oled.btn.negative": "Invert",
+        "oled.btn.rotate": "Rotate 90\u00b0",
+        "oled.import_dialog_title": "Import an image",
+        "oled.image_filter": "Images (*.png *.bmp *.gif)",
+        "oled.import_error_title": "Import error",
+        "oled.import_error_msg": "Cannot load image: {msg}",
+        # Build tab
+        "build.btn.generate": "Generate firmware",
+        "build.btn.export": "Export firmware",
+        "build.btn.guide": "Flash guide",
+        "build.toolchain_found": "Toolchain: {gcc_path}  |  version {version}  |  source: {source}",
+        "build.toolchain_not_found": "\u26a0 Toolchain not found\n{msg}",
+        "build.toolchain_missing_title": "Toolchain not found",
+        "build.vial_not_init_title": "Vial-QMK not initialised",
+        "build.vial_not_init_msg": (
+            "Vial-QMK is not available in the cache.\n"
+            "Restart the application to download it."
+        ),
+        "build.compiling": "Compiling\u2026",
+        "build.firmware_size": "Firmware: {size_kb} KB / {flash_kb} KB used",
+        "build.oversized_title": "Firmware too large",
+        "build.oversized_msg": (
+            "The firmware ({size_kb} KB) exceeds the flash capacity of MCU "
+            "{mcu} ({flash_kb} KB).\n"
+            "Reduce enabled features before flashing."
+        ),
+        "build.success": "Build successful.",
+        "build.error": "Build failed.",
+        "build.error_title": "Build error",
+        "build.file_not_found_title": "File not found",
+        "build.file_not_found_msg": (
+            "The firmware file is no longer available.\n"
+            "Run a build before exporting."
+        ),
+        "build.export_dialog_title": "Export firmware",
+        "build.uf2_filter": "UF2 firmware (*.uf2)",
+        "build.export_error_title": "Export error",
+        "build.export_error_msg": "Cannot export firmware:\n{exc}",
+        "build.export_success_title": "Export successful",
+        "build.export_success_msg": "Firmware exported to:\n{dest}",
+        # About dialog
+        "about.title": "About \u2014 keyboard_firmware_maker {version}",
+        "about.version": "Version: {version}",
+        "about.description": (
+            "Desktop application to create and customise\n"
+            "QMK/Vial-QMK firmware for split mechanical keyboards."
+        ),
+        # Flash guide dialog
+        "flash_guide.title": "Firmware flash guide",
+        "flash_guide.progress": "Step {current} / {total}",
+        "flash_guide.missing_image": "[missing image: {name}]",
+        "flash_guide.step1_title": "Step 1: Locate the BOOT button",
+        "flash_guide.step1_text": (
+            "On your Sofle PCB, find the button labelled BOOT\n"
+            "(usually near the RP2040 microcontroller)."
+        ),
+        "flash_guide.step2_title": "Step 2: Enter bootloader mode",
+        "flash_guide.step2_text": (
+            "1. Hold the BOOT button\n"
+            "2. Plug the USB cable into your keyboard\n"
+            "3. Release the BOOT button"
+        ),
+        "flash_guide.step3_title": "Step 3: RPI-RP2 drive detected",
+        "flash_guide.step3_text": (
+            "A drive named \u2018RPI-RP2\u2019 appears in your file explorer.\n"
+            "If it does not appear, repeat step 2."
+        ),
+        "flash_guide.step4_title": "Step 4: Install the firmware",
+        "flash_guide.step4_text": (
+            "Drag and drop the .uf2 file onto the RPI-RP2 drive.\n"
+            "The keyboard restarts automatically.\n\n"
+            "Your keyboard is ready! Configure the layers at vial.rocks"
+        ),
+        # Vial-QMK setup dialog
+        "vial_setup.title": "Environment setup",
+        "vial_setup.downloading": "Downloading Vial-QMK\u2026",
+        "vial_setup.ready": "Vial-QMK ready.",
+        "vial_setup.error_title": "Download error",
         # Dialogs
         "dlg.error": "Error",
         "dlg.save_error": "Cannot save: {e}",
@@ -97,6 +280,21 @@ STRINGS: dict[str, dict[str, str]] = {
         "dlg.save_title": "Save project",
         "dlg.open_title": "Open project",
         "dlg.file_filter": "KFM project (*.kfm.json)",
+        # RGB widget
+        "rgb.instructions": "Per-key colors \u2014 click a key to assign a color",
+        "rgb.effects_group": "RGB Effects",
+        "rgb.static.color": "Uniform color:",
+        "rgb.static.tooltip": "Click to choose color",
+        "rgb.native.info": "Native QMK effect \u2014 adjustable via RGB_MOD / RGB_HUI / RGB_VAI on the keyboard.",
+        "rgb.ripple.primary": "Pressed key color:",
+        "rgb.ripple.secondary": "Neighbor keys color:",
+        "rgb.ripple.fade": "Fade speed (ms):",
+        "rgb.ripple.trigger_btn": "Choose trigger key",
+        "rgb.ripple.trigger_none": "Not defined",
+        "rgb.ripple.trigger_click": "Click a key\u2026",
+        "rgb.dialog.primary_color": "Primary color",
+        "rgb.dialog.secondary_color": "Secondary color",
+        "rgb.key_color_fmt": "Color for {key_id}",
     },
     "it": {
         # Applicazione
@@ -115,6 +313,120 @@ STRINGS: dict[str, dict[str, str]] = {
         "tab.oled": "OLED",
         "tab.rgb": "RGB",
         "tab.build": "Build",
+        # Pulsanti generici
+        "btn.close": "Chiudi",
+        "btn.previous": "Precedente",
+        "btn.next": "Avanti",
+        # Scheda Hardware
+        "hardware.keyboard_model": "Modello tastiera:",
+        "hardware.mcu": "Microcontrollore:",
+        "hardware.oled": "Schermi OLED:",
+        "hardware.oled.none": "Nessuno",
+        "hardware.oled.left_only": "Solo sinistra",
+        "hardware.oled.right_only": "Solo destra",
+        "hardware.oled.both": "Sinistra e destra",
+        # Scheda OLED
+        "oled.side.left": "Sinistra",
+        "oled.side.right": "Destra",
+        "oled.import_btn": "Importa immagine\u2026",
+        "oled.overlay.layer": "Layer",
+        "oled.overlay.caps_lock": "Caps Lock",
+        "oled.overlay.wpm": "WPM",
+        "oled.overlay.luna": "Luna",
+        "oled.overlay.bongo": "Bongo Cat",
+        "oled.btn.negative": "Negativo",
+        "oled.btn.rotate": "Rotazione 90\u00b0",
+        "oled.import_dialog_title": "Importa un\u2019immagine",
+        "oled.image_filter": "Immagini (*.png *.bmp *.gif)",
+        "oled.import_error_title": "Errore di importazione",
+        "oled.import_error_msg": "Impossibile caricare l\u2019immagine: {msg}",
+        # Scheda Build
+        "build.btn.generate": "Genera firmware",
+        "build.btn.export": "Esporta firmware",
+        "build.btn.guide": "Guida flash",
+        "build.toolchain_found": "Toolchain: {gcc_path}  |  versione {version}  |  sorgente: {source}",
+        "build.toolchain_not_found": "\u26a0 Toolchain non trovata\n{msg}",
+        "build.toolchain_missing_title": "Toolchain non trovata",
+        "build.vial_not_init_title": "Vial-QMK non inizializzato",
+        "build.vial_not_init_msg": (
+            "Vial-QMK non \u00e8 disponibile nella cache.\n"
+            "Riavvia l\u2019applicazione per scaricarlo."
+        ),
+        "build.compiling": "Compilazione in corso\u2026",
+        "build.firmware_size": "Firmware: {size_kb} KB / {flash_kb} KB utilizzati",
+        "build.oversized_title": "Firmware troppo grande",
+        "build.oversized_msg": (
+            "Il firmware ({size_kb} KB) supera la capacit\u00e0 flash dell\u2019MCU "
+            "{mcu} ({flash_kb} KB).\n"
+            "Riduci le funzionalit\u00e0 attivate prima di flashare."
+        ),
+        "build.success": "Compilazione completata.",
+        "build.error": "Compilazione fallita.",
+        "build.error_title": "Errore di compilazione",
+        "build.file_not_found_title": "File non trovato",
+        "build.file_not_found_msg": (
+            "Il file firmware non \u00e8 pi\u00f9 disponibile.\n"
+            "Riesegui una compilazione prima di esportare."
+        ),
+        "build.export_dialog_title": "Esporta firmware",
+        "build.uf2_filter": "Firmware UF2 (*.uf2)",
+        "build.export_error_title": "Errore di esportazione",
+        "build.export_error_msg": "Impossibile esportare il firmware:\n{exc}",
+        "build.export_success_title": "Esportazione riuscita",
+        "build.export_success_msg": "Firmware esportato in:\n{dest}",
+        # Dialogo Informazioni
+        "about.title": "Informazioni \u2014 keyboard_firmware_maker {version}",
+        "about.version": "Versione: {version}",
+        "about.description": (
+            "Applicazione desktop per creare e personalizzare firmware\n"
+            "QMK/Vial-QMK per tastiere meccaniche split."
+        ),
+        # Dialogo guida flash
+        "flash_guide.title": "Guida flash firmware",
+        "flash_guide.progress": "Passaggio {current} / {total}",
+        "flash_guide.missing_image": "[immagine mancante: {name}]",
+        "flash_guide.step1_title": "Passo 1: Individuare il pulsante BOOT",
+        "flash_guide.step1_text": (
+            "Sul PCB del Sofle, individua il pulsante BOOT\n"
+            "(di solito vicino al microcontrollore RP2040)."
+        ),
+        "flash_guide.step2_title": "Passo 2: Entrare in modalit\u00e0 bootloader",
+        "flash_guide.step2_text": (
+            "1. Tieni premuto il pulsante BOOT\n"
+            "2. Collega il cavo USB alla tastiera\n"
+            "3. Rilascia il pulsante BOOT"
+        ),
+        "flash_guide.step3_title": "Passo 3: Lettore RPI-RP2 rilevato",
+        "flash_guide.step3_text": (
+            "Un lettore chiamato \u2018RPI-RP2\u2019 appare nel file manager.\n"
+            "Se non appare, ripeti il passo 2."
+        ),
+        "flash_guide.step4_title": "Passo 4: Installare il firmware",
+        "flash_guide.step4_text": (
+            "Trascina il file .uf2 nel lettore RPI-RP2.\n"
+            "La tastiera si riavvia automaticamente.\n\n"
+            "La tua tastiera \u00e8 pronta! Configura i layer su vial.rocks"
+        ),
+        # Dialogo setup Vial-QMK
+        "vial_setup.title": "Inizializzazione dell\u2019ambiente",
+        "vial_setup.downloading": "Download di Vial-QMK\u2026",
+        "vial_setup.ready": "Vial-QMK pronto.",
+        "vial_setup.error_title": "Errore di download",
+        # Dialoghi
+        "dlg.error": "Errore",
+        "dlg.save_error": "Impossibile salvare: {e}",
+        "dlg.load_error": "Impossibile caricare il progetto: {e}",
+        "dlg.vial_unavailable": "Vial-QMK non disponibile",
+        "dlg.vial_unavailable_msg": (
+            "La configurazione di Vial-QMK \u00e8 fallita o \u00e8 stata annullata.\n"
+            "La scheda Build non funzioner\u00e0 correttamente.\n"
+            "Riavvia l\u2019applicazione per riprovare."
+        ),
+        "dlg.lang_change_title": "Lingua modificata",
+        "dlg.lang_change_msg": "La lingua sar\u00e0 applicata al prossimo avvio.",
+        "dlg.save_title": "Salva progetto",
+        "dlg.open_title": "Apri progetto",
+        "dlg.file_filter": "Progetto KFM (*.kfm.json)",
         # Widget RGB
         "rgb.instructions": "Colori per tasto \u2014 clicca un tasto per assegnare un colore",
         "rgb.effects_group": "Effetti RGB",
@@ -130,20 +442,5 @@ STRINGS: dict[str, dict[str, str]] = {
         "rgb.dialog.primary_color": "Colore principale",
         "rgb.dialog.secondary_color": "Colore secondario",
         "rgb.key_color_fmt": "Colore per {key_id}",
-        # Dialoghi
-        "dlg.error": "Errore",
-        "dlg.save_error": "Impossibile salvare: {e}",
-        "dlg.load_error": "Impossibile caricare il progetto: {e}",
-        "dlg.vial_unavailable": "Vial-QMK non disponibile",
-        "dlg.vial_unavailable_msg": (
-            "La configurazione di Vial-QMK \u00e8 fallita o \u00e8 stata annullata.\n"
-            "La scheda Build non funzioner\u00e0 correttamente.\n"
-            "Riavvia l'applicazione per riprovare."
-        ),
-        "dlg.lang_change_title": "Lingua modificata",
-        "dlg.lang_change_msg": "La lingua sar\u00e0 applicata al prossimo avvio.",
-        "dlg.save_title": "Salva progetto",
-        "dlg.open_title": "Apri progetto",
-        "dlg.file_filter": "Progetto KFM (*.kfm.json)",
     },
 }

@@ -77,17 +77,17 @@ class MainWindow(QMainWindow):
 
         # Connexion après addTab() pour que setTabEnabled() soit valide
         self._tab_hardware.capabilities_changed.connect(self._on_capabilities_changed)
+        self._tab_hardware.oled_sides_changed.connect(self._on_oled_sides_changed)
         # Forcer l'état initial — le signal a pu être émis avant la connexion
         keyboards = self._tab_hardware._keyboards
         idx = self._tab_hardware._keyboard_combo.currentIndex()
         if keyboards and 0 <= idx < len(keyboards):
             self._on_capabilities_changed(keyboards[idx].capabilities)
+        self._on_oled_sides_changed(self._model.keyboard.oled_sides)
 
     def _on_capabilities_changed(self, capabilities: dict) -> None:
         """Met à jour la visibilité des onglets selon les capacités du clavier sélectionné."""
-        self._tabs.setTabEnabled(1, bool(capabilities.get("oled", False)))
-        # L'onglet RGB est toujours accessible pour visualiser le layout physique.
-        # La fonctionnalité per-key RGB n'est active que si rgb=True.
+        # L'onglet OLED est géré par _on_oled_sides_changed
         self._tabs.setTabEnabled(2, True)
         self._tab_rgb.refresh_layout()
         logger.info(
@@ -95,6 +95,11 @@ class MainWindow(QMainWindow):
             capabilities.get("oled"),
             capabilities.get("rgb"),
         )
+
+    def _on_oled_sides_changed(self, sides: list) -> None:
+        """Active/désactive l'onglet OLED et met à jour les groupes visibles."""
+        self._tabs.setTabEnabled(1, len(sides) > 0)
+        self._tab_oled.set_active_sides(sides)
 
     def _setup_menu(self) -> None:
         menu_bar = self.menuBar()
@@ -166,9 +171,10 @@ class MainWindow(QMainWindow):
         logger.info("Projet ouvert : %s", path)
 
     def _sync_hardware_widget(self) -> None:
-        """Synchronise les combos clavier et MCU avec model.keyboard après un chargement."""
+        """Synchronise les combos clavier, MCU et OLED avec model.keyboard après un chargement."""
         target_kb_model = self._model.keyboard.model
         target_mcu = self._model.keyboard.mcu
+        target_oled_sides = list(self._model.keyboard.oled_sides)
         combo = self._tab_hardware._keyboard_combo
         found = False
         for i in range(combo.count()):
@@ -190,6 +196,8 @@ class MainWindow(QMainWindow):
             if mcu_opt.id == target_mcu:
                 mcu_combo.setCurrentIndex(i)  # déclenche _on_mcu_changed → met à jour model
                 break
+        # Restaurer oled_sides sauvegardé (écrasé par _on_model_changed qui met le défaut)
+        self._tab_hardware.set_oled_sides(target_oled_sides)
 
     def _check_vial_qmk(self) -> None:
         """Lance le dialogue de setup si le cache Vial-QMK est absent (AC: 1, 3)."""

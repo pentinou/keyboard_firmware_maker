@@ -19,43 +19,165 @@ class KeyboardConfig:
 
     model: str = ""
     mcu: str = ""
+    oled_sides: list[str] = field(default_factory=list)
+    # [] = aucun  |  ["left"] | ["right"] | ["left","right"]
 
     def to_dict(self) -> dict[str, Any]:
-        return {"model": self.model, "mcu": self.mcu}
+        return {"model": self.model, "mcu": self.mcu, "oled_sides": list(self.oled_sides)}
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "KeyboardConfig":
         return cls(
             model=data.get("model", ""),
             mcu=data.get("mcu", ""),
+            oled_sides=list(data.get("oled_sides", [])),
+        )
+
+
+@dataclass
+class OledOverlayItem:
+    """Position d'un overlay (layer, caps lock, WPM) sur l'écran OLED.
+
+    col  : colonne curseur QMK (0–4 pour OLED 32px avec font 6px)
+    line : page QMK (0–15 pour OLED 128px / 8)
+    """
+
+    enabled: bool = False
+    col: int = 0
+    line: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"enabled": self.enabled, "col": self.col, "line": self.line}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "OledOverlayItem":
+        return cls(
+            enabled=bool(data.get("enabled", False)),
+            col=int(data.get("col", 0)),
+            line=int(data.get("line", 0)),
+        )
+
+
+@dataclass
+class OledImageItem:
+    """Une image importée sur l'écran OLED avec position et options.
+
+    Note: `frames` est uniquement runtime (données binaires converties).
+    Il n'est PAS inclus dans la sérialisation JSON.
+    natural_w / natural_h : dimensions du thumbnail OLED en pixels (avant padding).
+    """
+
+    image_path: str = ""
+    frames: list[bytes] = field(default_factory=list, repr=False)  # runtime only
+    natural_w: int = 32   # largeur thumbnail (pixels OLED)
+    natural_h: int = 128  # hauteur thumbnail (pixels OLED)
+    col: int = 0          # colonne curseur QMK (0-4)
+    line: int = 0         # page QMK (0-15)
+    inverted: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "image_path": self.image_path,
+            "natural_w": self.natural_w,
+            "natural_h": self.natural_h,
+            "col": self.col,
+            "line": self.line,
+            "inverted": self.inverted,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "OledImageItem":
+        return cls(
+            image_path=data.get("image_path", ""),
+            natural_w=int(data.get("natural_w", 32)),
+            natural_h=int(data.get("natural_h", 128)),
+            col=int(data.get("col", 0)),
+            line=int(data.get("line", 0)),
+            inverted=bool(data.get("inverted", False)),
+        )
+
+
+@dataclass
+class OledSideConfig:
+    """Configuration OLED d'une moitié du clavier split.
+
+    Note: OledImageItem.frames est uniquement runtime (données binaires converties).
+    """
+
+    images: list[OledImageItem] = field(default_factory=list)
+    layer: OledOverlayItem = field(default_factory=OledOverlayItem)
+    caps_lock: OledOverlayItem = field(default_factory=OledOverlayItem)
+    wpm: OledOverlayItem = field(default_factory=OledOverlayItem)
+    luna_enabled: bool = False
+    luna_line: int = 13  # page de départ Luna (13*8=104px, bas de l'écran 128px)
+    bongo_enabled: bool = False
+    bongo_line: int = 0  # page de départ Bongo Cat (0-15)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "images": [img.to_dict() for img in self.images],
+            "layer": self.layer.to_dict(),
+            "caps_lock": self.caps_lock.to_dict(),
+            "wpm": self.wpm.to_dict(),
+            "luna_enabled": self.luna_enabled,
+            "luna_line": self.luna_line,
+            "bongo_enabled": self.bongo_enabled,
+            "bongo_line": self.bongo_line,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "OledSideConfig":
+        # New format: "images" key (list of OledImageItem dicts)
+        if "images" in data and isinstance(data["images"], list):
+            images = [OledImageItem.from_dict(d) for d in data["images"] if isinstance(d, dict)]
+        # Migration: old format had image_path at top level
+        elif data.get("image_path"):
+            images = [OledImageItem.from_dict({
+                "image_path": data["image_path"],
+                "col": int(data.get("image_col", 0)),
+                "line": int(data.get("image_line", 0)),
+                "inverted": bool(data.get("image_inverted", False)),
+            })]
+        else:
+            images = []
+        return cls(
+            images=images,
+            layer=OledOverlayItem.from_dict(data.get("layer") or {}),
+            caps_lock=OledOverlayItem.from_dict(data.get("caps_lock") or {}),
+            wpm=OledOverlayItem.from_dict(data.get("wpm") or {}),
+            luna_enabled=bool(data.get("luna_enabled", False)),
+            luna_line=int(data.get("luna_line", 13)),
+            bongo_enabled=bool(data.get("bongo_enabled", False)),
+            bongo_line=int(data.get("bongo_line", 0)),
         )
 
 
 @dataclass
 class OledConfig:
-    """Configuration de l'affichage OLED.
+    """Configuration OLED split : côté gauche + côté droit indépendants.
 
-    Note: le champ `frames` est uniquement runtime (données binaires converties).
-    Il n'est PAS inclus dans la sérialisation JSON.
+    Migration : les anciens champs (image_path, overlays, luna_x, luna_y)
+    sont ignorés silencieusement lors du chargement.
     """
 
-    image_path: str = ""
-    overlays: list[str] = field(default_factory=list)
-    frames: list[bytes] = field(default_factory=list, repr=False)  # runtime only
+    left: OledSideConfig = field(default_factory=OledSideConfig)
+    right: OledSideConfig = field(default_factory=OledSideConfig)
 
     def to_dict(self) -> dict[str, Any]:
-        """Sérialise sans le champ `frames` (données runtime binaires)."""
         return {
-            "image_path": self.image_path,
-            "overlays": list(self.overlays),
+            "left": self.left.to_dict(),
+            "right": self.right.to_dict(),
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "OledConfig":
+        # Migration : si l'ancien format (clé "image_path" au niveau racine) est détecté,
+        # ignorer silencieusement les anciens champs.
+        left_data = data.get("left") or {}
+        right_data = data.get("right") or {}
         return cls(
-            image_path=data.get("image_path", ""),
-            overlays=list(data.get("overlays") or []),
-            frames=[],  # toujours vide au chargement — regénéré à l'import
+            left=OledSideConfig.from_dict(left_data),
+            right=OledSideConfig.from_dict(right_data),
         )
 
 
@@ -145,7 +267,10 @@ class ProjectModel:
     {
         "version": "1.0",
         "keyboard": {"model": "sofle-v2", "mcu": "rp2040"},
-        "oled": {"image_path": "/abs/path.gif", "overlays": ["layer"]},
+        "oled": {
+            "left":  {"images": [{"image_path": "", "col": 0, "line": 0, ...}], "layer": {...}, ...},
+            "right": {"images": [], "layer": {...}, ...}
+        },
         "rgb": {"effects": [...], "per_key": {"KEY_A": "#FF0000"}},
         "build": {"vial_qmk_version": "0.7.1", "toolchain_version": "13.3.rel1"}
     }
@@ -160,7 +285,7 @@ class ProjectModel:
     def to_dict(self) -> dict[str, Any]:
         """Sérialise l'état complet en dict JSON-compatible.
 
-        Note: OledConfig.frames est exclu (données binaires runtime).
+        Note: OledSideConfig.frames est exclu (données binaires runtime).
         """
         return {
             "version": self.version,
