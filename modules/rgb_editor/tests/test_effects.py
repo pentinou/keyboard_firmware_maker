@@ -24,14 +24,14 @@ def test_effect_types_contains_ripple():
 
 
 def test_effect_types_ids_are_snake_case():
-    for effect_id, _ in EFFECT_TYPES:
-        assert effect_id == effect_id.lower()
-        assert " " not in effect_id
+    for e in EFFECT_TYPES:
+        assert e.id == e.id.lower()
+        assert " " not in e.id
 
 
 def test_effect_types_have_display_names():
-    for _, display in EFFECT_TYPES:
-        assert len(display) > 0
+    for e in EFFECT_TYPES:
+        assert len(e.name) > 0
 
 
 def test_no_qt_import_in_effects():

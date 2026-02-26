@@ -8,7 +8,10 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QPushButton
 
 from models.project_model import ProjectModel
+from modules.rgb_editor.effects import EFFECT_TYPES
 from modules.rgb_editor.widget import RgbWidget
+
+_RIPPLE_IDX = next(i for i, e in enumerate(EFFECT_TYPES) if e.id == "ripple")
 
 
 @pytest.fixture
@@ -45,8 +48,9 @@ class TestRgbWidgetInit:
     def test_buttons_have_correct_size(self, widget):
         btn = widget._key_buttons["L_r0_c0"]
         from modules.rgb_editor.widget import KEY_SIZE
-        assert btn.width() == KEY_SIZE
-        assert btn.height() == KEY_SIZE
+        # Physical layout uses KEY_SIZE-2; grid fallback uses KEY_SIZE
+        assert btn.width() in (KEY_SIZE, KEY_SIZE - 2)
+        assert btn.height() in (KEY_SIZE, KEY_SIZE - 2)
 
 
 class TestRgbWidgetColorAssignment:
@@ -108,13 +112,13 @@ class TestRgbWidgetRefreshLayout:
         widget.refresh_layout()
         assert len(widget._key_buttons) == initial_count
 
-    def test_corne_has_48_buttons(self, qtbot):
-        """Corne: 4 rows × 6 cols × 2 sides = 48 keys."""
+    def test_corne_has_42_buttons(self, qtbot):
+        """Corne: 42 touches réelles (3×6 + 3 pouces) × 2 côtés, layout physique."""
         model = ProjectModel()
         model.keyboard.model = "corne"
         w = RgbWidget(model)
         qtbot.addWidget(w)
-        assert len(w._key_buttons) == 48
+        assert len(w._key_buttons) == 42
 
     def test_refresh_layout_preserves_per_key_colors(self, qtbot, model):
         """L3 — refresh_layout() doit restaurer les couleurs per-key après reconstruction."""
@@ -137,7 +141,7 @@ class TestRgbWidgetEffects:
         from PySide6.QtWidgets import QComboBox
         combo = widget.findChild(QComboBox, "effect_combo")
         items = [combo.itemText(i) for i in range(combo.count())]
-        assert any("statique" in t.lower() for t in items)
+        assert any("solid" in t.lower() for t in items)
 
     def test_effect_combo_has_ripple(self, widget):
         from PySide6.QtWidgets import QComboBox
@@ -156,7 +160,7 @@ class TestRgbWidgetEffects:
     def test_select_ripple_creates_effect(self, widget, model):
         from PySide6.QtWidgets import QComboBox
         combo = widget.findChild(QComboBox, "effect_combo")
-        combo.setCurrentIndex(1)  # ripple
+        combo.setCurrentIndex(_RIPPLE_IDX)
         assert model.rgb.effects[0].type == "ripple"
 
     def test_color_primary_button_exists(self, widget):
@@ -226,7 +230,7 @@ class TestRgbWidgetEffects:
         w = RgbWidget(model)
         qtbot.addWidget(w)
         combo = w.findChild(QComboBox, "effect_combo")
-        assert combo.currentIndex() == 1  # ripple
+        assert combo.currentIndex() == _RIPPLE_IDX
 
     def test_sync_restores_fade_ms(self, qtbot):
         model = ProjectModel()
@@ -242,7 +246,7 @@ class TestRgbWidgetEffects:
     def test_ac4_full_ripple_state(self, widget, model):
         """AC4 — vérification complète de l'état ripple (type + les 3 paramètres)."""
         from PySide6.QtWidgets import QComboBox, QSpinBox
-        widget.findChild(QComboBox, "effect_combo").setCurrentIndex(1)  # ripple
+        widget.findChild(QComboBox, "effect_combo").setCurrentIndex(_RIPPLE_IDX)
         with patch("modules.rgb_editor.widget.QColorDialog.getColor", return_value=QColor("#FF0000")):
             widget._on_color_primary_clicked()
         with patch("modules.rgb_editor.widget.QColorDialog.getColor", return_value=QColor("#FF8800")):
@@ -283,7 +287,7 @@ class TestRgbWidgetPreview:
 
     def test_select_ripple_starts_preview(self, widget):
         from PySide6.QtWidgets import QComboBox
-        widget.findChild(QComboBox, "effect_combo").setCurrentIndex(1)  # ripple
+        widget.findChild(QComboBox, "effect_combo").setCurrentIndex(_RIPPLE_IDX)
         assert widget._preview.is_active()
         widget._preview.stop()
 
@@ -297,7 +301,7 @@ class TestRgbWidgetPreview:
     def test_hide_event_stops_preview(self, widget):
         from PySide6.QtGui import QHideEvent
         from PySide6.QtWidgets import QComboBox
-        widget.findChild(QComboBox, "effect_combo").setCurrentIndex(1)  # ripple
+        widget.findChild(QComboBox, "effect_combo").setCurrentIndex(_RIPPLE_IDX)
         assert widget._preview.is_active()
         widget.hideEvent(QHideEvent())
         assert not widget._preview.is_active()
@@ -305,7 +309,7 @@ class TestRgbWidgetPreview:
     def test_show_event_starts_preview_with_effect(self, widget):
         from PySide6.QtGui import QShowEvent
         from PySide6.QtWidgets import QComboBox
-        widget.findChild(QComboBox, "effect_combo").setCurrentIndex(1)  # crée l'effet ripple
+        widget.findChild(QComboBox, "effect_combo").setCurrentIndex(_RIPPLE_IDX)  # crée l'effet ripple
         widget._preview.stop()  # stopper manuellement
         assert not widget._preview.is_active()
         widget.showEvent(QShowEvent())

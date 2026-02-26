@@ -21,13 +21,14 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
+    QSplitter,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from models.project_model import ProjectModel, RgbEffect
-from modules.hardware.keyboard_loader import KeyboardDefinition, load_all_keyboards
+from modules.hardware.keyboard_loader import KeyboardDefinition, KeyLayout, load_all_keyboards
 from modules.rgb_editor.effect_preview import EffectPreview
 from modules.rgb_editor.effects import EFFECT_TYPES
 
@@ -37,7 +38,16 @@ KEYBOARDS_DIR = Path(__file__).parent.parent.parent / "keyboards"
 KEY_SIZE = 36  # px
 
 # Index dans EFFECT_TYPES
-_EFFECT_IDS = [et[0] for et in EFFECT_TYPES]
+_EFFECT_IDS = [e.id for e in EFFECT_TYPES]
+
+
+def _stack_page_for(effect_id: str) -> int:
+    """Retourne l'index de page du stack pour un effet donné."""
+    if effect_id == "static":
+        return 0
+    if effect_id == "ripple":
+        return 2
+    return 1
 
 
 class RgbWidget(QWidget):
@@ -45,7 +55,7 @@ class RgbWidget(QWidget):
 
     Contient :
     - Un layout visuel split du clavier (touches colorées par click + QColorDialog)
-    - Une section effets RGB (QComboBox + paramètres dynamiques)
+    - Une section effets RGB (QComboBox + description + paramètres dynamiques)
     """
 
     def __init__(self, model: ProjectModel, parent: QWidget | None = None) -> None:
@@ -90,7 +100,6 @@ class RgbWidget(QWidget):
         self._keys_hbox = QHBoxLayout(container)
         self._keys_hbox.setAlignment(Qt.AlignmentFlag.AlignLeft)
         scroll.setWidget(container)
-        outer.addWidget(scroll)
 
         # Section effets
         effects_group = QGroupBox("Effets RGB")
@@ -102,22 +111,34 @@ class RgbWidget(QWidget):
         combo_row.addWidget(QLabel("Type d'effet :"))
         self._effect_combo = QComboBox()
         self._effect_combo.setObjectName("effect_combo")
-        for _, display in EFFECT_TYPES:
-            self._effect_combo.addItem(display)
+        for e in EFFECT_TYPES:
+            self._effect_combo.addItem(e.name)
         self._effect_combo.currentIndexChanged.connect(self._on_effect_type_changed)
         combo_row.addWidget(self._effect_combo)
         combo_row.addStretch()
         effects_layout.addLayout(combo_row)
 
-        # Panneau dynamique (QStackedWidget)
+        # Label description
+        self._lbl_effect_desc = QLabel()
+        self._lbl_effect_desc.setObjectName("effect_desc")
+        self._lbl_effect_desc.setWordWrap(True)
+        effects_layout.addWidget(self._lbl_effect_desc)
+
+        # Panneau dynamique (QStackedWidget) — 3 pages
         self._effect_stack = QStackedWidget()
         self._effect_stack.setObjectName("effect_stack")
-        self._effect_stack.addWidget(self._build_static_panel())   # index 0
-        self._effect_stack.addWidget(self._build_ripple_panel())   # index 1
+        self._effect_stack.addWidget(self._build_static_panel())   # index 0 : static
+        self._effect_stack.addWidget(self._build_native_panel())   # index 1 : effets QMK natifs
+        self._effect_stack.addWidget(self._build_ripple_panel())   # index 2 : ripple custom
         effects_layout.addWidget(self._effect_stack)
 
-        outer.addWidget(effects_group)
-        outer.addStretch()
+        # Splitter vertical : scroll (clavier) | effects_group
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.addWidget(scroll)
+        splitter.addWidget(effects_group)
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 1)
+        outer.addWidget(splitter)
 
     def _build_static_panel(self) -> QWidget:
         panel = QWidget()
@@ -131,6 +152,16 @@ class RgbWidget(QWidget):
         self._btn_static_color.clicked.connect(self._on_color_primary_clicked)
         layout.addWidget(self._btn_static_color)
         layout.addStretch()
+        return panel
+
+    def _build_native_panel(self) -> QWidget:
+        panel = QWidget()
+        panel.setObjectName("native_panel")
+        layout = QHBoxLayout(panel)
+        lbl = QLabel("Effet natif QMK — ajustable via RGB_MOD / RGB_HUI / RGB_VAI sur le clavier.")
+        lbl.setWordWrap(True)
+        lbl.setObjectName("native_info_label")
+        layout.addWidget(lbl)
         return panel
 
     def _build_ripple_panel(self) -> QWidget:
@@ -199,9 +230,15 @@ class RgbWidget(QWidget):
                 item.widget().deleteLater()
 
         kb = self._find_current_keyboard()
+        if kb and kb.layout:
+            self._build_physical_layout(kb)
+        else:
+            self._build_grid_layout(kb)
+
+    def _build_grid_layout(self, kb: KeyboardDefinition | None) -> None:
+        """Fallback : grille uniforme rows × cols."""
         rows = kb.matrix.get("rows", 5) if kb else 5
         cols = kb.matrix.get("cols", 6) if kb else 6
-
         for side in ("L", "R"):
             frame = QFrame()
             frame.setFrameShape(QFrame.Shape.StyledPanel)
@@ -220,6 +257,42 @@ class RgbWidget(QWidget):
                     )
                     grid.addWidget(btn, r, c)
                     self._key_buttons[key_id] = btn
+            self._keys_hbox.addWidget(frame)
+            self._keys_hbox.addSpacing(16)
+
+    def _build_physical_layout(self, kb: KeyboardDefinition) -> None:
+        """Positionnement absolu d'après les coordonnées physiques du YAML."""
+        side_map = {"L": "left", "R": "right"}
+        padding = 4  # px autour des touches
+        for side_code, yaml_side in side_map.items():
+            keys: list[KeyLayout] = kb.layout.get(yaml_side, [])
+            if not keys:
+                continue
+
+            max_x = max(k.x for k in keys)
+            max_y = max(k.y for k in keys)
+            canvas_w = int((max_x + 1) * KEY_SIZE) + padding * 2
+            canvas_h = int((max_y + 1) * KEY_SIZE) + padding * 2
+
+            frame = QFrame()
+            frame.setFrameShape(QFrame.Shape.StyledPanel)
+            frame.setObjectName(f"frame_{side_code}")
+            frame.setMinimumSize(canvas_w, canvas_h)
+
+            for k in keys:
+                key_id = f"{side_code}_r{k.row}_c{k.col}"
+                btn = QPushButton(parent=frame)
+                btn.setFixedSize(KEY_SIZE - 2, KEY_SIZE - 2)
+                btn.setObjectName(key_id)
+                btn.setToolTip(key_id)
+                px = padding + int(k.x * KEY_SIZE)
+                py = padding + int(k.y * KEY_SIZE)
+                btn.move(px, py)
+                btn.clicked.connect(
+                    lambda checked=False, kid=key_id: self._on_key_clicked(kid)
+                )
+                self._key_buttons[key_id] = btn
+
             self._keys_hbox.addWidget(frame)
             self._keys_hbox.addSpacing(16)
 
@@ -268,13 +341,14 @@ class RgbWidget(QWidget):
         if self._trigger_mode:
             self._trigger_mode = False
             self._btn_trigger.setText("Choisir touche déclencheur")
-        effect_id = EFFECT_TYPES[index][0]
-        effect = self._ensure_effect(effect_id)
-        effect.type = effect_id
-        self._effect_stack.setCurrentIndex(index)
+        effect_def = EFFECT_TYPES[index]
+        effect = self._ensure_effect(effect_def.id)
+        effect.type = effect_def.id
+        self._lbl_effect_desc.setText(effect_def.description)
+        self._effect_stack.setCurrentIndex(_stack_page_for(effect_def.id))
         self._refresh_effect_buttons()
         self._update_preview()
-        logger.info("Effet RGB changé : %s", effect_id)
+        logger.info("Effet RGB changé : %s", effect_def.id)
 
     def _on_color_primary_clicked(self) -> None:
         effect = self._ensure_effect(_EFFECT_IDS[self._effect_combo.currentIndex()])
@@ -334,7 +408,9 @@ class RgbWidget(QWidget):
             self._effect_combo.blockSignals(True)
             self._effect_combo.setCurrentIndex(idx)
             self._effect_combo.blockSignals(False)
-            self._effect_stack.setCurrentIndex(idx)
+            effect_def = EFFECT_TYPES[idx]
+            self._lbl_effect_desc.setText(effect_def.description)
+            self._effect_stack.setCurrentIndex(_stack_page_for(effect.type))
             # Spinbox fade_ms
             self._fade_ms_spin.blockSignals(True)
             self._fade_ms_spin.setValue(effect.fade_ms)
