@@ -1,6 +1,6 @@
 """MainWindow — fenêtre principale de keyboard_firmware_maker.
 
-Contient le QTabWidget avec les 4 onglets principaux, le menu "Fichier" et le menu "Aide".
+Contient le QTabWidget avec les 4 onglets principaux, les menus Fichier, Configuration et Aide.
 Reçoit le ProjectModel par injection de dépendance au constructeur.
 """
 from __future__ import annotations
@@ -9,6 +9,7 @@ import json
 import logging
 from pathlib import Path
 
+from PySide6.QtGui import QActionGroup
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from i18n import AVAILABLE_LANGUAGES, get_language, set_language, tr
 from models.project_model import ProjectModel
 from modules.hardware.widget import HardwareWidget
 from modules.oled_editor.widget import OledWidget
@@ -53,7 +55,7 @@ class MainWindow(QMainWindow):
         return self._model
 
     def _setup_ui(self) -> None:
-        self.setWindowTitle("keyboard_firmware_maker")
+        self.setWindowTitle(tr("app.title"))
         self.setMinimumSize(900, 600)
 
         self._tabs = QTabWidget()
@@ -64,10 +66,10 @@ class MainWindow(QMainWindow):
         self._tab_rgb = RgbWidget(self._model)
         self._tab_build = BuildWidget(self._model)
 
-        self._tabs.addTab(self._tab_hardware, "Matériel")
-        self._tabs.addTab(self._tab_oled, "OLED")
-        self._tabs.addTab(self._tab_rgb, "RGB")
-        self._tabs.addTab(self._tab_build, "Build")
+        self._tabs.addTab(self._tab_hardware, tr("tab.hardware"))
+        self._tabs.addTab(self._tab_oled,     tr("tab.oled"))
+        self._tabs.addTab(self._tab_rgb,      tr("tab.rgb"))
+        self._tabs.addTab(self._tab_build,    tr("tab.build"))
 
         # Désactivés par défaut — activés selon les capacités du clavier (FR3, FR4)
         self._tabs.setTabEnabled(1, False)
@@ -84,10 +86,10 @@ class MainWindow(QMainWindow):
     def _on_capabilities_changed(self, capabilities: dict) -> None:
         """Met à jour la visibilité des onglets selon les capacités du clavier sélectionné."""
         self._tabs.setTabEnabled(1, bool(capabilities.get("oled", False)))
-        rgb_enabled = bool(capabilities.get("rgb", False))
-        self._tabs.setTabEnabled(2, rgb_enabled)
-        if rgb_enabled:
-            self._tab_rgb.refresh_layout()
+        # L'onglet RGB est toujours accessible pour visualiser le layout physique.
+        # La fonctionnalité per-key RGB n'est active que si rgb=True.
+        self._tabs.setTabEnabled(2, True)
+        self._tab_rgb.refresh_layout()
         logger.info(
             "Capacités mises à jour : OLED=%s, RGB=%s",
             capabilities.get("oled"),
@@ -97,42 +99,58 @@ class MainWindow(QMainWindow):
     def _setup_menu(self) -> None:
         menu_bar = self.menuBar()
 
-        # Menu Fichier — AVANT Aide
-        file_menu = menu_bar.addMenu("Fichier")
-        save_action = file_menu.addAction("Sauvegarder le projet…")
+        # Menu Fichier
+        file_menu = menu_bar.addMenu(tr("menu.file"))
+        save_action = file_menu.addAction(tr("menu.file.save"))
         save_action.triggered.connect(self._save_project)
-        open_action = file_menu.addAction("Ouvrir un projet…")
+        open_action = file_menu.addAction(tr("menu.file.open"))
         open_action.triggered.connect(self._open_project)
         file_menu.addSeparator()
-        quit_action = file_menu.addAction("Quitter")
+        quit_action = file_menu.addAction(tr("menu.file.quit"))
         quit_action.triggered.connect(QApplication.quit)
 
-        # Menu Aide — inchangé
-        help_menu = menu_bar.addMenu("Aide")
-        about_action = help_menu.addAction("À propos…")
+        # Menu Configuration (entre Fichier et Aide)
+        config_menu = menu_bar.addMenu(tr("menu.config"))
+        lang_menu = config_menu.addMenu(tr("menu.config.language"))
+        lang_group = QActionGroup(lang_menu)
+        lang_group.setExclusive(True)
+        for code, name in AVAILABLE_LANGUAGES.items():
+            act = lang_menu.addAction(name)
+            act.setCheckable(True)
+            act.setChecked(code == get_language())
+            act.triggered.connect(lambda checked, lc=code: self._on_language_changed(lc))
+            lang_group.addAction(act)
+
+        # Menu Aide
+        help_menu = menu_bar.addMenu(tr("menu.help"))
+        about_action = help_menu.addAction(tr("menu.help.about"))
         about_action.triggered.connect(self._show_about)
+
+    def _on_language_changed(self, lang: str) -> None:
+        set_language(lang)
+        QMessageBox.information(self, tr("dlg.lang_change_title"), tr("dlg.lang_change_msg"))
 
     def _save_project(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
-            self, "Sauvegarder le projet", str(Path.home()), "Projet KFM (*.kfm.json)"
+            self, tr("dlg.save_title"), str(Path.home()), tr("dlg.file_filter")
         )
         if not path:
             return
         try:
             save_project(self._model, Path(path))  # L3 : file_io loggue déjà, pas besoin ici
         except OSError as e:
-            QMessageBox.critical(self, "Erreur", f"Impossible de sauvegarder : {e}")
+            QMessageBox.critical(self, tr("dlg.error"), tr("dlg.save_error").format(e=e))
 
     def _open_project(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
-            self, "Ouvrir un projet", str(Path.home()), "Projet KFM (*.kfm.json)"
+            self, tr("dlg.open_title"), str(Path.home()), tr("dlg.file_filter")
         )
         if not path:
             return
         try:
             loaded = load_project(Path(path))
         except (OSError, json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
-            QMessageBox.critical(self, "Erreur", f"Impossible de charger le projet : {e}")
+            QMessageBox.critical(self, tr("dlg.error"), tr("dlg.load_error").format(e=e))
             return
 
         # Mettre à jour les champs (conserver la référence existante)
@@ -143,7 +161,7 @@ class MainWindow(QMainWindow):
 
         self._sync_hardware_widget()
         # M1 : resynchroniser les widgets OLED et RGB avec les nouvelles données
-        self._tab_oled._sync_overlays_from_model()
+        self._tab_oled._sync_from_model()
         self._tab_rgb._sync_from_model()
         logger.info("Projet ouvert : %s", path)
 
@@ -180,10 +198,8 @@ class MainWindow(QMainWindow):
             if dlg.exec() != QDialog.DialogCode.Accepted:
                 QMessageBox.warning(
                     self,
-                    "Vial-QMK non disponible",
-                    "La configuration de Vial-QMK a échoué ou a été annulée.\n"
-                    "L'onglet Build ne fonctionnera pas correctement.\n"
-                    "Relancez l'application pour réessayer.",
+                    tr("dlg.vial_unavailable"),
+                    tr("dlg.vial_unavailable_msg"),
                 )
 
     def _show_about(self) -> None:

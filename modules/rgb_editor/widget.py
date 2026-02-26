@@ -12,12 +12,12 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QHideEvent, QShowEvent
 from PySide6.QtWidgets import (
     QColorDialog,
-    QComboBox,
     QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QListWidget,
     QPushButton,
     QScrollArea,
     QSpinBox,
@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from i18n import tr
 from models.project_model import ProjectModel, RgbEffect
 from modules.hardware.keyboard_loader import KeyboardDefinition, KeyLayout, load_all_keyboards
 from modules.rgb_editor.effect_preview import EffectPreview
@@ -55,7 +56,7 @@ class RgbWidget(QWidget):
 
     Contient :
     - Un layout visuel split du clavier (touches colorées par click + QColorDialog)
-    - Une section effets RGB (QComboBox + description + paramètres dynamiques)
+    - Une section effets RGB (QListWidget + description + paramètres dynamiques)
     """
 
     def __init__(self, model: ProjectModel, parent: QWidget | None = None) -> None:
@@ -89,7 +90,7 @@ class RgbWidget(QWidget):
         outer = QVBoxLayout(self)
 
         # Section touches
-        key_label = QLabel("Couleurs par touche — cliquez une touche pour assigner une couleur")
+        key_label = QLabel(tr("rgb.instructions"))
         key_label.setObjectName("rgb_instructions")
         outer.addWidget(key_label)
 
@@ -101,28 +102,29 @@ class RgbWidget(QWidget):
         self._keys_hbox.setAlignment(Qt.AlignmentFlag.AlignLeft)
         scroll.setWidget(container)
 
-        # Section effets
-        effects_group = QGroupBox("Effets RGB")
+        # Section effets — QListWidget à gauche, description + stack à droite
+        effects_group = QGroupBox(tr("rgb.effects_group"))
         effects_group.setObjectName("effects_group")
-        effects_layout = QVBoxLayout(effects_group)
+        effects_hbox = QHBoxLayout(effects_group)
 
-        # Combo sélection effet
-        combo_row = QHBoxLayout()
-        combo_row.addWidget(QLabel("Type d'effet :"))
-        self._effect_combo = QComboBox()
-        self._effect_combo.setObjectName("effect_combo")
+        # QListWidget (gauche)
+        self._effect_list = QListWidget()
+        self._effect_list.setObjectName("effect_list")
+        self._effect_list.setFixedWidth(220)
         for e in EFFECT_TYPES:
-            self._effect_combo.addItem(e.name)
-        self._effect_combo.currentIndexChanged.connect(self._on_effect_type_changed)
-        combo_row.addWidget(self._effect_combo)
-        combo_row.addStretch()
-        effects_layout.addLayout(combo_row)
+            self._effect_list.addItem(e.name)
+        self._effect_list.currentRowChanged.connect(self._on_effect_type_changed)
+        effects_hbox.addWidget(self._effect_list)
+
+        # Panneau droite : description + stack
+        right_vbox = QVBoxLayout()
+        right_vbox.setContentsMargins(0, 0, 0, 0)
 
         # Label description
         self._lbl_effect_desc = QLabel()
         self._lbl_effect_desc.setObjectName("effect_desc")
         self._lbl_effect_desc.setWordWrap(True)
-        effects_layout.addWidget(self._lbl_effect_desc)
+        right_vbox.addWidget(self._lbl_effect_desc)
 
         # Panneau dynamique (QStackedWidget) — 3 pages
         self._effect_stack = QStackedWidget()
@@ -130,7 +132,10 @@ class RgbWidget(QWidget):
         self._effect_stack.addWidget(self._build_static_panel())   # index 0 : static
         self._effect_stack.addWidget(self._build_native_panel())   # index 1 : effets QMK natifs
         self._effect_stack.addWidget(self._build_ripple_panel())   # index 2 : ripple custom
-        effects_layout.addWidget(self._effect_stack)
+        right_vbox.addWidget(self._effect_stack)
+        right_vbox.addStretch()
+
+        effects_hbox.addLayout(right_vbox, 1)
 
         # Splitter vertical : scroll (clavier) | effects_group
         splitter = QSplitter(Qt.Orientation.Vertical)
@@ -144,11 +149,11 @@ class RgbWidget(QWidget):
         panel = QWidget()
         panel.setObjectName("static_panel")
         layout = QHBoxLayout(panel)
-        layout.addWidget(QLabel("Couleur uniforme :"))
+        layout.addWidget(QLabel(tr("rgb.static.color")))
         self._btn_static_color = QPushButton()
         self._btn_static_color.setObjectName("btn_color_primary")
         self._btn_static_color.setFixedSize(32, 24)
-        self._btn_static_color.setToolTip("Cliquer pour choisir la couleur")
+        self._btn_static_color.setToolTip(tr("rgb.static.tooltip"))
         self._btn_static_color.clicked.connect(self._on_color_primary_clicked)
         layout.addWidget(self._btn_static_color)
         layout.addStretch()
@@ -158,7 +163,7 @@ class RgbWidget(QWidget):
         panel = QWidget()
         panel.setObjectName("native_panel")
         layout = QHBoxLayout(panel)
-        lbl = QLabel("Effet natif QMK — ajustable via RGB_MOD / RGB_HUI / RGB_VAI sur le clavier.")
+        lbl = QLabel(tr("rgb.native.info"))
         lbl.setWordWrap(True)
         lbl.setObjectName("native_info_label")
         layout.addWidget(lbl)
@@ -171,7 +176,7 @@ class RgbWidget(QWidget):
 
         # Couleur primaire
         row1 = QHBoxLayout()
-        row1.addWidget(QLabel("Couleur touche pressée :"))
+        row1.addWidget(QLabel(tr("rgb.ripple.primary")))
         self._btn_ripple_primary = QPushButton()
         self._btn_ripple_primary.setObjectName("btn_ripple_primary")
         self._btn_ripple_primary.setFixedSize(32, 24)
@@ -182,7 +187,7 @@ class RgbWidget(QWidget):
 
         # Couleur secondaire
         row2 = QHBoxLayout()
-        row2.addWidget(QLabel("Couleur touches voisines :"))
+        row2.addWidget(QLabel(tr("rgb.ripple.secondary")))
         self._btn_color_secondary = QPushButton()
         self._btn_color_secondary.setObjectName("btn_color_secondary")
         self._btn_color_secondary.setFixedSize(32, 24)
@@ -193,7 +198,7 @@ class RgbWidget(QWidget):
 
         # Fade ms
         row3 = QHBoxLayout()
-        row3.addWidget(QLabel("Vitesse de fondu (ms) :"))
+        row3.addWidget(QLabel(tr("rgb.ripple.fade")))
         self._fade_ms_spin = QSpinBox()
         self._fade_ms_spin.setObjectName("fade_ms_spin")
         self._fade_ms_spin.setRange(50, 5000)
@@ -206,10 +211,10 @@ class RgbWidget(QWidget):
 
         # Touche déclencheur
         row4 = QHBoxLayout()
-        self._btn_trigger = QPushButton("Choisir touche déclencheur")
+        self._btn_trigger = QPushButton(tr("rgb.ripple.trigger_btn"))
         self._btn_trigger.setObjectName("btn_trigger")
         self._btn_trigger.clicked.connect(self._on_trigger_clicked)
-        self._lbl_trigger = QLabel("Non défini")
+        self._lbl_trigger = QLabel(tr("rgb.ripple.trigger_none"))
         self._lbl_trigger.setObjectName("lbl_trigger")
         row4.addWidget(self._btn_trigger)
         row4.addWidget(self._lbl_trigger)
@@ -310,10 +315,10 @@ class RgbWidget(QWidget):
                 self._lbl_trigger.setText(key_id)
                 logger.info("Touche déclencheur définie : %s", key_id)
             self._trigger_mode = False
-            self._btn_trigger.setText("Choisir touche déclencheur")
+            self._btn_trigger.setText(tr("rgb.ripple.trigger_btn"))
             return
         current = QColor(self._model.rgb.per_key.get(key_id, "#FFFFFF"))
-        color = QColorDialog.getColor(current, self, f"Couleur pour {key_id}")
+        color = QColorDialog.getColor(current, self, tr("rgb.key_color_fmt").format(key_id=key_id))
         if color.isValid():
             hex_color = color.name().upper()
             self._apply_color(key_id, hex_color)
@@ -334,14 +339,14 @@ class RgbWidget(QWidget):
             self._model.rgb.effects = [RgbEffect(type=type_id)]
         return self._model.rgb.effects[0]
 
-    def _on_effect_type_changed(self, index: int) -> None:
-        if index < 0 or index >= len(EFFECT_TYPES):
+    def _on_effect_type_changed(self, row: int) -> None:
+        if row < 0 or row >= len(EFFECT_TYPES):
             return
         # M1: quitter le mode trigger si actif lors du changement d'effet
         if self._trigger_mode:
             self._trigger_mode = False
-            self._btn_trigger.setText("Choisir touche déclencheur")
-        effect_def = EFFECT_TYPES[index]
+            self._btn_trigger.setText(tr("rgb.ripple.trigger_btn"))
+        effect_def = EFFECT_TYPES[row]
         effect = self._ensure_effect(effect_def.id)
         effect.type = effect_def.id
         self._lbl_effect_desc.setText(effect_def.description)
@@ -351,18 +356,18 @@ class RgbWidget(QWidget):
         logger.info("Effet RGB changé : %s", effect_def.id)
 
     def _on_color_primary_clicked(self) -> None:
-        effect = self._ensure_effect(_EFFECT_IDS[self._effect_combo.currentIndex()])
+        effect = self._ensure_effect(_EFFECT_IDS[self._effect_list.currentRow()])
         current = QColor(effect.color_primary)
-        color = QColorDialog.getColor(current, self, "Couleur principale")
+        color = QColorDialog.getColor(current, self, tr("rgb.dialog.primary_color"))
         if color.isValid():
             effect.color_primary = color.name().upper()
             self._refresh_effect_buttons()
             self._update_preview()
 
     def _on_color_secondary_clicked(self) -> None:
-        effect = self._ensure_effect(_EFFECT_IDS[self._effect_combo.currentIndex()])
+        effect = self._ensure_effect(_EFFECT_IDS[self._effect_list.currentRow()])
         current = QColor(effect.color_secondary)
-        color = QColorDialog.getColor(current, self, "Couleur secondaire")
+        color = QColorDialog.getColor(current, self, tr("rgb.dialog.secondary_color"))
         if color.isValid():
             effect.color_secondary = color.name().upper()
             self._refresh_effect_buttons()
@@ -379,7 +384,7 @@ class RgbWidget(QWidget):
 
     def _on_trigger_clicked(self) -> None:
         self._trigger_mode = True
-        self._btn_trigger.setText("Cliquez une touche…")
+        self._btn_trigger.setText(tr("rgb.ripple.trigger_click"))
 
     def _refresh_effect_buttons(self) -> None:
         """Met à jour les couleurs affichées sur les boutons de couleur."""
@@ -399,15 +404,15 @@ class RgbWidget(QWidget):
             self._apply_color(key_id, hex_color)
         if self._model.rgb.effects:
             effect = self._model.rgb.effects[0]
-            # Combo effet
+            # Liste effet
             try:
                 idx = _EFFECT_IDS.index(effect.type)
             except ValueError:
                 logger.warning("Type d'effet inconnu '%s' — retour à static", effect.type)
                 idx = 0
-            self._effect_combo.blockSignals(True)
-            self._effect_combo.setCurrentIndex(idx)
-            self._effect_combo.blockSignals(False)
+            self._effect_list.blockSignals(True)
+            self._effect_list.setCurrentRow(idx)
+            self._effect_list.blockSignals(False)
             effect_def = EFFECT_TYPES[idx]
             self._lbl_effect_desc.setText(effect_def.description)
             self._effect_stack.setCurrentIndex(_stack_page_for(effect.type))
