@@ -69,6 +69,7 @@ class OledImageItem:
 
     image_path: str = ""
     frames: list[bytes] = field(default_factory=list, repr=False)  # runtime only
+    delays: list[int] = field(default_factory=list, repr=False)    # runtime only (ms par frame)
     natural_w: int = 32   # largeur thumbnail (pixels OLED)
     natural_h: int = 128  # hauteur thumbnail (pixels OLED)
     col: int = 0          # colonne curseur QMK (0-4)
@@ -108,8 +109,13 @@ class OledSideConfig:
     layer: OledOverlayItem = field(default_factory=OledOverlayItem)
     caps_lock: OledOverlayItem = field(default_factory=OledOverlayItem)
     wpm: OledOverlayItem = field(default_factory=OledOverlayItem)
+    rgb_mode: OledOverlayItem = field(default_factory=OledOverlayItem)
+    katawajojo_enabled: bool = False
+    katawajojo_line: int = 13  # page de départ KatawaJojo (13*8=104px, bas de l'écran 128px)
     luna_enabled: bool = False
     luna_line: int = 13  # page de départ Luna (13*8=104px, bas de l'écran 128px)
+    ocean_dream_enabled: bool = False
+    ocean_dream_line: int = 0  # plein écran
     bongo_enabled: bool = False
     bongo_line: int = 0  # page de départ Bongo Cat (0-15)
 
@@ -119,8 +125,13 @@ class OledSideConfig:
             "layer": self.layer.to_dict(),
             "caps_lock": self.caps_lock.to_dict(),
             "wpm": self.wpm.to_dict(),
+            "rgb_mode": self.rgb_mode.to_dict(),
+            "katawajojo_enabled": self.katawajojo_enabled,
+            "katawajojo_line": self.katawajojo_line,
             "luna_enabled": self.luna_enabled,
             "luna_line": self.luna_line,
+            "ocean_dream_enabled": self.ocean_dream_enabled,
+            "ocean_dream_line": self.ocean_dream_line,
             "bongo_enabled": self.bongo_enabled,
             "bongo_line": self.bongo_line,
         }
@@ -140,13 +151,29 @@ class OledSideConfig:
             })]
         else:
             images = []
+        # Migration: old "luna_enabled" was actually katawajojo
+        if "katawajojo_enabled" in data:
+            katawajojo_enabled = bool(data.get("katawajojo_enabled", False))
+            katawajojo_line = int(data.get("katawajojo_line", 13))
+            luna_enabled = bool(data.get("luna_enabled", False))
+            luna_line = int(data.get("luna_line", 13))
+        else:
+            katawajojo_enabled = bool(data.get("luna_enabled", False))
+            katawajojo_line = int(data.get("luna_line", 13))
+            luna_enabled = False
+            luna_line = 13
         return cls(
             images=images,
             layer=OledOverlayItem.from_dict(data.get("layer") or {}),
             caps_lock=OledOverlayItem.from_dict(data.get("caps_lock") or {}),
             wpm=OledOverlayItem.from_dict(data.get("wpm") or {}),
-            luna_enabled=bool(data.get("luna_enabled", False)),
-            luna_line=int(data.get("luna_line", 13)),
+            rgb_mode=OledOverlayItem.from_dict(data.get("rgb_mode") or {}),
+            katawajojo_enabled=katawajojo_enabled,
+            katawajojo_line=katawajojo_line,
+            luna_enabled=luna_enabled,
+            luna_line=luna_line,
+            ocean_dream_enabled=bool(data.get("ocean_dream_enabled", False)),
+            ocean_dream_line=int(data.get("ocean_dream_line", 0)),
             bongo_enabled=bool(data.get("bongo_enabled", False)),
             bongo_line=int(data.get("bongo_line", 0)),
         )
@@ -162,11 +189,17 @@ class OledConfig:
 
     left: OledSideConfig = field(default_factory=OledSideConfig)
     right: OledSideConfig = field(default_factory=OledSideConfig)
+    anti_burnin: bool = False
+    sleep_enabled: bool = False
+    sleep_timeout_s: int = 240
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "left": self.left.to_dict(),
             "right": self.right.to_dict(),
+            "anti_burnin": self.anti_burnin,
+            "sleep_enabled": self.sleep_enabled,
+            "sleep_timeout_s": self.sleep_timeout_s,
         }
 
     @classmethod
@@ -178,6 +211,9 @@ class OledConfig:
         return cls(
             left=OledSideConfig.from_dict(left_data),
             right=OledSideConfig.from_dict(right_data),
+            anti_burnin=bool(data.get("anti_burnin", False)),
+            sleep_enabled=bool(data.get("sleep_enabled", False)),
+            sleep_timeout_s=int(data.get("sleep_timeout_s", 240)),
         )
 
 

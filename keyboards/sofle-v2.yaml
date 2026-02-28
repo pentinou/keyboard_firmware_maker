@@ -1,5 +1,8 @@
 model: sofle-v2
 display_name: "Sofle v2.1 RGB"
+vial_name: "Sofle"
+vial_vid: "0xFC32"
+vial_pid: "0x0287"
 description: "Clavier split 60% avec encodeurs rotatifs, afficheur OLED 128×64 et LEDs RGB addressables per-key. Conçu par Josef Adamcik."
 mcu_options:
   - id: rp2040
@@ -15,3 +18,78 @@ oled:
   width: 64
   height: 128
   bits: 1
+# Physical key positions (x, y in key units). Source: QMK info.json sofle/rev1
+# Right side positions are normalized relative to left (x_min subtracted = 9.5)
+layout:
+  left:
+    # row 0 — number row
+    - {row: 0, col: 0, x: 0.0,  y: 0.5}
+    - {row: 0, col: 1, x: 1.0,  y: 0.375}
+    - {row: 0, col: 2, x: 2.0,  y: 0.125}
+    - {row: 0, col: 3, x: 3.0,  y: 0.0}
+    - {row: 0, col: 4, x: 4.0,  y: 0.125}
+    - {row: 0, col: 5, x: 5.0,  y: 0.25}
+    # row 1 — QWERTY
+    - {row: 1, col: 0, x: 0.0,  y: 1.5}
+    - {row: 1, col: 1, x: 1.0,  y: 1.375}
+    - {row: 1, col: 2, x: 2.0,  y: 1.125}
+    - {row: 1, col: 3, x: 3.0,  y: 1.0}
+    - {row: 1, col: 4, x: 4.0,  y: 1.125}
+    - {row: 1, col: 5, x: 5.0,  y: 1.25}
+    # row 2 — home row
+    - {row: 2, col: 0, x: 0.0,  y: 2.5}
+    - {row: 2, col: 1, x: 1.0,  y: 2.375}
+    - {row: 2, col: 2, x: 2.0,  y: 2.125}
+    - {row: 2, col: 3, x: 3.0,  y: 2.0}
+    - {row: 2, col: 4, x: 4.0,  y: 2.125}
+    - {row: 2, col: 5, x: 5.0,  y: 2.25}
+    # row 3 — bottom row
+    - {row: 3, col: 0, x: 0.0,  y: 3.5}
+    - {row: 3, col: 1, x: 1.0,  y: 3.375}
+    - {row: 3, col: 2, x: 2.0,  y: 3.125}
+    - {row: 3, col: 3, x: 3.0,  y: 3.0}
+    - {row: 3, col: 4, x: 4.0,  y: 3.125}
+    - {row: 3, col: 5, x: 5.0,  y: 3.25}
+    # row 4 — encoder + thumb cluster (c0-c3 décalés pour coller c3 à c4)
+    - {row: 4, col: 5, x: 6.0,  y: 2.75, encoder: true}
+    - {row: 4, col: 0, x: 2.0,  y: 4.375}
+    - {row: 4, col: 1, x: 3.0,  y: 4.125}
+    - {row: 4, col: 2, x: 4.0,  y: 4.15}
+    - {row: 4, col: 3, x: 5.0,  y: 4.25}
+    - {row: 4, col: 4, x: 6.0,  y: 4.25}
+  right:
+    # row 0 — number row (miroir exact du côté gauche, x_right = 6 - x_left)
+    - {row: 0, col: 5, x: 1.0,  y: 0.25}
+    - {row: 0, col: 4, x: 2.0,  y: 0.125}
+    - {row: 0, col: 3, x: 3.0,  y: 0.0}
+    - {row: 0, col: 2, x: 4.0,  y: 0.125}
+    - {row: 0, col: 1, x: 5.0,  y: 0.375}
+    - {row: 0, col: 0, x: 6.0,  y: 0.5}
+    # row 1
+    - {row: 1, col: 5, x: 1.0,  y: 1.25}
+    - {row: 1, col: 4, x: 2.0,  y: 1.125}
+    - {row: 1, col: 3, x: 3.0,  y: 1.0}
+    - {row: 1, col: 2, x: 4.0,  y: 1.125}
+    - {row: 1, col: 1, x: 5.0,  y: 1.375}
+    - {row: 1, col: 0, x: 6.0,  y: 1.5}
+    # row 2
+    - {row: 2, col: 5, x: 1.0,  y: 2.25}
+    - {row: 2, col: 4, x: 2.0,  y: 2.125}
+    - {row: 2, col: 3, x: 3.0,  y: 2.0}
+    - {row: 2, col: 2, x: 4.0,  y: 2.125}
+    - {row: 2, col: 1, x: 5.0,  y: 2.375}
+    - {row: 2, col: 0, x: 6.0,  y: 2.5}
+    # row 3
+    - {row: 3, col: 5, x: 1.0,  y: 3.25}
+    - {row: 3, col: 4, x: 2.0,  y: 3.125}
+    - {row: 3, col: 3, x: 3.0,  y: 3.0}
+    - {row: 3, col: 2, x: 4.0,  y: 3.125}
+    - {row: 3, col: 1, x: 5.0,  y: 3.375}
+    - {row: 3, col: 0, x: 6.0,  y: 3.5}
+    # row 4 — encoder + thumb cluster (miroir du left corrigé : x_right = 6 - x_left)
+    - {row: 4, col: 5, x: 0.0,  y: 2.75, encoder: true}
+    - {row: 4, col: 0, x: 4.0,  y: 4.375}
+    - {row: 4, col: 1, x: 3.0,  y: 4.125}
+    - {row: 4, col: 2, x: 2.0,  y: 4.15}
+    - {row: 4, col: 3, x: 1.0,  y: 4.25}
+    - {row: 4, col: 4, x: 0.0,  y: 4.25}

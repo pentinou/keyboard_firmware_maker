@@ -243,12 +243,21 @@ class TestOledWidgetCheckboxesLeft:
         cb = widget.findChild(QCheckBox, "left_wpm_check")
         assert cb is not None
 
+    def test_left_katawajojo_check_exists(self, widget):
+        cb = widget.findChild(QCheckBox, "left_katawajojo_check")
+        assert cb is not None
+
     def test_left_luna_check_exists(self, widget):
         cb = widget.findChild(QCheckBox, "left_luna_check")
         assert cb is not None
 
+    def test_left_ocean_dream_check_exists(self, widget):
+        cb = widget.findChild(QCheckBox, "left_ocean_dream_check")
+        assert cb is not None
+
     def test_left_checkboxes_unchecked_by_default(self, widget):
-        for name in ("left_layer_check", "left_caps_check", "left_wpm_check", "left_luna_check"):
+        for name in ("left_layer_check", "left_caps_check", "left_wpm_check",
+                      "left_katawajojo_check", "left_luna_check", "left_ocean_dream_check"):
             cb = widget.findChild(QCheckBox, name)
             assert not cb.isChecked(), f"{name} doit être décoché par défaut"
 
@@ -267,10 +276,20 @@ class TestOledWidgetCheckboxesLeft:
         cb.setChecked(True)
         assert model.oled.left.wpm.enabled is True
 
+    def test_check_left_katawajojo_updates_model(self, widget, model):
+        cb = widget.findChild(QCheckBox, "left_katawajojo_check")
+        cb.setChecked(True)
+        assert model.oled.left.katawajojo_enabled is True
+
     def test_check_left_luna_updates_model(self, widget, model):
         cb = widget.findChild(QCheckBox, "left_luna_check")
         cb.setChecked(True)
         assert model.oled.left.luna_enabled is True
+
+    def test_check_left_ocean_dream_updates_model(self, widget, model):
+        cb = widget.findChild(QCheckBox, "left_ocean_dream_check")
+        cb.setChecked(True)
+        assert model.oled.left.ocean_dream_enabled is True
 
     def test_uncheck_left_layer_updates_model(self, widget, model):
         cb = widget.findChild(QCheckBox, "left_layer_check")
@@ -295,12 +314,21 @@ class TestOledWidgetCheckboxesRight:
         cb = widget.findChild(QCheckBox, "right_wpm_check")
         assert cb is not None
 
+    def test_right_katawajojo_check_exists(self, widget):
+        cb = widget.findChild(QCheckBox, "right_katawajojo_check")
+        assert cb is not None
+
     def test_right_luna_check_exists(self, widget):
         cb = widget.findChild(QCheckBox, "right_luna_check")
         assert cb is not None
 
+    def test_right_ocean_dream_check_exists(self, widget):
+        cb = widget.findChild(QCheckBox, "right_ocean_dream_check")
+        assert cb is not None
+
     def test_right_checkboxes_unchecked_by_default(self, widget):
-        for name in ("right_layer_check", "right_caps_check", "right_wpm_check", "right_luna_check"):
+        for name in ("right_layer_check", "right_caps_check", "right_wpm_check",
+                      "right_katawajojo_check", "right_luna_check", "right_ocean_dream_check"):
             cb = widget.findChild(QCheckBox, name)
             assert not cb.isChecked(), f"{name} doit être décoché par défaut"
 
@@ -309,10 +337,20 @@ class TestOledWidgetCheckboxesRight:
         cb.setChecked(True)
         assert model.oled.right.layer.enabled is True
 
+    def test_check_right_katawajojo_updates_model(self, widget, model):
+        cb = widget.findChild(QCheckBox, "right_katawajojo_check")
+        cb.setChecked(True)
+        assert model.oled.right.katawajojo_enabled is True
+
     def test_check_right_luna_updates_model(self, widget, model):
         cb = widget.findChild(QCheckBox, "right_luna_check")
         cb.setChecked(True)
         assert model.oled.right.luna_enabled is True
+
+    def test_check_right_ocean_dream_updates_model(self, widget, model):
+        cb = widget.findChild(QCheckBox, "right_ocean_dream_check")
+        cb.setChecked(True)
+        assert model.oled.right.ocean_dream_enabled is True
 
     def test_check_right_does_not_affect_left(self, widget, model):
         widget.findChild(QCheckBox, "right_layer_check").setChecked(True)
@@ -327,13 +365,17 @@ class TestOledWidgetSync:
         model.oled.left.caps_lock.enabled = True
         model.oled.left.wpm.enabled = True
         model.oled.right.luna_enabled = True
+        model.oled.left.katawajojo_enabled = True
+        model.oled.right.ocean_dream_enabled = True
         w = OledWidget(model)
         qtbot.addWidget(w)
         assert not w.findChild(QCheckBox, "left_layer_check").isChecked()
         assert w.findChild(QCheckBox, "left_caps_check").isChecked()
         assert w.findChild(QCheckBox, "left_wpm_check").isChecked()
+        assert w.findChild(QCheckBox, "left_katawajojo_check").isChecked()
         assert not w.findChild(QCheckBox, "right_layer_check").isChecked()
         assert w.findChild(QCheckBox, "right_luna_check").isChecked()
+        assert w.findChild(QCheckBox, "right_ocean_dream_check").isChecked()
 
     def test_sync_from_model_does_not_trigger_signal(self, qtbot, model):
         """La synchronisation initiale ne doit pas modifier le modèle via signal."""
@@ -372,6 +414,19 @@ class TestOledCanvasDrag:
         assert model.oled.left.layer.col == 2
         assert model.oled.left.layer.line == 3
 
+    def test_drag_katawajojo_updates_line_only(self, widget, model):
+        """Drag de KatawaJojo ne modifie que katawajojo_line (col toujours 0)."""
+        model.oled.left.katawajojo_enabled = True
+        model.oled.left.katawajojo_line = 0
+        canvas = widget._canvas_left
+        canvas._dragging_item = "katawajojo"
+        canvas._drag_offset_x = 0
+        canvas._drag_offset_y = 0
+        py = 5 * canvas.PAGE_H + 1
+        new_line = max(0, min(py // canvas.PAGE_H, 15))
+        model.oled.left.katawajojo_line = new_line
+        assert model.oled.left.katawajojo_line == 5
+
     def test_drag_luna_updates_line_only(self, widget, model):
         """Drag de Luna ne modifie que luna_line (col toujours 0)."""
         model.oled.left.luna_enabled = True
@@ -384,6 +439,19 @@ class TestOledCanvasDrag:
         new_line = max(0, min(py // canvas.PAGE_H, 15))
         model.oled.left.luna_line = new_line
         assert model.oled.left.luna_line == 5
+
+    def test_drag_ocean_dream_updates_line_only(self, widget, model):
+        """Drag de Ocean Dream ne modifie que ocean_dream_line."""
+        model.oled.left.ocean_dream_enabled = True
+        model.oled.left.ocean_dream_line = 0
+        canvas = widget._canvas_left
+        canvas._dragging_item = "ocean_dream"
+        canvas._drag_offset_x = 0
+        canvas._drag_offset_y = 0
+        py = 3 * canvas.PAGE_H + 1
+        new_line = max(0, min(py // canvas.PAGE_H, 15))
+        model.oled.left.ocean_dream_line = new_line
+        assert model.oled.left.ocean_dream_line == 3
 
     def test_drag_constrained_to_max_col(self, widget, model):
         """col ne dépasse pas 4 (limite 5 colonnes pour 32px / 6px)."""

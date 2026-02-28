@@ -16,7 +16,7 @@
   {%- set ns.keys = ns.keys + [[half_rows + matrix_rows, col, col + gap, half_rows]] -%}
 {%- endfor -%}
 {
-    "keyboard_name": "{{ keyboard_model }}",
+    "keyboard_name": "{{ vial_name }}",
     "url": "",
     "maintainer": "keyboard_firmware_maker",
     "manufacturer": "keyboard_firmware_maker",
@@ -25,14 +25,43 @@
         "pid": "0x0001",
         "device_version": "0.0.1"
     },
+    "features": {
+        "encoder": true
+    },
+    "encoder": {
+        "rotary": [
+{% if mcu == "rp2040" %}
+            { "pin_a": "GP28", "pin_b": "GP29", "resolution": 2 }
+{% else %}
+            { "pin_a": "F5", "pin_b": "F4", "resolution": 2 }
+{% endif %}
+        ]
+    },
     "split": {
-        "enabled": true
+        "enabled": true,
+        "encoder": {
+            "right": {
+                "rotary": [
+{% if mcu == "rp2040" %}
+                    { "pin_a": "GP29", "pin_b": "GP28", "resolution": 2 }
+{% else %}
+                    { "pin_a": "F4", "pin_b": "F5", "resolution": 2 }
+{% endif %}
+                ]
+            }
+        },
+        "transport": {
+            "sync": {
+                "oled": true,
+                "wpm": true
+            }
+        }
     },
     "diode_direction": "COL2ROW",
 {% if mcu == "rp2040" %}
     "matrix_pins": {
-        "rows": ["GP29", "GP28", "GP27", "GP26", "GP22"],
-        "cols": ["GP20", "GP23", "GP21", "GP19", "GP18", "GP17"]
+        "rows": ["GP5", "GP6", "GP7", "GP8", "GP9"],
+        "cols": ["GP27", "GP26", "GP22", "GP20", "GP23", "GP21"]
     },
 {% endif %}
     "layouts": {

@@ -39,58 +39,350 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     ),
 };
 
+/* Encoder map — 1 encoder per side, configurable via Vial */
+#if defined(ENCODER_MAP_ENABLE)
+const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
+    [_BASE]  = { ENCODER_CCW_CW(KC_VOLD, KC_VOLU), ENCODER_CCW_CW(KC_PGDN, KC_PGUP) },
+    [_LOWER] = { ENCODER_CCW_CW(KC_MPRV, KC_MNXT), ENCODER_CCW_CW(KC_HOME, KC_END)  },
+    [_RAISE] = { ENCODER_CCW_CW(KC_BRID, KC_BRIU), ENCODER_CCW_CW(KC_LEFT, KC_RGHT) },
+};
+#endif
+
+{% if katawajojo_enabled %}
+#include "katawajojo.c"
+{% endif %}
+{% if luna_enabled %}
+#include "luna.c"
+{% endif %}
+{% if ocean_dream_enabled %}
+#include "ocean_dream.c"
+{% endif %}
+{% if left_bongo_enabled or right_bongo_enabled %}
+#include "bongocat.c"
+{% endif %}
+
 {% if oled_enabled %}
 /* ─── OLED ─────────────────────────────────────────────────────────────── */
 
-{% if oled_frames %}
-/* OLED bitmap frames (1-bit, 64×128px) */
-{% for frame in oled_frames %}
-static const uint8_t PROGMEM oled_frame_{{ loop.index0 }}[] = {
+oled_rotation_t oled_init_user(oled_rotation_t rotation) {
+    return OLED_ROTATION_270;
+}
+
+{% if left_rgb_mode.enabled or right_rgb_mode.enabled %}
+/* RGB mode abbreviated names — 2 lines × 5 chars */
+static const char PROGMEM rgb_name[][11] = {
+/*  0 */ "          ",  /* None */
+/*  1 */ "SolidColor",
+/*  2 */ "AlphaMods ",
+/*  3 */ "Grad UpDwn",
+/*  4 */ "Grad LfRgt",
+/*  5 */ "Breathhing",
+/*  6 */ "Band Sat  ",
+/*  7 */ "Band Val  ",
+/*  8 */ "BdPinSat  ",
+/*  9 */ "BdPinVal  ",
+/* 10 */ "BdSpiSat  ",
+/* 11 */ "BdSpiVal  ",
+/* 12 */ "CycleAll  ",
+/* 13 */ "CycleLfRgt",
+/* 14 */ "CycleUpDwn",
+/* 15 */ "CycleOutIn",
+/* 16 */ "CycleOIDul",
+/* 17 */ "RnbMvChvrn",
+/* 18 */ "CyclePinwl",
+/* 19 */ "CycleSpirl",
+/* 20 */ "Dual Beacn",
+/* 21 */ "RainbBeacn",
+/* 22 */ "RainbPinwl",
+/* 23 */ "FlowrBloom",
+/* 24 */ "Rain drops",
+/* 25 */ "JellyDrops",
+/* 26 */ "Hue  Breth",
+/* 27 */ "Hue  Pendl",
+/* 28 */ "Hue  Wave ",
+/* 29 */ "PixelFrctl",
+/* 30 */ "PixelFlow ",
+/* 31 */ "PixelRain ",
+/* 32 */ "TypngHtmap",
+/* 33 */ "DigtlRain ",
+/* 34 */ "SldReSimpl",
+/* 35 */ "SolidReact",
+/* 36 */ "SldReWide ",
+/* 37 */ "SldReMulWd",
+/* 38 */ "SldReCross",
+/* 39 */ "SldReMulCr",
+/* 40 */ "SldReNexus",
+/* 41 */ "SldReMulNx",
+/* 42 */ "SplasH    ",
+/* 43 */ "MultiSplsh",
+/* 44 */ "SolidSplsh",
+/* 45 */ "SldMuSplsh",
+/* 46 */ "Star light",
+/* 47 */ "Star Smoth",
+/* 48 */ "StarDulHue",
+/* 49 */ "StarDulSat",
+/* 50 */ "Riverflow ",
+};
+#define RGB_NAME_COUNT (sizeof(rgb_name) / sizeof(rgb_name[0]))
+
+/* Separator bar: 32 pixels wide, 1 page tall (all bottom pixels lit) */
+static const char PROGMEM rgb_sep[32] = {
+    0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+    0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+    0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+    0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+};
+
+static void render_rgb_mode(uint8_t col, uint8_t line) {
+    uint8_t mode = rgb_matrix_get_mode();
+    oled_set_cursor(col, line);
+    oled_write_P(PSTR("RGB  "), false);
+    /* Separator bar */
+    oled_set_cursor(0, line + 1);
+    oled_write_raw_P(rgb_sep, sizeof(rgb_sep));
+    /* Mode name — 2 lines of 5 chars */
+    if (mode < RGB_NAME_COUNT) {
+        char buf[6];
+        memcpy_P(buf, rgb_name[mode], 5);
+        buf[5] = '\0';
+        oled_set_cursor(col, line + 2);
+        oled_write(buf, false);
+        memcpy_P(buf, rgb_name[mode] + 5, 5);
+        buf[5] = '\0';
+        oled_set_cursor(col, line + 3);
+        oled_write(buf, false);
+    } else {
+        oled_set_cursor(col, line + 2);
+        oled_write_P(PSTR("Mode "), false);
+        oled_set_cursor(col, line + 3);
+        oled_write(get_u8_str(mode, ' '), false);
+    }
+}
+{% endif %}
+
+
+{% for img in left_images %}
+/* LEFT OLED image {{ img.idx }} bitmap frames */
+{% for frame in img.frames %}
+static const uint8_t PROGMEM left_img{{ img.idx }}_frame{{ loop.index0 }}[] = {
     {{ frame }}
 };
 {% endfor %}
+{% endfor %}
 
-/* Frame sizes lookup */
-static const uint16_t oled_frame_sizes[] = {
-{% for frame in oled_frames %}    sizeof(oled_frame_{{ loop.index0 }}){% if not loop.last %},{% endif %}
+{% for img in right_images %}
+/* RIGHT OLED image {{ img.idx }} bitmap frames */
+{% for frame in img.frames %}
+static const uint8_t PROGMEM right_img{{ img.idx }}_frame{{ loop.index0 }}[] = {
+    {{ frame }}
+};
+{% endfor %}
+{% endfor %}
 
-{% endfor %}};
+{% if anti_burnin %}
+/* ─── Anti burn-in ─────────────────────────────────────────────────────────
+ * Toutes les 60 s : inversion matérielle 1 s + décalage 1 pixel aléatoire.
+ * Réduit le marquage des éléments fixes sur l'écran OLED.              */
+extern uint8_t  oled_buffer[OLED_MATRIX_SIZE];
+extern uint16_t oled_dirty;
+
+static uint32_t _burnin_timer  = 0;
+static bool     _burnin_active = false;
+static uint8_t  _burnin_dir    = 0; /* 0=droite 1=gauche 2=haut 3=bas */
+
+static void _burnin_apply(void) {
+    if (_burnin_active) {
+        if (timer_elapsed32(_burnin_timer) >= 1000) {
+            _burnin_active = false;
+            _burnin_timer  = timer_read32();
+            oled_invert(false);
+            return;
+        }
+        /* Décalage 1 pixel dans la direction choisie */
+        uint8_t p, c;
+        switch (_burnin_dir) {
+            case 0: { /* Droite */
+                for (p = 0; p < OLED_MATRIX_SIZE / OLED_DISPLAY_HEIGHT; p++) {
+                    uint16_t b = (uint16_t)p * OLED_DISPLAY_HEIGHT;
+                    memmove(&oled_buffer[b + 1], &oled_buffer[b], OLED_DISPLAY_HEIGHT - 1);
+                    oled_buffer[b] = 0;
+                }
+                break;
+            }
+            case 1: { /* Gauche */
+                for (p = 0; p < OLED_MATRIX_SIZE / OLED_DISPLAY_HEIGHT; p++) {
+                    uint16_t b = (uint16_t)p * OLED_DISPLAY_HEIGHT;
+                    memmove(&oled_buffer[b], &oled_buffer[b + 1], OLED_DISPLAY_HEIGHT - 1);
+                    oled_buffer[b + OLED_DISPLAY_HEIGHT - 1] = 0;
+                }
+                break;
+            }
+            case 2: { /* Haut */
+                for (c = 0; c < OLED_DISPLAY_HEIGHT; c++) {
+                    uint8_t pages = OLED_MATRIX_SIZE / OLED_DISPLAY_HEIGHT;
+                    for (p = 0; p < pages - 1; p++) {
+                        uint8_t carry = (oled_buffer[(uint16_t)(p + 1) * OLED_DISPLAY_HEIGHT + c] & 0x01) << 7;
+                        oled_buffer[(uint16_t)p * OLED_DISPLAY_HEIGHT + c] =
+                            (oled_buffer[(uint16_t)p * OLED_DISPLAY_HEIGHT + c] >> 1) | carry;
+                    }
+                    oled_buffer[(uint16_t)(pages - 1) * OLED_DISPLAY_HEIGHT + c] >>= 1;
+                }
+                break;
+            }
+            default: { /* Bas */
+                uint8_t pages = OLED_MATRIX_SIZE / OLED_DISPLAY_HEIGHT;
+                for (c = 0; c < OLED_DISPLAY_HEIGHT; c++) {
+                    for (p = pages - 1; p > 0; p--) {
+                        uint8_t carry = (oled_buffer[(uint16_t)(p - 1) * OLED_DISPLAY_HEIGHT + c] & 0x80) >> 7;
+                        oled_buffer[(uint16_t)p * OLED_DISPLAY_HEIGHT + c] =
+                            (oled_buffer[(uint16_t)p * OLED_DISPLAY_HEIGHT + c] << 1) | carry;
+                    }
+                    oled_buffer[c] <<= 1;
+                }
+                break;
+            }
+        }
+        oled_dirty = 0xFFFF; /* Forcer rafraîchissement complet */
+    } else {
+        if (timer_elapsed32(_burnin_timer) >= 60000) {
+            _burnin_active = true;
+            _burnin_dir    = (uint8_t)(timer_read32() & 3);
+            _burnin_timer  = timer_read32();
+            oled_invert(true);
+        }
+    }
+}
 {% endif %}
 
 bool oled_task_user(void) {
     oled_clear();
-{% if oled_frames %}
-    /* Cycle through frames at ~200ms interval */
-    static uint32_t frame_timer = 0;
-    static uint8_t  frame_idx   = 0;
-    if (timer_elapsed32(frame_timer) > 200) {
-        frame_timer = timer_read32();
-        frame_idx   = (frame_idx + 1) % {{ oled_frames | length }};
-    }
-    switch (frame_idx) {
-{% for frame in oled_frames %}
-        case {{ loop.index0 }}: oled_write_raw_P(oled_frame_{{ loop.index0 }}, oled_frame_sizes[{{ loop.index0 }}]); break;
+    if (is_keyboard_left()) {
+        /* ── LEFT OLED ─────────────────────────────── */
+{% if left_images %}
+{% for img in left_images %}
+        oled_set_cursor(0, 0);
+{% if img.frames | length > 1 %}
+        {
+            static const uint16_t left_img{{ img.idx }}_delays[] = { {{ img.delays | join(', ') }} };
+            static uint32_t left_img{{ img.idx }}_timer = 0;
+            static uint8_t  left_img{{ img.idx }}_idx   = 0;
+            if (timer_elapsed32(left_img{{ img.idx }}_timer) > left_img{{ img.idx }}_delays[left_img{{ img.idx }}_idx]) {
+                left_img{{ img.idx }}_timer = timer_read32();
+                left_img{{ img.idx }}_idx   = (left_img{{ img.idx }}_idx + 1) % {{ img.frames | length }};
+            }
+            switch (left_img{{ img.idx }}_idx) {
+{% for frame in img.frames %}
+                case {{ loop.index0 }}: oled_write_raw_P((const char *)left_img{{ img.idx }}_frame{{ loop.index0 }}, sizeof(left_img{{ img.idx }}_frame{{ loop.index0 }})); break;
 {% endfor %}
-    }
+            }
+        }
 {% else %}
-    oled_write_P(PSTR("keyboard_firmware_maker"), false);
+        oled_write_raw_P((const char *)left_img{{ img.idx }}_frame0, sizeof(left_img{{ img.idx }}_frame0));
 {% endif %}
-{% if "layer" in oled_overlays %}
-    oled_set_cursor(0, 3);
-    oled_write_P(PSTR("Layer: "), false);
-    oled_write(get_u8_str(get_highest_layer(layer_state), ' '), false);
+{% endfor %}
+{% else %}
+        oled_write_P(PSTR("KFM  "), false);
 {% endif %}
-{% if "caps_lock" in oled_overlays %}
-    led_t led_state = host_keyboard_led_state();
-    if (led_state.caps_lock) {
-        oled_set_cursor(0, 4);
-        oled_write_P(PSTR("CAPS"), false);
+{% if left_layer.enabled %}
+        oled_set_cursor({{ left_layer.col }}, {{ left_layer.line }});
+        oled_write_P(PSTR("LAYER"), false);
+        oled_set_cursor({{ left_layer.col }}, {{ left_layer.line + 1 }});
+        oled_write(get_u8_str(get_highest_layer(layer_state), ' '), false);
+{% endif %}
+{% if left_caps_lock.enabled %}
+        oled_set_cursor({{ left_caps_lock.col }}, {{ left_caps_lock.line }});
+        oled_write_P(PSTR("Cap"), false);
+        { led_t l = host_keyboard_led_state();
+            oled_set_cursor({{ left_caps_lock.col }}, {{ left_caps_lock.line + 1 }});
+            oled_write_P(l.caps_lock ? PSTR("ON ") : PSTR("   "), false); }
+{% endif %}
+{% if left_wpm.enabled %}
+        oled_set_cursor({{ left_wpm.col }}, {{ left_wpm.line }});
+        oled_write_P(PSTR("Wpm"), false);
+        oled_set_cursor({{ left_wpm.col }}, {{ left_wpm.line + 1 }});
+        oled_write(get_u8_str(get_current_wpm(), ' '), false);
+{% endif %}
+{% if left_rgb_mode.enabled %}
+        render_rgb_mode({{ left_rgb_mode.col }}, {{ left_rgb_mode.line }});
+{% endif %}
+{% if left_katawajojo_enabled %}
+        render_katawajojo({{ left_katawajojo_line }});
+{% endif %}
+{% if left_luna_enabled %}
+        render_luna({{ left_luna_line }});
+{% endif %}
+{% if left_ocean_dream_enabled %}
+        render_ocean_dream();
+{% endif %}
+{% if left_bongo_enabled %}
+        oled_set_cursor(0, {{ left_bongo_line }});
+        render_anim_bongocat();
+{% endif %}
+    } else {
+        /* ── RIGHT OLED ─────────────────────────────── */
+{% if right_images %}
+{% for img in right_images %}
+        oled_set_cursor(0, 0);
+{% if img.frames | length > 1 %}
+        {
+            static const uint16_t right_img{{ img.idx }}_delays[] = { {{ img.delays | join(', ') }} };
+            static uint32_t right_img{{ img.idx }}_timer = 0;
+            static uint8_t  right_img{{ img.idx }}_idx   = 0;
+            if (timer_elapsed32(right_img{{ img.idx }}_timer) > right_img{{ img.idx }}_delays[right_img{{ img.idx }}_idx]) {
+                right_img{{ img.idx }}_timer = timer_read32();
+                right_img{{ img.idx }}_idx   = (right_img{{ img.idx }}_idx + 1) % {{ img.frames | length }};
+            }
+            switch (right_img{{ img.idx }}_idx) {
+{% for frame in img.frames %}
+                case {{ loop.index0 }}: oled_write_raw_P((const char *)right_img{{ img.idx }}_frame{{ loop.index0 }}, sizeof(right_img{{ img.idx }}_frame{{ loop.index0 }})); break;
+{% endfor %}
+            }
+        }
+{% else %}
+        oled_write_raw_P((const char *)right_img{{ img.idx }}_frame0, sizeof(right_img{{ img.idx }}_frame0));
+{% endif %}
+{% endfor %}
+{% else %}
+        oled_write_P(PSTR("KFM  "), false);
+{% endif %}
+{% if right_layer.enabled %}
+        oled_set_cursor({{ right_layer.col }}, {{ right_layer.line }});
+        oled_write_P(PSTR("LAYER"), false);
+        oled_set_cursor({{ right_layer.col }}, {{ right_layer.line + 1 }});
+        oled_write(get_u8_str(get_highest_layer(layer_state), ' '), false);
+{% endif %}
+{% if right_caps_lock.enabled %}
+        oled_set_cursor({{ right_caps_lock.col }}, {{ right_caps_lock.line }});
+        oled_write_P(PSTR("Cap"), false);
+        { led_t l = host_keyboard_led_state();
+            oled_set_cursor({{ right_caps_lock.col }}, {{ right_caps_lock.line + 1 }});
+            oled_write_P(l.caps_lock ? PSTR("ON ") : PSTR("   "), false); }
+{% endif %}
+{% if right_wpm.enabled %}
+        oled_set_cursor({{ right_wpm.col }}, {{ right_wpm.line }});
+        oled_write_P(PSTR("Wpm"), false);
+        oled_set_cursor({{ right_wpm.col }}, {{ right_wpm.line + 1 }});
+        oled_write(get_u8_str(get_current_wpm(), ' '), false);
+{% endif %}
+{% if right_rgb_mode.enabled %}
+        render_rgb_mode({{ right_rgb_mode.col }}, {{ right_rgb_mode.line }});
+{% endif %}
+{% if right_katawajojo_enabled %}
+        render_katawajojo({{ right_katawajojo_line }});
+{% endif %}
+{% if right_luna_enabled %}
+        render_luna({{ right_luna_line }});
+{% endif %}
+{% if right_ocean_dream_enabled %}
+        render_ocean_dream();
+{% endif %}
+{% if right_bongo_enabled %}
+        oled_set_cursor(0, {{ right_bongo_line }});
+        render_anim_bongocat();
+{% endif %}
     }
-{% endif %}
-{% if "wpm" in oled_overlays %}
-    oled_set_cursor(0, 5);
-    oled_write(get_u8_str(get_current_wpm(), ' '), false);
-    oled_write_P(PSTR(" WPM"), false);
+{% if anti_burnin %}
+    _burnin_apply();
 {% endif %}
     return false;
 }
@@ -99,12 +391,25 @@ bool oled_task_user(void) {
 {% if rgb_enabled %}
 /* ─── RGB ───────────────────────────────────────────────────────────────── */
 
-{% for effect in rgb_effects %}
-{% if effect.type == "ripple" %}
-/* Ripple effect : primary={{ effect.color_primary }}, secondary={{ effect.color_secondary }}, fade={{ effect.fade_ms }}ms */
-bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
-    return false;
+{% if has_reactive_effects %}
+uint8_t  _ripple_last_x = 128;
+uint8_t  _ripple_last_y = 32;
+uint16_t _ripple_timer  = 0;
+bool     _ripple_active = false;
+
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    if (record->event.pressed) {
+        uint8_t row = record->event.key.row;
+        uint8_t col = record->event.key.col;
+        uint8_t led = g_led_config.matrix_co[row][col];
+        if (led != NO_LED) {
+            _ripple_last_x = g_led_config.point[led].x;
+            _ripple_last_y = g_led_config.point[led].y;
+            _ripple_timer  = timer_read();
+            _ripple_active = true;
+        }
+    }
+    return true;
 }
 {% endif %}
-{% endfor %}
 {% endif %}

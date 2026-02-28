@@ -11,6 +11,7 @@ Structure de sortie dans output_dir/ :
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import sys
 from pathlib import Path
@@ -19,6 +20,7 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader
 
 from models.project_model import OledSideConfig, ProjectModel
+from modules.oled_editor.processor import frame_to_qmk_bytes
 from modules.hardware.keyboard_loader import load_keyboard
 
 logger = logging.getLogger(__name__)
@@ -76,14 +78,23 @@ class TemplateGenerator:
         result: dict[str, Path] = {}
 
         template_files = list(TEMPLATE_FILES)
+        if model.oled.left.katawajojo_enabled or model.oled.right.katawajojo_enabled:
+            template_files.append(("katawajojo.c.j2", "keymaps/default/katawajojo.c"))
         if model.oled.left.luna_enabled or model.oled.right.luna_enabled:
             template_files.append(("luna.c.j2", "keymaps/default/luna.c"))
+        if model.oled.left.ocean_dream_enabled or model.oled.right.ocean_dream_enabled:
+            template_files.append(("ocean_dream.c.j2", "keymaps/default/ocean_dream.c"))
         if model.oled.left.bongo_enabled or model.oled.right.bongo_enabled:
             template_files.append(("bongocat.c.j2", "keymaps/default/bongocat.c"))
             template_files.append(("bongocat.h.j2", "keymaps/default/bongocat.h"))
         custom_effects = [e for e in model.rgb.effects if e.type in _CUSTOM_EFFECT_TYPES]
         if custom_effects:
             template_files.append(("rgb_matrix_user.inc.j2", "keymaps/default/rgb_matrix_user.inc"))
+
+        # Check for static vial.json (official layout from keyboard vendor)
+        static_vial = self._templates_dir.parent / "keyboards" / f"{model.keyboard.model}.vial.json"
+        if static_vial.is_file():
+            template_files = [(n, o) for n, o in template_files if n != "vial.json.j2"]
 
         for tmpl_name, out_rel in template_files:
             tmpl = env.get_template(tmpl_name)
@@ -93,6 +104,15 @@ class TemplateGenerator:
             result[tmpl_name] = out_path
             logger.debug("Template rendu : %s → %s", tmpl_name, out_path)
 
+        # Copy static vial.json if available
+        if static_vial.is_file():
+            import shutil
+            vial_out = output_dir / "keymaps" / "default" / "vial.json"
+            vial_out.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(static_vial, vial_out)
+            result["vial.json"] = vial_out
+            logger.debug("Copie vial.json statique : %s → %s", static_vial, vial_out)
+
         logger.info("Génération templates terminée dans %s", output_dir)
         return result
 
@@ -101,15 +121,26 @@ class TemplateGenerator:
         left = model.oled.left
         right = model.oled.right
 
+        left_katawajojo = left.katawajojo_enabled
+        right_katawajojo = right.katawajojo_enabled
+        katawajojo_enabled = left_katawajojo or right_katawajojo
+
         left_luna = left.luna_enabled
         right_luna = right.luna_enabled
         luna_enabled = left_luna or right_luna
+
+        left_ocean_dream = left.ocean_dream_enabled
+        right_ocean_dream = right.ocean_dream_enabled
+        ocean_dream_enabled = left_ocean_dream or right_ocean_dream
 
         left_bongo = left.bongo_enabled
         right_bongo = right.bongo_enabled
 
         wpm_needed = (
-            left.wpm.enabled or right.wpm.enabled or left_luna or right_luna
+            left.wpm.enabled or right.wpm.enabled
+            or left_katawajojo or right_katawajojo
+            or left_luna or right_luna
+            or left_ocean_dream or right_ocean_dream
             or left_bongo or right_bongo
         )
 
@@ -119,7 +150,10 @@ class TemplateGenerator:
                 or side.layer.enabled
                 or side.caps_lock.enabled
                 or side.wpm.enabled
+                or side.rgb_mode.enabled
+                or side.katawajojo_enabled
                 or side.luna_enabled
+                or side.ocean_dream_enabled
                 or side.bongo_enabled
             )
 
@@ -128,19 +162,58 @@ class TemplateGenerator:
         rgb_enabled = bool(model.rgb.effects or model.rgb.per_key)
 
         mcu = model.keyboard.mcu or "rp2040"
-        matrix_rows, matrix_cols = _load_keyboard_matrix(
+        matrix_rows, matrix_cols, kb_layout, vial_name, vial_vid, vial_pid = _load_keyboard_data(
             model.keyboard.model, self._templates_dir.parent
         )
+
+        # Build flat key list for vial.json with physical positions
+        vial_keys: list[dict] = []
+        left_keys = kb_layout.get("left", [])
+        right_keys = kb_layout.get("right", [])
+        if left_keys and right_keys:
+            max_left_x = max(k["x"] for k in left_keys)
+            x_offset = max_left_x + 1.5
+            thumb_row = matrix_rows - 1  # last row per half = thumb/encoder row
+            for k in left_keys:
+                # Skip encoder button placeholder (last row, col 0 — not in LAYOUT_sofle)
+                if k["row"] == thumb_row and k["col"] == 0:
+                    continue
+                vial_keys.append({
+                    "matrix_row": k["row"], "matrix_col": k["col"],
+                    "x": round(k["x"], 3), "y": round(k["y"], 3),
+                })
+            for k in right_keys:
+                # Skip encoder button placeholder (last row, col max — not in LAYOUT_sofle)
+                if k["row"] == thumb_row and k["col"] == matrix_cols - 1:
+                    continue
+                vial_keys.append({
+                    "matrix_row": k["row"] + matrix_rows, "matrix_col": k["col"],
+                    "x": round(k["x"] + x_offset, 3), "y": round(k["y"], 3),
+                })
+        else:
+            # Fallback: simple grid
+            for row in range(matrix_rows):
+                for col in range(matrix_cols):
+                    vial_keys.append({"matrix_row": row, "matrix_col": col,
+                                      "x": col, "y": row})
+            x_offset = matrix_cols + 1
+            for row in range(matrix_rows):
+                for col in range(matrix_cols):
+                    vial_keys.append({"matrix_row": row + matrix_rows,
+                                      "matrix_col": col, "x": col + x_offset, "y": row})
 
         def _build_images(side: OledSideConfig) -> list[dict]:
             result = []
             for i, img in enumerate(side.images):
                 if not img.frames:
                     continue
-                frames = _invert_frames(img.frames) if img.inverted else img.frames
+                frames = _invert_frames(img.frames, img.natural_w, img.natural_h) if img.inverted else img.frames
+                qmk_frames = [frame_to_qmk_bytes(f) for f in frames]
+                delays = img.delays if img.delays else [200] * len(frames)
                 result.append({
                     "idx": i,
-                    "frames": _encode_oled_frames(frames),
+                    "frames": _encode_oled_frames(qmk_frames),
+                    "delays": delays,
                     "col": img.col,
                     "line": img.line,
                 })
@@ -163,21 +236,36 @@ class TemplateGenerator:
                     "fade_ms": e.fade_ms,
                 })
 
+        uid_seed = (model.keyboard.model or "keyboard").encode()
+        uid_bytes = hashlib.md5(uid_seed).digest()[:8]
+        vial_uid = ", ".join(f"0x{b:02X}" for b in uid_bytes)
+
         return {
             "keyboard_model": model.keyboard.model or "keyboard_firmware_maker",
+            "vial_name": vial_name,
+            "vial_vid": vial_vid,
+            "vial_pid": vial_pid,
             "mcu": mcu,
             "bootloader": _BOOTLOADER_MAP.get(mcu, "rp2040"),
+            "vial_uid": vial_uid,
             "oled_enabled": oled_enabled,
             "wpm_needed": wpm_needed,
             "rgb_enabled": rgb_enabled,
+            "katawajojo_enabled": katawajojo_enabled,
             "luna_enabled": luna_enabled,
+            "ocean_dream_enabled": ocean_dream_enabled,
             # Left side
             "left_images": _build_images(left),
             "left_layer": {"enabled": left.layer.enabled, "col": left.layer.col, "line": left.layer.line},
             "left_caps_lock": {"enabled": left.caps_lock.enabled, "col": left.caps_lock.col, "line": left.caps_lock.line},
             "left_wpm": {"enabled": left.wpm.enabled, "col": left.wpm.col, "line": left.wpm.line},
+            "left_rgb_mode": {"enabled": left.rgb_mode.enabled and rgb_enabled, "col": left.rgb_mode.col, "line": left.rgb_mode.line},
+            "left_katawajojo_enabled": left_katawajojo,
+            "left_katawajojo_line": left.katawajojo_line,
             "left_luna_enabled": left_luna,
             "left_luna_line": left.luna_line,
+            "left_ocean_dream_enabled": left_ocean_dream,
+            "left_ocean_dream_line": left.ocean_dream_line,
             "left_bongo_enabled": left_bongo,
             "left_bongo_line": left.bongo_line,
             # Right side
@@ -185,8 +273,13 @@ class TemplateGenerator:
             "right_layer": {"enabled": right.layer.enabled, "col": right.layer.col, "line": right.layer.line},
             "right_caps_lock": {"enabled": right.caps_lock.enabled, "col": right.caps_lock.col, "line": right.caps_lock.line},
             "right_wpm": {"enabled": right.wpm.enabled, "col": right.wpm.col, "line": right.wpm.line},
+            "right_rgb_mode": {"enabled": right.rgb_mode.enabled and rgb_enabled, "col": right.rgb_mode.col, "line": right.rgb_mode.line},
+            "right_katawajojo_enabled": right_katawajojo,
+            "right_katawajojo_line": right.katawajojo_line,
             "right_luna_enabled": right_luna,
             "right_luna_line": right.luna_line,
+            "right_ocean_dream_enabled": right_ocean_dream,
+            "right_ocean_dream_line": right.ocean_dream_line,
             "right_bongo_enabled": right_bongo,
             "right_bongo_line": right.bongo_line,
             # RGB
@@ -197,36 +290,66 @@ class TemplateGenerator:
             "has_reactive_effects": any(e["type"] == "ripple" for e in custom_effects_ctx),
             "matrix_rows": matrix_rows,
             "matrix_cols": matrix_cols,
+            "vial_keys": vial_keys,
+            "anti_burnin": model.oled.anti_burnin and oled_enabled,
+            "oled_sleep": model.oled.sleep_enabled and oled_enabled,
+            "oled_sleep_timeout_ms": model.oled.sleep_timeout_s * 1000,
+            "rgb_sleep": model.oled.sleep_enabled and rgb_enabled,
         }
 
 
-def _load_keyboard_matrix(model_name: str, project_root: Path) -> tuple[int, int]:
-    """Charge les dimensions de matrice depuis le YAML du clavier.
+def _load_keyboard_data(
+    model_name: str, project_root: Path
+) -> tuple[int, int, dict, str, str, str]:
+    """Charge les dimensions de matrice, le layout et les métadonnées Vial depuis le YAML.
 
     Returns:
-        (rows_per_half, cols) — défaut (5, 6) si le fichier est introuvable.
+        (rows_per_half, cols, layout, vial_name, vial_vid, vial_pid)
+        layout = {"left": [...], "right": [...]} where each entry is a dict with
+        keys row, col, x, y.
     """
     kb_file = project_root / "keyboards" / f"{model_name}.yaml"
     try:
         kb = load_keyboard(kb_file)
-        return kb.matrix["rows"], kb.matrix["cols"]
+        raw_layout: dict[str, list[dict]] = {}
+        for side in ("left", "right"):
+            raw_layout[side] = [
+                {"row": k.row, "col": k.col, "x": k.x, "y": k.y}
+                for k in kb.layout.get(side, [])
+            ]
+        vial_name = kb.vial_name or model_name
+        return kb.matrix["rows"], kb.matrix["cols"], raw_layout, vial_name, kb.vial_vid, kb.vial_pid
     except Exception:
         logger.warning(
             "Impossible de lire la matrice pour '%s' depuis %s — défaut 5×6",
             model_name, kb_file,
         )
-        return 5, 6
+        return 5, 6, {}, model_name, "0xFEED", "0x0001"
 
 
-def _invert_frames(frames: list[bytes]) -> list[bytes]:
-    """Retourne les frames avec chaque octet inversé (XOR 0xFF)."""
-    return [bytes(b ^ 0xFF for b in frame) for frame in frames]
+def _invert_frames(frames: list[bytes], nat_w: int, nat_h: int) -> list[bytes]:
+    """Inverse uniquement les pixels de la zone de contenu (nat_w × nat_h).
+
+    Le contenu est centré horizontalement et aligné en haut dans le frame 32×128.
+    Le fond (padding noir) reste intact pour éviter de le rendre blanc.
+    """
+    from modules.oled_editor.processor import OLED_WIDTH
+    crop_x = (OLED_WIDTH - nat_w) // 2
+    result: list[bytes] = []
+    for frame in frames:
+        arr = bytearray(frame)
+        for row in range(nat_h):
+            for col in range(crop_x, crop_x + nat_w):
+                arr[row * OLED_WIDTH + col] ^= 0xFF
+        result.append(bytes(arr))
+    return result
 
 
 def _encode_oled_frames(frames: list[bytes]) -> list[str]:
     """Encode des frames binaires en tableaux C uint8_t pour les templates.
 
     Chaque frame bytes → "0x00, 0xFF, 0x01, ..." (une ligne par 16 octets).
+    Les frames doivent être déjà au format QMK 512 octets (via frame_to_qmk_bytes).
     """
     result: list[str] = []
     for frame in frames:

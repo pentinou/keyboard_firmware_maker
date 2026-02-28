@@ -24,6 +24,17 @@ class McuOption:
 
 
 @dataclass
+class KeyLayout:
+    """Position physique d'une touche (unités clavier, 1U = 1 touche)."""
+
+    row: int
+    col: int
+    x: float
+    y: float
+    encoder: bool = False
+
+
+@dataclass
 class KeyboardDefinition:
     """Définition complète d'un modèle de clavier chargée depuis un fichier YAML."""
 
@@ -33,6 +44,14 @@ class KeyboardDefinition:
     mcu_options: list[McuOption] = field(default_factory=list)
     capabilities: dict[str, bool] = field(default_factory=dict)
     matrix: dict[str, int] = field(default_factory=lambda: {"rows": 5, "cols": 6})
+    layout: dict[str, list[KeyLayout]] = field(default_factory=dict)
+    """Positions physiques des touches par côté ('left'/'right'). Vide si absent."""
+    vial_name: str = ""
+    """Nom affiché dans Vial (ex: "Sofle"). Vide = utilise model."""
+    vial_vid: str = "0xFEED"
+    """Vendor ID USB pour Vial."""
+    vial_pid: str = "0x0001"
+    """Product ID USB pour Vial."""
 
 
 def load_keyboard(path: Path) -> KeyboardDefinition:
@@ -70,6 +89,23 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
         logger.warning("Valeur 'cols' invalide (%r) dans %s — défaut 6", cols, path.name)
         cols = 6
 
+    raw_layout = data.get("layout", {})
+    layout: dict[str, list[KeyLayout]] = {}
+    for side in ("left", "right"):
+        keys = raw_layout.get(side, [])
+        if isinstance(keys, list):
+            layout[side] = [
+                KeyLayout(
+                    row=int(k["row"]),
+                    col=int(k["col"]),
+                    x=float(k["x"]),
+                    y=float(k["y"]),
+                    encoder=bool(k.get("encoder", False)),
+                )
+                for k in keys
+                if isinstance(k, dict)
+            ]
+
     return KeyboardDefinition(
         model=data["model"],
         display_name=data["display_name"],
@@ -77,6 +113,10 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
         mcu_options=mcu_options,
         capabilities=data.get("capabilities", {}),
         matrix={"rows": rows, "cols": cols},
+        layout=layout,
+        vial_name=data.get("vial_name", ""),
+        vial_vid=data.get("vial_vid", "0xFEED"),
+        vial_pid=data.get("vial_pid", "0x0001"),
     )
 
 

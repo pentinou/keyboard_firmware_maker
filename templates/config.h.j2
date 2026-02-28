@@ -27,13 +27,29 @@
 
 {% if oled_enabled %}
 /* OLED */
-#define OLED_DISPLAY_128X64
+#define OLED_DISPLAY_128X32
+{% if oled_sleep %}
+#define OLED_TIMEOUT {{ oled_sleep_timeout_ms }}
+{% endif %}
 {% endif %}
 
-/* Split keyboard serial */
-#define USE_SERIAL
-{% if mcu == "rp2040" %}
-#define SOFT_SERIAL_PIN GP1
-{% else %}
-#define SOFT_SERIAL_PIN D2
+{% if rgb_sleep %}
+/* RGB Matrix sleep */
+#define RGB_MATRIX_TIMEOUT {{ oled_sleep_timeout_ms }}
+#define RGB_MATRIX_SLEEP
 {% endif %}
+
+/* Rotary encoders — pins defined in keyboard.json (info.json) */
+#define ENCODER_MAP_KEY_DELAY 10
+
+/* Split keyboard serial */
+{% if mcu == "rp2040" %}
+#define SERIAL_USART_TX_PIN GP1
+{% else %}
+#define SOFT_SERIAL_PIN D1
+{% endif %}
+
+/* Vial */
+#define VIAL_KEYBOARD_UID { {{ vial_uid }} }
+#define VIAL_UNLOCK_COMBO_ROWS { 0, {{ matrix_rows }}, {{ matrix_rows - 1 }}, {{ matrix_rows * 2 - 1 }} }
+#define VIAL_UNLOCK_COMBO_COLS { 0, 0, 0, 0 }

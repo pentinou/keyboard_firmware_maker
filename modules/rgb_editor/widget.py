@@ -285,6 +285,8 @@ class RgbWidget(QWidget):
             frame.setMinimumSize(canvas_w, canvas_h)
 
             for k in keys:
+                if k.encoder:
+                    continue  # Skip encoder positions (no RGB LED)
                 key_id = f"{side_code}_r{k.row}_c{k.col}"
                 btn = QPushButton(parent=frame)
                 btn.setFixedSize(KEY_SIZE - 2, KEY_SIZE - 2)

@@ -8,12 +8,31 @@ BOOTLOADER = {{ bootloader }}
 {% if oled_enabled %}
 OLED_ENABLE = yes
 OLED_DRIVER = ssd1306
+{% endif %}
+
+{% if wpm_needed %}
 WPM_ENABLE = yes
 {% endif %}
 
 {% if rgb_enabled %}
 RGB_MATRIX_ENABLE = yes
 RGB_MATRIX_DRIVER = ws2812
+{% if mcu == "rp2040" %}
+WS2812_DRIVER = vendor
 {% endif %}
+{% if has_custom_effects %}
+RGB_MATRIX_CUSTOM_USER = yes
+{% endif %}
+{% endif %}
+
+{% if mcu == "rp2040" %}
+SERIAL_DRIVER = vendor
+{% endif %}
+
+ENCODER_ENABLE = yes
+ENCODER_MAP_ENABLE = yes
+
+VIA_ENABLE = yes
+VIAL_ENABLE = yes
 
 LTO_ENABLE = yes

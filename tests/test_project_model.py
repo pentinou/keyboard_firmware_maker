@@ -3,11 +3,214 @@ from models.project_model import (
     BuildConfig,
     KeyboardConfig,
     OledConfig,
+    OledImageItem,
+    OledOverlayItem,
+    OledSideConfig,
     ProjectModel,
     RgbConfig,
     RgbEffect,
 )
 
+
+# ─── OledOverlayItem ──────────────────────────────────────────────────────────
+
+def test_oled_overlay_item_defaults():
+    item = OledOverlayItem()
+    assert item.enabled is False
+    assert item.col == 0
+    assert item.line == 0
+
+
+def test_oled_overlay_item_serialization():
+    item = OledOverlayItem(enabled=True, col=2, line=5)
+    d = item.to_dict()
+    assert d == {"enabled": True, "col": 2, "line": 5}
+
+
+def test_oled_overlay_item_from_dict():
+    item = OledOverlayItem.from_dict({"enabled": True, "col": 3, "line": 7})
+    assert item.enabled is True
+    assert item.col == 3
+    assert item.line == 7
+
+
+def test_oled_overlay_item_from_dict_defaults():
+    item = OledOverlayItem.from_dict({})
+    assert item.enabled is False
+    assert item.col == 0
+    assert item.line == 0
+
+
+# ─── OledSideConfig ───────────────────────────────────────────────────────────
+
+def test_oled_side_config_defaults():
+    side = OledSideConfig()
+    assert side.images == []
+    assert side.layer.enabled is False
+    assert side.caps_lock.enabled is False
+    assert side.wpm.enabled is False
+    assert side.katawajojo_enabled is False
+    assert side.katawajojo_line == 13
+    assert side.luna_enabled is False
+    assert side.luna_line == 13
+    assert side.ocean_dream_enabled is False
+    assert side.ocean_dream_line == 0
+
+
+def test_oled_side_config_serialization_excludes_frames():
+    """to_dict() doit inclure 'images' (sans frames) et les autres clés."""
+    side = OledSideConfig()
+    img = OledImageItem(image_path="/tmp/test.png")
+    img.frames = [b"\x00\xff"]  # runtime only
+    side.images = [img]
+    d = side.to_dict()
+    assert "images" in d
+    assert "frames" not in d["images"][0]  # frames exclus
+    assert "image_path" in d["images"][0]
+    assert "layer" in d
+    assert "caps_lock" in d
+    assert "wpm" in d
+    assert "katawajojo_enabled" in d
+    assert "katawajojo_line" in d
+    assert "luna_enabled" in d
+    assert "luna_line" in d
+    assert "ocean_dream_enabled" in d
+    assert "ocean_dream_line" in d
+
+
+def test_oled_side_config_from_dict():
+    """from_dict() avec nouveau format 'images'."""
+    d = {
+        "images": [{"image_path": "/tmp/test.png", "col": 1, "line": 2}],
+        "layer": {"enabled": True, "col": 1, "line": 2},
+        "caps_lock": {"enabled": False, "col": 0, "line": 0},
+        "wpm": {"enabled": True, "col": 3, "line": 4},
+        "katawajojo_enabled": True,
+        "katawajojo_line": 10,
+        "luna_enabled": True,
+        "luna_line": 12,
+        "ocean_dream_enabled": True,
+        "ocean_dream_line": 0,
+    }
+    side = OledSideConfig.from_dict(d)
+    assert len(side.images) == 1
+    assert side.images[0].image_path == "/tmp/test.png"
+    assert side.images[0].frames == []  # toujours vide au chargement
+    assert side.layer.enabled is True
+    assert side.layer.col == 1
+    assert side.wpm.enabled is True
+    assert side.katawajojo_enabled is True
+    assert side.katawajojo_line == 10
+    assert side.luna_enabled is True
+    assert side.luna_line == 12
+    assert side.ocean_dream_enabled is True
+    assert side.ocean_dream_line == 0
+
+
+def test_oled_side_config_migration_luna_to_katawajojo():
+    """from_dict() doit migrer l'ancien format luna → katawajojo."""
+    d = {
+        "luna_enabled": True,
+        "luna_line": 10,
+    }
+    side = OledSideConfig.from_dict(d)
+    # Old "luna" was actually katawajojo
+    assert side.katawajojo_enabled is True
+    assert side.katawajojo_line == 10
+    # New luna should be False (not present in old format)
+    assert side.luna_enabled is False
+    assert side.luna_line == 13
+
+
+def test_oled_side_config_from_dict_migration():
+    """from_dict() doit migrer l'ancien format (image_path au niveau top) vers images[0]."""
+    d = {
+        "image_path": "/tmp/test.png",
+        "image_col": 2,
+        "image_line": 3,
+        "image_inverted": True,
+        "layer": {"enabled": True, "col": 1, "line": 2},
+    }
+    side = OledSideConfig.from_dict(d)
+    assert len(side.images) == 1
+    assert side.images[0].image_path == "/tmp/test.png"
+    assert side.images[0].col == 2
+    assert side.images[0].line == 3
+    assert side.images[0].inverted is True
+
+
+def test_oled_side_config_from_dict_empty():
+    side = OledSideConfig.from_dict({})
+    assert side.images == []
+    assert side.katawajojo_enabled is False
+    assert side.katawajojo_line == 13
+    assert side.luna_enabled is False
+    assert side.luna_line == 13
+    assert side.ocean_dream_enabled is False
+    assert side.ocean_dream_line == 0
+
+
+# ─── OledConfig ───────────────────────────────────────────────────────────────
+
+def test_oled_config_defaults():
+    cfg = OledConfig()
+    assert isinstance(cfg.left, OledSideConfig)
+    assert isinstance(cfg.right, OledSideConfig)
+    assert cfg.left.images == []
+    assert cfg.right.images == []
+
+
+def test_oled_config_serialization():
+    cfg = OledConfig()
+    cfg.left.images = [OledImageItem(image_path="/left.png")]
+    cfg.right.images = [OledImageItem(image_path="/right.gif")]
+    cfg.left.layer.enabled = True
+    d = cfg.to_dict()
+    assert "left" in d
+    assert "right" in d
+    assert d["left"]["images"][0]["image_path"] == "/left.png"
+    assert d["right"]["images"][0]["image_path"] == "/right.gif"
+    assert d["left"]["layer"]["enabled"] is True
+
+
+def test_oled_config_from_dict():
+    d = {
+        "left": {
+            "images": [{"image_path": "/left.png"}],
+            "katawajojo_enabled": True,
+            "katawajojo_line": 11,
+            "luna_enabled": True,
+            "luna_line": 9,
+        },
+        "right": {"images": [{"image_path": "/right.gif"}]},
+    }
+    cfg = OledConfig.from_dict(d)
+    assert cfg.left.images[0].image_path == "/left.png"
+    assert cfg.left.katawajojo_enabled is True
+    assert cfg.left.katawajojo_line == 11
+    assert cfg.left.luna_enabled is True
+    assert cfg.left.luna_line == 9
+    assert cfg.right.images[0].image_path == "/right.gif"
+
+
+def test_oled_config_migration_old_format():
+    """OledConfig.from_dict() ignore silencieusement l'ancien format (overlays, luna_x, luna_y)."""
+    old_data = {
+        "image_path": "/old.gif",
+        "overlays": ["layer", "wpm"],
+        "luna_enabled": True,
+        "luna_x": 0,
+        "luna_y": 106,
+    }
+    # L'ancien format n'a pas de clés "left"/"right" → defaults
+    cfg = OledConfig.from_dict(old_data)
+    assert isinstance(cfg.left, OledSideConfig)
+    assert isinstance(cfg.right, OledSideConfig)
+    # Les anciennes clés sont ignorées silencieusement (pas de left/right)
+    assert cfg.left.images == []
+
+
+# ─── ProjectModel ─────────────────────────────────────────────────────────────
 
 def test_project_model_defaults():
     """ProjectModel doit avoir des valeurs par défaut vides."""
@@ -15,9 +218,13 @@ def test_project_model_defaults():
     assert model.version == "1.0"
     assert model.keyboard.model == ""
     assert model.keyboard.mcu == ""
-    assert model.oled.image_path == ""
-    assert model.oled.overlays == []
-    assert model.oled.frames == []
+    assert isinstance(model.oled, OledConfig)
+    assert isinstance(model.oled.left, OledSideConfig)
+    assert isinstance(model.oled.right, OledSideConfig)
+    assert model.oled.left.images == []
+    assert model.oled.left.katawajojo_enabled is False
+    assert model.oled.left.luna_enabled is False
+    assert model.oled.left.ocean_dream_enabled is False
     assert model.rgb.effects == []
     assert model.rgb.per_key == {}
     assert model.build.vial_qmk_version == ""
@@ -28,8 +235,8 @@ def test_project_model_serialization():
     model = ProjectModel()
     model.keyboard.model = "sofle-v2"
     model.keyboard.mcu = "rp2040"
-    model.oled.image_path = "/abs/path/test.gif"
-    model.oled.overlays = ["layer", "wpm"]
+    model.oled.left.images = [OledImageItem(image_path="/abs/path/test.gif")]
+    model.oled.left.layer.enabled = True
     model.rgb.per_key = {"KEY_A": "#FF0000"}
 
     data = model.to_dict()
@@ -37,13 +244,13 @@ def test_project_model_serialization():
     assert data["version"] == "1.0"
     assert data["keyboard"]["model"] == "sofle-v2"
     assert data["keyboard"]["mcu"] == "rp2040"
-    assert data["oled"]["image_path"] == "/abs/path/test.gif"
-    assert data["oled"]["overlays"] == ["layer", "wpm"]
+    assert data["oled"]["left"]["images"][0]["image_path"] == "/abs/path/test.gif"
+    assert data["oled"]["left"]["layer"]["enabled"] is True
     assert data["rgb"]["per_key"] == {"KEY_A": "#FF0000"}
 
 
 def test_from_dict_null_sub_fields_no_crash():
-    """M1/L2 — from_dict() avec sous-champs null ne doit pas lever AttributeError."""
+    """from_dict() avec sous-champs null ne doit pas lever AttributeError."""
     data = {
         "version": "1.0",
         "keyboard": None,
@@ -53,18 +260,15 @@ def test_from_dict_null_sub_fields_no_crash():
     }
     model = ProjectModel.from_dict(data)
     assert model.keyboard.model == ""
-    assert model.oled.image_path == ""
+    assert isinstance(model.oled, OledConfig)
     assert model.rgb.effects == []
     assert model.build.vial_qmk_version == ""
 
 
 def test_rgb_from_dict_null_effects_no_crash():
-    """M2/L4 — RgbConfig.from_dict() avec effects: null ou elements null → liste vide."""
-    from models.project_model import RgbConfig
-    # effects: null
+    """RgbConfig.from_dict() avec effects: null ou elements null → liste vide."""
     cfg = RgbConfig.from_dict({"effects": None, "per_key": {}})
     assert cfg.effects == []
-    # effects: [null, valid_dict]
     cfg2 = RgbConfig.from_dict({
         "effects": [None, {"type": "static", "color_primary": "#FFFFFF",
                            "color_secondary": "#888888", "fade_ms": 500, "trigger_key": None}],
@@ -77,17 +281,180 @@ def test_rgb_from_dict_null_effects_no_crash():
 def test_frames_not_serialized():
     """Les frames OLED (données binaires runtime) ne doivent PAS être sérialisées."""
     model = ProjectModel()
-    model.oled.frames = [b"\x00\xff", b"\xaa\xbb"]
+    img = OledImageItem(image_path="/tmp/test.png")
+    img.frames = [b"\x00\xff", b"\xaa\xbb"]
+    model.oled.left.images = [img]
     data = model.to_dict()
-    assert "frames" not in data.get("oled", {})
+    # frames ne doit pas apparaître dans le dict de l'OledImageItem
+    assert "frames" not in data["oled"]["left"]["images"][0]
+    assert "frames" not in data.get("oled", {}).get("right", {})
+
+
+def test_oled_luna_serialization():
+    """luna/katawajojo/ocean_dream doivent être sérialisés et désérialisés."""
+    model = ProjectModel()
+    model.oled.left.katawajojo_enabled = True
+    model.oled.left.katawajojo_line = 10
+    model.oled.left.luna_enabled = True
+    model.oled.left.luna_line = 12
+    model.oled.right.ocean_dream_enabled = True
+    model.oled.right.ocean_dream_line = 0
+    data = model.to_dict()
+    assert data["oled"]["left"]["katawajojo_enabled"] is True
+    assert data["oled"]["left"]["katawajojo_line"] == 10
+    assert data["oled"]["left"]["luna_enabled"] is True
+    assert data["oled"]["left"]["luna_line"] == 12
+    assert data["oled"]["right"]["ocean_dream_enabled"] is True
+    assert data["oled"]["right"]["ocean_dream_line"] == 0
+
+    restored = ProjectModel.from_dict(data)
+    assert restored.oled.left.katawajojo_enabled is True
+    assert restored.oled.left.katawajojo_line == 10
+    assert restored.oled.left.luna_enabled is True
+    assert restored.oled.left.luna_line == 12
+    assert restored.oled.right.ocean_dream_enabled is True
+    assert restored.oled.right.ocean_dream_line == 0
+
+
+# ─── OledImageItem ────────────────────────────────────────────────────────────
+
+def test_oled_image_item_defaults():
+    img = OledImageItem()
+    assert img.image_path == ""
+    assert img.frames == []
+    assert img.natural_w == 32
+    assert img.natural_h == 128
+    assert img.col == 0
+    assert img.line == 0
+    assert img.inverted is False
+
+
+def test_oled_image_item_serialization():
+    img = OledImageItem(image_path="/tmp/t.png", col=2, line=4, inverted=True, natural_w=20, natural_h=50)
+    d = img.to_dict()
+    assert d["image_path"] == "/tmp/t.png"
+    assert d["col"] == 2
+    assert d["line"] == 4
+    assert d["inverted"] is True
+    assert d["natural_w"] == 20
+    assert d["natural_h"] == 50
+    assert "frames" not in d
+
+
+def test_oled_image_item_deserialization():
+    img = OledImageItem.from_dict({"image_path": "/p.gif", "col": 1, "line": 3, "inverted": True})
+    assert img.image_path == "/p.gif"
+    assert img.col == 1
+    assert img.line == 3
+    assert img.inverted is True
+    assert img.frames == []
+
+
+def test_oled_image_item_defaults_from_empty_dict():
+    img = OledImageItem.from_dict({})
+    assert img.col == 0
+    assert img.line == 0
+    assert img.inverted is False
+
+
+def test_oled_image_item_roundtrip():
+    img = OledImageItem(image_path="/tmp/a.png", col=3, line=7, inverted=True)
+    img.frames = [b"\xff"]  # runtime — must not appear in dict
+    restored = OledImageItem.from_dict(img.to_dict())
+    assert restored.image_path == "/tmp/a.png"
+    assert restored.col == 3
+    assert restored.line == 7
+    assert restored.inverted is True
+    assert restored.frames == []  # runtime not serialized
+
+
+def test_oled_side_config_images_serialization_roundtrip():
+    model = ProjectModel()
+    model.oled.left.images = [
+        OledImageItem(image_path="/a.png", col=4, line=12),
+        OledImageItem(image_path="/b.gif", col=1, line=8, inverted=True),
+    ]
+    model.oled.right.images = []
+    data = model.to_dict()
+    restored = ProjectModel.from_dict(data)
+    assert len(restored.oled.left.images) == 2
+    assert restored.oled.left.images[0].image_path == "/a.png"
+    assert restored.oled.left.images[0].col == 4
+    assert restored.oled.left.images[1].inverted is True
+    assert restored.oled.right.images == []
+
+
+# ─── bongo_enabled / bongo_line ───────────────────────────────────────────────
+
+def test_oled_side_config_bongo_defaults():
+    side = OledSideConfig()
+    assert side.bongo_enabled is False
+    assert side.bongo_line == 0
+
+
+def test_oled_side_config_bongo_serialization():
+    side = OledSideConfig(bongo_enabled=True, bongo_line=5)
+    d = side.to_dict()
+    assert d["bongo_enabled"] is True
+    assert d["bongo_line"] == 5
+
+
+def test_oled_side_config_bongo_deserialization():
+    side = OledSideConfig.from_dict({"bongo_enabled": True, "bongo_line": 8})
+    assert side.bongo_enabled is True
+    assert side.bongo_line == 8
+
+
+def test_oled_side_config_bongo_defaults_from_empty_dict():
+    side = OledSideConfig.from_dict({})
+    assert side.bongo_enabled is False
+    assert side.bongo_line == 0
+
+
+def test_oled_side_config_bongo_roundtrip():
+    model = ProjectModel()
+    model.oled.right.bongo_enabled = True
+    model.oled.right.bongo_line = 3
+    data = model.to_dict()
+    restored = ProjectModel.from_dict(data)
+    assert restored.oled.right.bongo_enabled is True
+    assert restored.oled.right.bongo_line == 3
+    assert restored.oled.left.bongo_enabled is False
+
+
+def test_oled_overlay_roundtrip():
+    """Les overlays doivent survivre à un cycle to_dict/from_dict."""
+    model = ProjectModel()
+    model.oled.left.layer.enabled = True
+    model.oled.left.layer.col = 2
+    model.oled.left.layer.line = 5
+    model.oled.right.wpm.enabled = True
+    model.oled.right.wpm.col = 1
+    model.oled.right.wpm.line = 14
+
+    data = model.to_dict()
+    restored = ProjectModel.from_dict(data)
+
+    assert restored.oled.left.layer.enabled is True
+    assert restored.oled.left.layer.col == 2
+    assert restored.oled.left.layer.line == 5
+    assert restored.oled.right.wpm.enabled is True
+    assert restored.oled.right.wpm.col == 1
+    assert restored.oled.right.wpm.line == 14
 
 
 def test_project_model_deserialization():
-    """from_dict() doit reconstruire un ProjectModel depuis un dict JSON."""
+    """from_dict() doit reconstruire un ProjectModel depuis un dict JSON (nouveau format)."""
     data = {
         "version": "1.0",
         "keyboard": {"model": "sofle-v2", "mcu": "rp2040"},
-        "oled": {"image_path": "/tmp/test.gif", "overlays": ["layer"]},
+        "oled": {
+            "left": {
+                "images": [{"image_path": "/tmp/test.gif", "col": 0, "line": 3}],
+                "layer": {"enabled": True, "col": 0, "line": 3},
+            },
+            "right": {},
+        },
         "rgb": {
             "effects": [
                 {
@@ -106,8 +473,8 @@ def test_project_model_deserialization():
 
     assert model.keyboard.model == "sofle-v2"
     assert model.keyboard.mcu == "rp2040"
-    assert model.oled.image_path == "/tmp/test.gif"
-    assert model.oled.overlays == ["layer"]
+    assert model.oled.left.images[0].image_path == "/tmp/test.gif"
+    assert model.oled.left.layer.enabled is True
     assert len(model.rgb.effects) == 1
     assert model.rgb.effects[0].type == "ripple"
     assert model.rgb.effects[0].color_primary == "#FF0000"
@@ -115,13 +482,29 @@ def test_project_model_deserialization():
     assert model.build.vial_qmk_version == "0.7.1"
 
 
+def test_project_model_deserialization_old_format():
+    """from_dict() doit migrer l'ancien format (image_path au niveau oled.left)."""
+    data = {
+        "version": "1.0",
+        "oled": {
+            "left": {"image_path": "/tmp/test.gif", "image_col": 1, "image_line": 2},
+            "right": {},
+        },
+    }
+    model = ProjectModel.from_dict(data)
+    assert len(model.oled.left.images) == 1
+    assert model.oled.left.images[0].image_path == "/tmp/test.gif"
+    assert model.oled.left.images[0].col == 1
+    assert model.oled.left.images[0].line == 2
+
+
 def test_project_model_partial_deserialization():
     """from_dict() doit gérer un dict partiel sans lever d'exception."""
     data = {"version": "1.0", "keyboard": {"model": "sofle-v2"}}
     model = ProjectModel.from_dict(data)
     assert model.keyboard.model == "sofle-v2"
-    assert model.keyboard.mcu == ""  # valeur par défaut
-    assert model.oled.image_path == ""
+    assert model.keyboard.mcu == ""
+    assert model.oled.left.images == []
 
 
 def test_rgb_effect_serialization():

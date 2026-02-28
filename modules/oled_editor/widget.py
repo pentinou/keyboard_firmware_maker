@@ -17,8 +17,10 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
+    QLabel,
     QMessageBox,
     QPushButton,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -54,7 +56,7 @@ class _OledCanvas(QWidget):
         super().__init__(parent)
         self._side = side
         self._pixmaps: list[QPixmap | None] = []  # one per side.images entry
-        self._dragging_item: str | None = None  # "layer", "caps_lock", "wpm", "luna", "bongo", "image:N"
+        self._dragging_item: str | None = None  # "layer", "caps_lock", "wpm", "katawajojo", "luna", "ocean_dream", "bongo", "image:N"
         self._drag_offset_x = 0
         self._drag_offset_y = 0
         self._selected_item: str | None = None
@@ -99,16 +101,25 @@ class _OledCanvas(QWidget):
         s = self._side
         if name == "layer" and s.layer.enabled:
             return (s.layer.col * self.CHAR_W, s.layer.line * self.PAGE_H,
-                    3 * self.CHAR_W, self.PAGE_H)
+                    3 * self.CHAR_W, 2 * self.PAGE_H)
         if name == "caps_lock" and s.caps_lock.enabled:
             return (s.caps_lock.col * self.CHAR_W, s.caps_lock.line * self.PAGE_H,
-                    3 * self.CHAR_W, self.PAGE_H)
+                    3 * self.CHAR_W, 2 * self.PAGE_H)
         if name == "wpm" and s.wpm.enabled:
             return (s.wpm.col * self.CHAR_W, s.wpm.line * self.PAGE_H,
-                    3 * self.CHAR_W, self.PAGE_H)
+                    3 * self.CHAR_W, 2 * self.PAGE_H)
+        if name == "rgb_mode" and s.rgb_mode.enabled:
+            return (s.rgb_mode.col * self.CHAR_W, s.rgb_mode.line * self.PAGE_H,
+                    OLED_WIDTH * self.SCALE, 4 * self.PAGE_H)
+        if name == "katawajojo" and s.katawajojo_enabled:
+            return (0, s.katawajojo_line * self.PAGE_H,
+                    OLED_WIDTH * self.SCALE, _LUNA_H * self.SCALE)
         if name == "luna" and s.luna_enabled:
             return (0, s.luna_line * self.PAGE_H,
                     OLED_WIDTH * self.SCALE, _LUNA_H * self.SCALE)
+        if name == "ocean_dream" and s.ocean_dream_enabled:
+            return (0, s.ocean_dream_line * self.PAGE_H,
+                    OLED_WIDTH * self.SCALE, 16 * self.PAGE_H)
         if name == "bongo" and s.bongo_enabled:
             return (0, s.bongo_line * self.PAGE_H,
                     OLED_WIDTH * self.SCALE, 4 * self.PAGE_H)
@@ -119,16 +130,25 @@ class _OledCanvas(QWidget):
         result = []
         r = self._item_rect("layer")
         if r:
-            result.append(("layer", r, QColor(0, 200, 0, 160), "Lr"))
+            result.append(("layer", r, QColor(0, 200, 0, 160), "LAYER"))
         r = self._item_rect("caps_lock")
         if r:
             result.append(("caps_lock", r, QColor(220, 200, 0, 160), "Cp"))
         r = self._item_rect("wpm")
         if r:
             result.append(("wpm", r, QColor(0, 100, 220, 160), "Wp"))
+        r = self._item_rect("rgb_mode")
+        if r:
+            result.append(("rgb_mode", r, QColor(220, 50, 220, 160), "RGB"))
+        r = self._item_rect("katawajojo")
+        if r:
+            result.append(("katawajojo", r, QColor(0, 200, 200, 160), "Ktw"))
         r = self._item_rect("luna")
         if r:
-            result.append(("luna", r, QColor(0, 200, 200, 160), "Luna"))
+            result.append(("luna", r, QColor(0, 180, 120, 160), "Luna"))
+        r = self._item_rect("ocean_dream")
+        if r:
+            result.append(("ocean_dream", r, QColor(30, 80, 220, 160), "Ocean"))
         r = self._item_rect("bongo")
         if r:
             result.append(("bongo", r, QColor(220, 100, 0, 160), "BngoCat"))
@@ -234,8 +254,15 @@ class _OledCanvas(QWidget):
         elif self._dragging_item == "wpm":
             s.wpm.col = new_col
             s.wpm.line = new_line
+        elif self._dragging_item == "rgb_mode":
+            s.rgb_mode.col = new_col
+            s.rgb_mode.line = new_line
+        elif self._dragging_item == "katawajojo":
+            s.katawajojo_line = new_line
         elif self._dragging_item == "luna":
             s.luna_line = new_line
+        elif self._dragging_item == "ocean_dream":
+            s.ocean_dream_line = new_line
         elif self._dragging_item == "bongo":
             s.bongo_line = new_line
         self.update()
@@ -291,9 +318,38 @@ class OledWidget(QWidget):
         self._sync_from_model()
 
     def _setup_ui(self) -> None:
-        layout = QHBoxLayout(self)
-        layout.addWidget(self._make_side_group("left", tr("oled.side.left")))
-        layout.addWidget(self._make_side_group("right", tr("oled.side.right")))
+        from PySide6.QtWidgets import QVBoxLayout
+        main = QVBoxLayout(self)
+        main.setContentsMargins(0, 0, 0, 0)
+
+        self._anti_burnin_check = QCheckBox(tr("oled.anti_burnin"))
+        self._anti_burnin_check.setObjectName("anti_burnin_check")
+        self._anti_burnin_check.stateChanged.connect(self._on_anti_burnin_changed)
+        main.addWidget(self._anti_burnin_check)
+
+        sleep_row = QHBoxLayout()
+        self._sleep_check = QCheckBox(tr("oled.sleep"))
+        self._sleep_check.setObjectName("sleep_check")
+        self._sleep_check.stateChanged.connect(self._on_sleep_changed)
+        sleep_row.addWidget(self._sleep_check)
+        self._sleep_label = QLabel(tr("oled.sleep_timeout"))
+        self._sleep_label.setObjectName("sleep_label")
+        self._sleep_label.setEnabled(False)
+        sleep_row.addWidget(self._sleep_label)
+        self._sleep_spin = QSpinBox()
+        self._sleep_spin.setObjectName("sleep_spin")
+        self._sleep_spin.setRange(10, 3600)
+        self._sleep_spin.setValue(240)
+        self._sleep_spin.setEnabled(False)
+        self._sleep_spin.valueChanged.connect(self._on_sleep_timeout_changed)
+        sleep_row.addWidget(self._sleep_spin)
+        sleep_row.addStretch()
+        main.addLayout(sleep_row)
+
+        sides = QHBoxLayout()
+        sides.addWidget(self._make_side_group("left", tr("oled.side.left")))
+        sides.addWidget(self._make_side_group("right", tr("oled.side.right")))
+        main.addLayout(sides)
 
     def _make_side_group(self, side: str, title: str) -> QGroupBox:
         group = QGroupBox(title)
@@ -304,11 +360,27 @@ class OledWidget(QWidget):
         btn.clicked.connect(lambda _=None, s=side: self._on_import_clicked(s))
         vl.addWidget(btn)
 
+        utils_label = QLabel(f"<b>{tr('oled.group.utils')}</b>")
+        vl.addWidget(utils_label)
         for name, label in [
             ("layer", tr("oled.overlay.layer")),
             ("caps", tr("oled.overlay.caps_lock")),
             ("wpm", tr("oled.overlay.wpm")),
+            ("rgb_mode", tr("oled.overlay.rgb_mode")),
+        ]:
+            cb = QCheckBox(label)
+            cb.setObjectName(f"{side}_{name}_check")
+            cb.stateChanged.connect(
+                lambda state, s=side, n=name: self._on_check_changed(s, n, bool(state))
+            )
+            vl.addWidget(cb)
+
+        eyecandy_label = QLabel(f"<b>{tr('oled.group.eyecandy')}</b>")
+        vl.addWidget(eyecandy_label)
+        for name, label in [
+            ("katawajojo", tr("oled.overlay.katawajojo")),
             ("luna", tr("oled.overlay.luna")),
+            ("ocean_dream", tr("oled.overlay.ocean_dream")),
             ("bongo", tr("oled.overlay.bongo")),
         ]:
             cb = QCheckBox(label)
@@ -376,6 +448,7 @@ class OledWidget(QWidget):
         new_item = OledImageItem(
             image_path=self._pending_path,
             frames=frames,
+            delays=delays,
             natural_w=natural_w,
             natural_h=natural_h,
         )
@@ -427,6 +500,24 @@ class OledWidget(QWidget):
             self._timers[side].stop()
         self._timers[side].setInterval(100)
 
+    def _on_anti_burnin_changed(self, state: int) -> None:
+        self._model.oled.anti_burnin = bool(state)
+        logger.info("Anti burn-in : %s", bool(state))
+
+    def _on_sleep_changed(self, state: int) -> None:
+        enabled = bool(state)
+        self._model.oled.sleep_enabled = enabled
+        lbl = self.findChild(QLabel, "sleep_label")
+        sp = self.findChild(QSpinBox, "sleep_spin")
+        if lbl:
+            lbl.setEnabled(enabled)
+        if sp:
+            sp.setEnabled(enabled)
+        logger.info("Sleep mode : %s", enabled)
+
+    def _on_sleep_timeout_changed(self, value: int) -> None:
+        self._model.oled.sleep_timeout_s = value
+
     def _on_check_changed(self, side: str, name: str, checked: bool) -> None:
         side_config = self._model.oled.left if side == "left" else self._model.oled.right
         if name == "layer":
@@ -435,8 +526,14 @@ class OledWidget(QWidget):
             side_config.caps_lock.enabled = checked
         elif name == "wpm":
             side_config.wpm.enabled = checked
+        elif name == "rgb_mode":
+            side_config.rgb_mode.enabled = checked
+        elif name == "katawajojo":
+            side_config.katawajojo_enabled = checked
         elif name == "luna":
             side_config.luna_enabled = checked
+        elif name == "ocean_dream":
+            side_config.ocean_dream_enabled = checked
         elif name == "bongo":
             side_config.bongo_enabled = checked
         canvas = self._canvas_left if side == "left" else self._canvas_right
@@ -492,13 +589,36 @@ class OledWidget(QWidget):
 
     def _sync_from_model(self) -> None:
         """Synchronise les checkboxes depuis le modèle (ex : après chargement projet)."""
+        cb = self.findChild(QCheckBox, "anti_burnin_check")
+        if cb:
+            cb.blockSignals(True)
+            cb.setChecked(self._model.oled.anti_burnin)
+            cb.blockSignals(False)
+        sleep_enabled = self._model.oled.sleep_enabled
+        cb = self.findChild(QCheckBox, "sleep_check")
+        if cb:
+            cb.blockSignals(True)
+            cb.setChecked(sleep_enabled)
+            cb.blockSignals(False)
+        lbl = self.findChild(QLabel, "sleep_label")
+        if lbl:
+            lbl.setEnabled(sleep_enabled)
+        sp = self.findChild(QSpinBox, "sleep_spin")
+        if sp:
+            sp.blockSignals(True)
+            sp.setValue(self._model.oled.sleep_timeout_s)
+            sp.setEnabled(sleep_enabled)
+            sp.blockSignals(False)
         for side in ("left", "right"):
             side_config = self._model.oled.left if side == "left" else self._model.oled.right
             mapping = [
                 (f"{side}_layer_check", side_config.layer.enabled),
                 (f"{side}_caps_check", side_config.caps_lock.enabled),
                 (f"{side}_wpm_check", side_config.wpm.enabled),
+                (f"{side}_rgb_mode_check", side_config.rgb_mode.enabled),
+                (f"{side}_katawajojo_check", side_config.katawajojo_enabled),
                 (f"{side}_luna_check", side_config.luna_enabled),
+                (f"{side}_ocean_dream_check", side_config.ocean_dream_enabled),
                 (f"{side}_bongo_check", side_config.bongo_enabled),
             ]
             for obj_name, value in mapping:
@@ -535,9 +655,9 @@ class OledWidget(QWidget):
                           QImage.Format.Format_Grayscale8)
         nat_w = max(1, img_item.natural_w)
         nat_h = max(1, img_item.natural_h)
-        # Processor centers the thumbnail: compute crop offsets
+        # Processor top-aligns and h-centers the thumbnail: compute crop offsets
         crop_x = (OLED_WIDTH - nat_w) // 2
-        crop_y = (OLED_HEIGHT - nat_h) // 2
+        crop_y = 0
         cropped = full_img.copy(crop_x, crop_y, nat_w, nat_h)
         pixmap = QPixmap.fromImage(cropped).scaled(
             nat_w * _OledCanvas.SCALE,

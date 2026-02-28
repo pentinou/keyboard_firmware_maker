@@ -35,9 +35,9 @@ class TestRgbWidgetInit:
     def test_key_buttons_not_empty(self, widget):
         assert len(widget._key_buttons) > 0
 
-    def test_sofle_has_60_buttons(self, widget):
-        # Sofle: 5 rows × 6 cols × 2 sides = 60 keys
-        assert len(widget._key_buttons) == 60
+    def test_sofle_has_58_buttons(self, widget):
+        # Sofle: 5 rows × 6 cols × 2 sides = 60 positions - 2 encoders = 58 keys
+        assert len(widget._key_buttons) == 58
 
     def test_left_buttons_present(self, widget):
         assert "L_r0_c0" in widget._key_buttons
