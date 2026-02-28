@@ -1,10 +1,10 @@
 """Tests pour modules/build_manager/toolchain.py et vial_qmk_manager.py."""
 from __future__ import annotations
 
+import subprocess
 import sys
-import zipfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -100,57 +100,80 @@ class TestVialQmkManagerIsReady:
         monkeypatch.setattr(vqm, "VIAL_QMK_DIR", vqmk_dir)
         assert not vqm.VialQmkManager().is_ready()
 
-    def test_ready_when_makefile_exists(self, tmp_path, monkeypatch):
+    def test_not_ready_when_chibios_missing(self, tmp_path, monkeypatch):
+        """is_ready() retourne False si le sous-module ChibiOS est absent ou vide."""
         vqmk_dir = tmp_path / "vial-qmk"
         vqmk_dir.mkdir()
         (vqmk_dir / "Makefile").touch()
+        # lib/chibios existe mais est vide (comme après une extraction ZIP)
+        (vqmk_dir / "lib" / "chibios").mkdir(parents=True)
+        monkeypatch.setattr(vqm, "VIAL_QMK_DIR", vqmk_dir)
+        assert not vqm.VialQmkManager().is_ready()
+
+    def test_ready_when_makefile_and_chibios_populated(self, tmp_path, monkeypatch):
+        vqmk_dir = tmp_path / "vial-qmk"
+        vqmk_dir.mkdir()
+        (vqmk_dir / "Makefile").touch()
+        (vqmk_dir / "lib" / "chibios" / "os").mkdir(parents=True)
         monkeypatch.setattr(vqm, "VIAL_QMK_DIR", vqmk_dir)
         assert vqm.VialQmkManager().is_ready()
 
 
 class TestVialQmkManagerDownload:
-    def _make_fake_zip(self, zip_path: Path, sha: str) -> None:
-        """Crée un zip factice imitant l'archive GitHub."""
-        with zipfile.ZipFile(zip_path, "w") as zf:
-            zf.writestr(f"vial-qmk-{sha}/Makefile", "# fake Makefile")
-            zf.writestr(f"vial-qmk-{sha}/README.md", "# Vial-QMK")
+    def _fake_git_side_effect(self, vqmk_dir: Path):
+        """Retourne un side_effect pour subprocess.run simulant les commandes git."""
+        def fake_git(args, **kwargs):
+            if "init" in args:
+                vqmk_dir.mkdir(exist_ok=True)
+            elif "checkout" in args:
+                (vqmk_dir / "Makefile").touch()
+            elif "submodule" in args:
+                (vqmk_dir / "lib" / "chibios" / "os").mkdir(parents=True, exist_ok=True)
+            return MagicMock(returncode=0)
+        return fake_git
 
     def test_download_creates_vial_qmk_dir(self, tmp_path, monkeypatch):
         monkeypatch.setattr(vqm, "CACHE_DIR", tmp_path)
-        monkeypatch.setattr(vqm, "VIAL_QMK_DIR", tmp_path / "vial-qmk")
+        vqmk_dir = tmp_path / "vial-qmk"
+        monkeypatch.setattr(vqm, "VIAL_QMK_DIR", vqmk_dir)
 
-        def fake_urlretrieve(url, path, reporthook=None):
-            self._make_fake_zip(Path(path), vqm.VIAL_QMK_SHA)
+        with patch("subprocess.run", side_effect=self._fake_git_side_effect(vqmk_dir)):
+            vqm.VialQmkManager().download()
 
-        monkeypatch.setattr(vqm.urllib.request, "urlretrieve", fake_urlretrieve)
-        vqm.VialQmkManager().download()
-        assert (tmp_path / "vial-qmk" / "Makefile").is_file()
+        assert (vqmk_dir / "Makefile").is_file()
+        assert (vqmk_dir / "lib" / "chibios").is_dir()
 
     def test_download_calls_progress_callback(self, tmp_path, monkeypatch):
         monkeypatch.setattr(vqm, "CACHE_DIR", tmp_path)
-        monkeypatch.setattr(vqm, "VIAL_QMK_DIR", tmp_path / "vial-qmk")
+        vqmk_dir = tmp_path / "vial-qmk"
+        monkeypatch.setattr(vqm, "VIAL_QMK_DIR", vqmk_dir)
         calls: list[int] = []
 
-        def fake_urlretrieve(url, path, reporthook=None):
-            self._make_fake_zip(Path(path), vqm.VIAL_QMK_SHA)
-            if reporthook:
-                reporthook(1, 1024, 2048)  # 50%
-                reporthook(2, 1024, 2048)  # 100%
+        with patch("subprocess.run", side_effect=self._fake_git_side_effect(vqmk_dir)):
+            vqm.VialQmkManager().download(progress_callback=calls.append)
 
-        monkeypatch.setattr(vqm.urllib.request, "urlretrieve", fake_urlretrieve)
-        vqm.VialQmkManager().download(progress_callback=calls.append)
         assert 50 in calls
+        assert 100 in calls
 
-    def test_download_removes_zip_after_extraction(self, tmp_path, monkeypatch):
+    def test_download_calls_log_callback(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(vqm, "CACHE_DIR", tmp_path)
+        vqmk_dir = tmp_path / "vial-qmk"
+        monkeypatch.setattr(vqm, "VIAL_QMK_DIR", vqmk_dir)
+        logs: list[str] = []
+
+        with patch("subprocess.run", side_effect=self._fake_git_side_effect(vqmk_dir)):
+            vqm.VialQmkManager().download(log_callback=logs.append)
+
+        assert any("sous-modules" in log for log in logs)
+
+    def test_download_git_failure_propagates(self, tmp_path, monkeypatch):
+        """Un échec git lève subprocess.CalledProcessError."""
         monkeypatch.setattr(vqm, "CACHE_DIR", tmp_path)
         monkeypatch.setattr(vqm, "VIAL_QMK_DIR", tmp_path / "vial-qmk")
 
-        def fake_urlretrieve(url, path, reporthook=None):
-            self._make_fake_zip(Path(path), vqm.VIAL_QMK_SHA)
-
-        monkeypatch.setattr(vqm.urllib.request, "urlretrieve", fake_urlretrieve)
-        vqm.VialQmkManager().download()
-        assert not (tmp_path / "vial-qmk.zip").exists()
+        with patch("subprocess.run", side_effect=subprocess.CalledProcessError(128, "git")):
+            with pytest.raises(subprocess.CalledProcessError):
+                vqm.VialQmkManager().download()
 
 
 # ─────────────────────────────────────── Tests VialQmkSetupDialog ──
@@ -194,31 +217,15 @@ class TestVialQmkSetupDialog:
         pb = dlg.findChild(QProgressBar, "setup_progress")
         assert pb.value() == 100
 
-
-# ─────────────────────────── Tests _extract_zip / download robustness ──
-
-class TestExtractZip:
-    def test_raises_when_no_vialqmk_dir_found(self, tmp_path):
-        """L2 — _extract_zip lève RuntimeError si aucun dossier vial-qmk-* dans l'archive."""
-        zip_path = tmp_path / "test.zip"
-        with zipfile.ZipFile(zip_path, "w") as zf:
-            zf.writestr("other-dir/file.txt", "content")
-        with pytest.raises(RuntimeError, match="vial-qmk-"):
-            vqm._extract_zip(zip_path, tmp_path)
-
-    def test_zip_cleaned_up_on_extraction_failure(self, tmp_path, monkeypatch):
-        """M1 — Le zip doit être supprimé même si l'extraction échoue."""
-        monkeypatch.setattr(vqm, "CACHE_DIR", tmp_path)
-        monkeypatch.setattr(vqm, "VIAL_QMK_DIR", tmp_path / "vial-qmk")
-
-        def fake_urlretrieve(url, path, reporthook=None):
-            with zipfile.ZipFile(Path(path), "w") as zf:
-                zf.writestr("other-dir/README.md", "not vial-qmk")
-
-        monkeypatch.setattr(vqm.urllib.request, "urlretrieve", fake_urlretrieve)
-        with pytest.raises(RuntimeError):
-            vqm.VialQmkManager().download()
-        assert not (tmp_path / "vial-qmk.zip").exists()
+    def test_log_line_signal_updates_label(self, qtbot):
+        """log_line met à jour l'étiquette avec l'étape courante."""
+        from PySide6.QtWidgets import QLabel
+        with patch.object(vqm.DownloadWorker, "start", lambda self: None):
+            dlg = vqm.VialQmkSetupDialog()
+            qtbot.addWidget(dlg)
+        dlg._worker.log_line.emit("Téléchargement des sous-modules…")
+        label = dlg.findChild(QLabel, "setup_label")
+        assert label.text() == "Téléchargement des sous-modules…"
 
 
 # ─────────────────────────── Tests _get_system_gcc_version ──

@@ -8,7 +8,10 @@ import pytest
 
 from PIL import UnidentifiedImageError
 
-from modules.oled_editor.processor import OLED_HEIGHT, OLED_WIDTH, convert_image, convert_image_with_delays, get_frame_delays
+from modules.oled_editor.processor import (
+    OLED_BUFFER_SIZE, OLED_HEIGHT, OLED_WIDTH,
+    convert_image, convert_image_with_delays, frame_to_qmk_bytes, get_frame_delays,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -20,7 +23,7 @@ def test_convert_png_returns_one_frame():
 
 def test_convert_output_dimensions():
     frames = convert_image(FIXTURES / "test_100x100.png")
-    assert len(frames[0]) == OLED_WIDTH * OLED_HEIGHT  # 64 * 128 = 8192 bytes
+    assert len(frames[0]) == OLED_WIDTH * OLED_HEIGHT  # 32 * 128 = 4096 bytes
 
 
 def test_convert_output_is_binary():
@@ -131,6 +134,42 @@ def test_convert_image_with_delays_png_single():
     assert len(delays) == 1
     assert delays[0] >= 50
     assert len(frames[0]) == OLED_WIDTH * OLED_HEIGHT
+
+
+class TestFrameToQmkBytes:
+    def test_output_size_is_512(self):
+        """frame_to_qmk_bytes retourne exactement 512 octets (32×16 pages)."""
+        frame = bytes(4096)
+        result = frame_to_qmk_bytes(frame)
+        assert len(result) == OLED_BUFFER_SIZE == 512
+
+    def test_all_black_frame_gives_zero_bytes(self):
+        """Frame entièrement noire (0x00) → tous les bits à 0 → 512 × 0x00."""
+        frame = bytes([0x00] * 4096)
+        result = frame_to_qmk_bytes(frame)
+        assert all(b == 0x00 for b in result)
+
+    def test_all_white_frame_gives_ff_bytes(self):
+        """Frame entièrement blanche (0xFF) → tous les bits à 1 → 512 × 0xFF."""
+        frame = bytes([0xFF] * 4096)
+        result = frame_to_qmk_bytes(frame)
+        assert all(b == 0xFF for b in result)
+
+    def test_single_pixel_bit_packing(self):
+        """Un seul pixel blanc en (col=0, row=0) → bit 0 du premier octet = 1."""
+        frame = bytearray([0x00] * 4096)
+        frame[0 * OLED_WIDTH + 0] = 0xFF  # pixel (row=0, col=0) = blanc
+        result = frame_to_qmk_bytes(bytes(frame))
+        # Page 0, col 0 = octet 0 ; bit 0 (poids faible) doit être 1
+        assert result[0] & 0x01 == 0x01
+
+    def test_convert_and_pack_roundtrip(self):
+        """Convertir une image réelle puis packer → 512 octets valides."""
+        frames = convert_image(FIXTURES / "test_100x100.png")
+        result = frame_to_qmk_bytes(frames[0])
+        assert len(result) == 512
+        # Tous les octets sont dans la plage uint8
+        assert all(0 <= b <= 255 for b in result)
 
 
 def test_no_qt_import_in_processor():

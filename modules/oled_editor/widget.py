@@ -101,16 +101,19 @@ class _OledCanvas(QWidget):
         s = self._side
         if name == "layer" and s.layer.enabled:
             return (s.layer.col * self.CHAR_W, s.layer.line * self.PAGE_H,
-                    3 * self.CHAR_W, 2 * self.PAGE_H)
+                    OLED_WIDTH * self.SCALE, 3 * self.PAGE_H)
         if name == "caps_lock" and s.caps_lock.enabled:
             return (s.caps_lock.col * self.CHAR_W, s.caps_lock.line * self.PAGE_H,
-                    3 * self.CHAR_W, 2 * self.PAGE_H)
+                    OLED_WIDTH * self.SCALE, 3 * self.PAGE_H)
         if name == "wpm" and s.wpm.enabled:
             return (s.wpm.col * self.CHAR_W, s.wpm.line * self.PAGE_H,
-                    3 * self.CHAR_W, 2 * self.PAGE_H)
+                    OLED_WIDTH * self.SCALE, 3 * self.PAGE_H)
         if name == "rgb_mode" and s.rgb_mode.enabled:
             return (s.rgb_mode.col * self.CHAR_W, s.rgb_mode.line * self.PAGE_H,
                     OLED_WIDTH * self.SCALE, 4 * self.PAGE_H)
+        if name == "kfm" and s.kfm.enabled:
+            return (s.kfm.col * self.CHAR_W, s.kfm.line * self.PAGE_H,
+                    OLED_WIDTH * self.SCALE, 1 * self.PAGE_H)
         if name == "katawajojo" and s.katawajojo_enabled:
             return (0, s.katawajojo_line * self.PAGE_H,
                     OLED_WIDTH * self.SCALE, _LUNA_H * self.SCALE)
@@ -133,13 +136,16 @@ class _OledCanvas(QWidget):
             result.append(("layer", r, QColor(0, 200, 0, 160), "LAYER"))
         r = self._item_rect("caps_lock")
         if r:
-            result.append(("caps_lock", r, QColor(220, 200, 0, 160), "Cp"))
+            result.append(("caps_lock", r, QColor(220, 200, 0, 160), "CAPS"))
         r = self._item_rect("wpm")
         if r:
-            result.append(("wpm", r, QColor(0, 100, 220, 160), "Wp"))
+            result.append(("wpm", r, QColor(0, 100, 220, 160), "WPM"))
         r = self._item_rect("rgb_mode")
         if r:
             result.append(("rgb_mode", r, QColor(220, 50, 220, 160), "RGB"))
+        r = self._item_rect("kfm")
+        if r:
+            result.append(("kfm", r, QColor(160, 160, 160, 160), "<KFM>"))
         r = self._item_rect("katawajojo")
         if r:
             result.append(("katawajojo", r, QColor(0, 200, 200, 160), "Ktw"))
@@ -257,6 +263,9 @@ class _OledCanvas(QWidget):
         elif self._dragging_item == "rgb_mode":
             s.rgb_mode.col = new_col
             s.rgb_mode.line = new_line
+        elif self._dragging_item == "kfm":
+            s.kfm.col = new_col
+            s.kfm.line = new_line
         elif self._dragging_item == "katawajojo":
             s.katawajojo_line = new_line
         elif self._dragging_item == "luna":
@@ -367,6 +376,7 @@ class OledWidget(QWidget):
             ("caps", tr("oled.overlay.caps_lock")),
             ("wpm", tr("oled.overlay.wpm")),
             ("rgb_mode", tr("oled.overlay.rgb_mode")),
+            ("kfm", tr("oled.overlay.kfm")),
         ]:
             cb = QCheckBox(label)
             cb.setObjectName(f"{side}_{name}_check")
@@ -528,6 +538,8 @@ class OledWidget(QWidget):
             side_config.wpm.enabled = checked
         elif name == "rgb_mode":
             side_config.rgb_mode.enabled = checked
+        elif name == "kfm":
+            side_config.kfm.enabled = checked
         elif name == "katawajojo":
             side_config.katawajojo_enabled = checked
         elif name == "luna":
@@ -616,6 +628,7 @@ class OledWidget(QWidget):
                 (f"{side}_caps_check", side_config.caps_lock.enabled),
                 (f"{side}_wpm_check", side_config.wpm.enabled),
                 (f"{side}_rgb_mode_check", side_config.rgb_mode.enabled),
+                (f"{side}_kfm_check", side_config.kfm.enabled),
                 (f"{side}_katawajojo_check", side_config.katawajojo_enabled),
                 (f"{side}_luna_check", side_config.luna_enabled),
                 (f"{side}_ocean_dream_check", side_config.ocean_dream_enabled),

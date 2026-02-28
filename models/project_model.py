@@ -110,6 +110,7 @@ class OledSideConfig:
     caps_lock: OledOverlayItem = field(default_factory=OledOverlayItem)
     wpm: OledOverlayItem = field(default_factory=OledOverlayItem)
     rgb_mode: OledOverlayItem = field(default_factory=OledOverlayItem)
+    kfm: OledOverlayItem = field(default_factory=OledOverlayItem)
     katawajojo_enabled: bool = False
     katawajojo_line: int = 13  # page de départ KatawaJojo (13*8=104px, bas de l'écran 128px)
     luna_enabled: bool = False
@@ -126,6 +127,7 @@ class OledSideConfig:
             "caps_lock": self.caps_lock.to_dict(),
             "wpm": self.wpm.to_dict(),
             "rgb_mode": self.rgb_mode.to_dict(),
+            "kfm": self.kfm.to_dict(),
             "katawajojo_enabled": self.katawajojo_enabled,
             "katawajojo_line": self.katawajojo_line,
             "luna_enabled": self.luna_enabled,
@@ -168,6 +170,7 @@ class OledSideConfig:
             caps_lock=OledOverlayItem.from_dict(data.get("caps_lock") or {}),
             wpm=OledOverlayItem.from_dict(data.get("wpm") or {}),
             rgb_mode=OledOverlayItem.from_dict(data.get("rgb_mode") or {}),
+            kfm=OledOverlayItem.from_dict(data.get("kfm") or {}),
             katawajojo_enabled=katawajojo_enabled,
             katawajojo_line=katawajojo_line,
             luna_enabled=luna_enabled,

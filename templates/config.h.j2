@@ -19,6 +19,13 @@
 #define WS2812_DI_PIN D3
 {% endif %}
 #define RGB_MATRIX_MAXIMUM_BRIGHTNESS 200
+/* Startup defaults — solid color on at connection */
+#define RGB_MATRIX_DEFAULT_ON         true
+#define RGB_MATRIX_DEFAULT_MODE       RGB_MATRIX_SOLID_COLOR
+#define RGB_MATRIX_DEFAULT_HUE        0
+#define RGB_MATRIX_DEFAULT_SAT        255
+#define RGB_MATRIX_DEFAULT_VAL        128
+/* Legacy names for older QMK/Vial-QMK builds */
 #define RGB_MATRIX_STARTUP_MODE       RGB_MATRIX_SOLID_COLOR
 #define RGB_MATRIX_STARTUP_HUE        0
 #define RGB_MATRIX_STARTUP_SAT        255
@@ -39,8 +46,11 @@
 #define RGB_MATRIX_SLEEP
 {% endif %}
 
-/* Rotary encoders — pins defined in keyboard.json (info.json) */
+/* Rotary encoders — pins defined in keyboard.json */
 #define ENCODER_MAP_KEY_DELAY 10
+{% if mcu == "rp2040" %}
+#define ENCODER_DEFAULT_POS 0x3
+{% endif %}
 
 /* Split keyboard serial */
 {% if mcu == "rp2040" %}
@@ -49,7 +59,4 @@
 #define SOFT_SERIAL_PIN D1
 {% endif %}
 
-/* Vial */
-#define VIAL_KEYBOARD_UID { {{ vial_uid }} }
-#define VIAL_UNLOCK_COMBO_ROWS { 0, {{ matrix_rows }}, {{ matrix_rows - 1 }}, {{ matrix_rows * 2 - 1 }} }
-#define VIAL_UNLOCK_COMBO_COLS { 0, 0, 0, 0 }
+/* Vial — UID and unlock auto-generated from vial.json */

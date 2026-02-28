@@ -7,6 +7,7 @@ Structure de sortie dans output_dir/ :
   config.h
   rules.mk
   keymaps/default/keymap.c
+  keymaps/default/rules.mk
   keymaps/default/vial.json
 """
 from __future__ import annotations
@@ -45,6 +46,8 @@ TEMPLATE_FILES: list[tuple[str, str]] = [
     ("rules.mk.j2",   "rules.mk"),
     ("info.json.j2",  "keyboard.json"),
     ("vial.json.j2",  "keymaps/default/vial.json"),
+    ("keymap_rules.mk.j2", "keymaps/default/rules.mk"),
+    ("keymap_config.h.j2", "keymaps/default/config.h"),
 ]
 
 
@@ -151,6 +154,7 @@ class TemplateGenerator:
                 or side.caps_lock.enabled
                 or side.wpm.enabled
                 or side.rgb_mode.enabled
+                or side.kfm.enabled
                 or side.katawajojo_enabled
                 or side.luna_enabled
                 or side.ocean_dream_enabled
@@ -173,19 +177,16 @@ class TemplateGenerator:
         if left_keys and right_keys:
             max_left_x = max(k["x"] for k in left_keys)
             x_offset = max_left_x + 1.5
-            thumb_row = matrix_rows - 1  # last row per half = thumb/encoder row
             for k in left_keys:
-                # Skip encoder button placeholder (last row, col 0 — not in LAYOUT_sofle)
-                if k["row"] == thumb_row and k["col"] == 0:
-                    continue
+                if k.get("encoder"):
+                    continue  # Skip encoder positions (not in LAYOUT_sofle)
                 vial_keys.append({
                     "matrix_row": k["row"], "matrix_col": k["col"],
                     "x": round(k["x"], 3), "y": round(k["y"], 3),
                 })
             for k in right_keys:
-                # Skip encoder button placeholder (last row, col max — not in LAYOUT_sofle)
-                if k["row"] == thumb_row and k["col"] == matrix_cols - 1:
-                    continue
+                if k.get("encoder"):
+                    continue  # Skip encoder positions (not in LAYOUT_sofle)
                 vial_keys.append({
                     "matrix_row": k["row"] + matrix_rows, "matrix_col": k["col"],
                     "x": round(k["x"] + x_offset, 3), "y": round(k["y"], 3),
@@ -260,6 +261,7 @@ class TemplateGenerator:
             "left_caps_lock": {"enabled": left.caps_lock.enabled, "col": left.caps_lock.col, "line": left.caps_lock.line},
             "left_wpm": {"enabled": left.wpm.enabled, "col": left.wpm.col, "line": left.wpm.line},
             "left_rgb_mode": {"enabled": left.rgb_mode.enabled and rgb_enabled, "col": left.rgb_mode.col, "line": left.rgb_mode.line},
+            "left_kfm": {"enabled": left.kfm.enabled, "col": left.kfm.col, "line": left.kfm.line},
             "left_katawajojo_enabled": left_katawajojo,
             "left_katawajojo_line": left.katawajojo_line,
             "left_luna_enabled": left_luna,
@@ -274,6 +276,7 @@ class TemplateGenerator:
             "right_caps_lock": {"enabled": right.caps_lock.enabled, "col": right.caps_lock.col, "line": right.caps_lock.line},
             "right_wpm": {"enabled": right.wpm.enabled, "col": right.wpm.col, "line": right.wpm.line},
             "right_rgb_mode": {"enabled": right.rgb_mode.enabled and rgb_enabled, "col": right.rgb_mode.col, "line": right.rgb_mode.line},
+            "right_kfm": {"enabled": right.kfm.enabled, "col": right.kfm.col, "line": right.kfm.line},
             "right_katawajojo_enabled": right_katawajojo,
             "right_katawajojo_line": right.katawajojo_line,
             "right_luna_enabled": right_luna,
@@ -314,7 +317,8 @@ def _load_keyboard_data(
         raw_layout: dict[str, list[dict]] = {}
         for side in ("left", "right"):
             raw_layout[side] = [
-                {"row": k.row, "col": k.col, "x": k.x, "y": k.y}
+                {"row": k.row, "col": k.col, "x": k.x, "y": k.y,
+                 "encoder": k.encoder}
                 for k in kb.layout.get(side, [])
             ]
         vial_name = kb.vial_name or model_name

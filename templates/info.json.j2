@@ -12,7 +12,7 @@
 {%- for col in range(1, matrix_cols) -%}
   {%- set ns.keys = ns.keys + [[half_rows, col, col, half_rows]] -%}
 {%- endfor -%}
-{%- for col in range(matrix_cols - 1) -%}
+{%- for col in range(1, matrix_cols) -%}
   {%- set ns.keys = ns.keys + [[half_rows + matrix_rows, col, col + gap, half_rows]] -%}
 {%- endfor -%}
 {

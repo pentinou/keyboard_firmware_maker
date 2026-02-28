@@ -141,6 +141,8 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
+        if not path.endswith(".kfm.json"):
+            path += ".kfm.json"
         try:
             save_project(self._model, Path(path))  # L3 : file_io loggue déjà, pas besoin ici
         except OSError as e:

@@ -31,8 +31,9 @@ def test_save_project_snake_case_keys(tmp_path):
     path = tmp_path / "test.kfm.json"
     save_project(model, path)
     data = json.loads(path.read_text())
-    assert "keyboard" in data          # snake_case
-    assert "image_path" in data["oled"]  # snake_case
+    assert "keyboard" in data                          # snake_case
+    assert "left" in data["oled"]                      # nouveau format split
+    assert "images" in data["oled"]["left"]            # liste d'images dans le sous-dict
 
 
 def test_save_project_no_tmp_file_remains(tmp_path):
@@ -68,12 +69,19 @@ def test_load_project_invalid_json_raises(tmp_path):
 
 def test_save_project_frames_not_serialized(tmp_path):
     """Les frames OLED ne doivent pas apparaître dans le JSON (Story 1.1)."""
+    from models.project_model import OledImageItem
     model = ProjectModel()
-    model.oled.frames = [b'\x00\xFF']  # données runtime
+    img_left = OledImageItem(frames=[b'\x00\xFF'])
+    img_right = OledImageItem(frames=[b'\x00\xFF'])
+    model.oled.left.images = [img_left]
+    model.oled.right.images = [img_right]
     path = tmp_path / "test.kfm.json"
     save_project(model, path)
     data = json.loads(path.read_text())
-    assert "frames" not in data.get("oled", {})
+    left_images = data.get("oled", {}).get("left", {}).get("images", [])
+    right_images = data.get("oled", {}).get("right", {}).get("images", [])
+    assert all("frames" not in img for img in left_images)
+    assert all("frames" not in img for img in right_images)
 
 
 def test_save_project_overwrites_existing(tmp_path):

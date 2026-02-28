@@ -48,6 +48,15 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
 };
 #endif
 
+{% if rgb_enabled %}
+/* Force RGB on at every boot (overrides EEPROM saved state) */
+void keyboard_post_init_user(void) {
+    rgb_matrix_enable_noeeprom();
+    rgb_matrix_mode_noeeprom(RGB_MATRIX_SOLID_COLOR);
+    rgb_matrix_sethsv_noeeprom(0, 255, 128);
+}
+{% endif %}
+
 {% if katawajojo_enabled %}
 #include "katawajojo.c"
 {% endif %}
@@ -63,6 +72,14 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
 
 {% if oled_enabled %}
 /* ─── OLED ─────────────────────────────────────────────────────────────── */
+
+/* Shared separator bar: 32px wide, thin line near top of page */
+static const char PROGMEM oled_sep[32] = {
+    0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
+    0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
+    0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
+    0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
+};
 
 oled_rotation_t oled_init_user(oled_rotation_t rotation) {
     return OLED_ROTATION_270;
@@ -125,21 +142,13 @@ static const char PROGMEM rgb_name[][11] = {
 };
 #define RGB_NAME_COUNT (sizeof(rgb_name) / sizeof(rgb_name[0]))
 
-/* Separator bar: 32 pixels wide, 1 page tall (all bottom pixels lit) */
-static const char PROGMEM rgb_sep[32] = {
-    0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
-    0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
-    0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
-    0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
-};
-
 static void render_rgb_mode(uint8_t col, uint8_t line) {
     uint8_t mode = rgb_matrix_get_mode();
     oled_set_cursor(col, line);
-    oled_write_P(PSTR("RGB  "), false);
-    /* Separator bar */
+    oled_write_P(PSTR("RGB :"), false);
+    /* Separator bar — just below "RGB :" */
     oled_set_cursor(0, line + 1);
-    oled_write_raw_P(rgb_sep, sizeof(rgb_sep));
+    oled_write_raw_P(oled_sep, sizeof(oled_sep));
     /* Mode name — 2 lines of 5 chars */
     if (mode < RGB_NAME_COUNT) {
         char buf[6];
@@ -255,7 +264,15 @@ static void _burnin_apply(void) {
 {% endif %}
 
 bool oled_task_user(void) {
+{% if left_ocean_dream_enabled and right_ocean_dream_enabled %}
+    /* Ocean Dream uses pixel-level drawing — never clear */
+{% elif left_ocean_dream_enabled %}
+    if (!is_keyboard_left()) { oled_clear(); }
+{% elif right_ocean_dream_enabled %}
+    if (is_keyboard_left()) { oled_clear(); }
+{% else %}
     oled_clear();
+{% endif %}
     if (is_keyboard_left()) {
         /* ── LEFT OLED ─────────────────────────────── */
 {% if left_images %}
@@ -280,26 +297,30 @@ bool oled_task_user(void) {
         oled_write_raw_P((const char *)left_img{{ img.idx }}_frame0, sizeof(left_img{{ img.idx }}_frame0));
 {% endif %}
 {% endfor %}
-{% else %}
-        oled_write_P(PSTR("KFM  "), false);
 {% endif %}
 {% if left_layer.enabled %}
         oled_set_cursor({{ left_layer.col }}, {{ left_layer.line }});
         oled_write_P(PSTR("LAYER"), false);
-        oled_set_cursor({{ left_layer.col }}, {{ left_layer.line + 1 }});
+        oled_set_cursor(0, {{ left_layer.line + 1 }});
+        oled_write_raw_P(oled_sep, sizeof(oled_sep));
+        oled_set_cursor({{ left_layer.col }}, {{ left_layer.line + 2 }});
         oled_write(get_u8_str(get_highest_layer(layer_state), ' '), false);
 {% endif %}
 {% if left_caps_lock.enabled %}
         oled_set_cursor({{ left_caps_lock.col }}, {{ left_caps_lock.line }});
-        oled_write_P(PSTR("Cap"), false);
+        oled_write_P(PSTR("Caps:"), false);
+        oled_set_cursor(0, {{ left_caps_lock.line + 1 }});
+        oled_write_raw_P(oled_sep, sizeof(oled_sep));
         { led_t l = host_keyboard_led_state();
-            oled_set_cursor({{ left_caps_lock.col }}, {{ left_caps_lock.line + 1 }});
-            oled_write_P(l.caps_lock ? PSTR("ON ") : PSTR("   "), false); }
+            oled_set_cursor({{ left_caps_lock.col }}, {{ left_caps_lock.line + 2 }});
+            oled_write_P(l.caps_lock ? PSTR("ON   ") : PSTR("OFF  "), false); }
 {% endif %}
 {% if left_wpm.enabled %}
         oled_set_cursor({{ left_wpm.col }}, {{ left_wpm.line }});
-        oled_write_P(PSTR("Wpm"), false);
-        oled_set_cursor({{ left_wpm.col }}, {{ left_wpm.line + 1 }});
+        oled_write_P(PSTR("WPM :"), false);
+        oled_set_cursor(0, {{ left_wpm.line + 1 }});
+        oled_write_raw_P(oled_sep, sizeof(oled_sep));
+        oled_set_cursor({{ left_wpm.col }}, {{ left_wpm.line + 2 }});
         oled_write(get_u8_str(get_current_wpm(), ' '), false);
 {% endif %}
 {% if left_rgb_mode.enabled %}
@@ -317,6 +338,11 @@ bool oled_task_user(void) {
 {% if left_bongo_enabled %}
         oled_set_cursor(0, {{ left_bongo_line }});
         render_anim_bongocat();
+{% endif %}
+{% if left_kfm.enabled %}
+        /* KFM rendered last so it overlays on animations */
+        oled_set_cursor({{ left_kfm.col }}, {{ left_kfm.line }});
+        oled_write_P(PSTR("<KFM>"), false);
 {% endif %}
     } else {
         /* ── RIGHT OLED ─────────────────────────────── */
@@ -342,26 +368,30 @@ bool oled_task_user(void) {
         oled_write_raw_P((const char *)right_img{{ img.idx }}_frame0, sizeof(right_img{{ img.idx }}_frame0));
 {% endif %}
 {% endfor %}
-{% else %}
-        oled_write_P(PSTR("KFM  "), false);
 {% endif %}
 {% if right_layer.enabled %}
         oled_set_cursor({{ right_layer.col }}, {{ right_layer.line }});
         oled_write_P(PSTR("LAYER"), false);
-        oled_set_cursor({{ right_layer.col }}, {{ right_layer.line + 1 }});
+        oled_set_cursor(0, {{ right_layer.line + 1 }});
+        oled_write_raw_P(oled_sep, sizeof(oled_sep));
+        oled_set_cursor({{ right_layer.col }}, {{ right_layer.line + 2 }});
         oled_write(get_u8_str(get_highest_layer(layer_state), ' '), false);
 {% endif %}
 {% if right_caps_lock.enabled %}
         oled_set_cursor({{ right_caps_lock.col }}, {{ right_caps_lock.line }});
-        oled_write_P(PSTR("Cap"), false);
+        oled_write_P(PSTR("Caps:"), false);
+        oled_set_cursor(0, {{ right_caps_lock.line + 1 }});
+        oled_write_raw_P(oled_sep, sizeof(oled_sep));
         { led_t l = host_keyboard_led_state();
-            oled_set_cursor({{ right_caps_lock.col }}, {{ right_caps_lock.line + 1 }});
-            oled_write_P(l.caps_lock ? PSTR("ON ") : PSTR("   "), false); }
+            oled_set_cursor({{ right_caps_lock.col }}, {{ right_caps_lock.line + 2 }});
+            oled_write_P(l.caps_lock ? PSTR("ON   ") : PSTR("OFF  "), false); }
 {% endif %}
 {% if right_wpm.enabled %}
         oled_set_cursor({{ right_wpm.col }}, {{ right_wpm.line }});
-        oled_write_P(PSTR("Wpm"), false);
-        oled_set_cursor({{ right_wpm.col }}, {{ right_wpm.line + 1 }});
+        oled_write_P(PSTR("WPM :"), false);
+        oled_set_cursor(0, {{ right_wpm.line + 1 }});
+        oled_write_raw_P(oled_sep, sizeof(oled_sep));
+        oled_set_cursor({{ right_wpm.col }}, {{ right_wpm.line + 2 }});
         oled_write(get_u8_str(get_current_wpm(), ' '), false);
 {% endif %}
 {% if right_rgb_mode.enabled %}
@@ -379,6 +409,11 @@ bool oled_task_user(void) {
 {% if right_bongo_enabled %}
         oled_set_cursor(0, {{ right_bongo_line }});
         render_anim_bongocat();
+{% endif %}
+{% if right_kfm.enabled %}
+        /* KFM rendered last so it overlays on animations */
+        oled_set_cursor({{ right_kfm.col }}, {{ right_kfm.line }});
+        oled_write_P(PSTR("<KFM>"), false);
 {% endif %}
     }
 {% if anti_burnin %}

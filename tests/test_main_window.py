@@ -57,8 +57,8 @@ def test_oled_tab_enabled_for_sofle(qtbot):
     assert window._tabs.isTabEnabled(2) is True   # RGB
 
 
-def test_rgb_tab_disabled_for_corne(qtbot):
-    """L'onglet RGB doit être désactivé pour le Corne (rgb=False)."""
+def test_rgb_tab_always_enabled(qtbot):
+    """L'onglet RGB est toujours accessible (layout physique visible pour tous les claviers)."""
     model = ProjectModel()
     window = MainWindow(model)
     qtbot.addWidget(window)
@@ -70,7 +70,7 @@ def test_rgb_tab_disabled_for_corne(qtbot):
     )
     assert corne_index is not None
     keyboard_combo.setCurrentIndex(corne_index)
-    assert window._tabs.isTabEnabled(2) is False  # RGB désactivé
+    assert window._tabs.isTabEnabled(2) is True   # RGB toujours actif
     assert window._tabs.isTabEnabled(1) is True   # OLED toujours actif
 
 
@@ -86,10 +86,10 @@ def test_tabs_update_dynamically_on_keyboard_change(qtbot):
     keyboard_combo.setCurrentIndex(sofle_index)
     assert window._tabs.isTabEnabled(1) is True
     assert window._tabs.isTabEnabled(2) is True
-    # Passer sur Corne → RGB désactivé
+    # Passer sur Corne → RGB toujours actif (layout physique visible)
     corne_index = next(i for i in range(keyboard_combo.count()) if "Corne" in keyboard_combo.itemText(i))
     keyboard_combo.setCurrentIndex(corne_index)
-    assert window._tabs.isTabEnabled(2) is False
+    assert window._tabs.isTabEnabled(2) is True
 
 
 def test_build_tab_always_enabled(qtbot):
@@ -141,7 +141,8 @@ def test_open_project_syncs_oled_overlays(qtbot, tmp_path):
     from modules.project_manager.file_io import save_project
     from PySide6.QtWidgets import QCheckBox
     model = ProjectModel()
-    model.oled.overlays = ["layer", "wpm"]
+    model.oled.left.layer.enabled = True
+    model.oled.left.wpm.enabled = True
     proj_path = tmp_path / "proj.kfm.json"
     save_project(model, proj_path)
 
@@ -150,9 +151,9 @@ def test_open_project_syncs_oled_overlays(qtbot, tmp_path):
     with patch("ui.main_window.QFileDialog.getOpenFileName", return_value=(str(proj_path), "")):
         window._open_project()
 
-    cb_layer = window._tab_oled.findChild(QCheckBox, "layer_check")
-    cb_wpm = window._tab_oled.findChild(QCheckBox, "wpm_check")
-    cb_caps = window._tab_oled.findChild(QCheckBox, "caps_lock_check")
+    cb_layer = window._tab_oled.findChild(QCheckBox, "left_layer_check")
+    cb_wpm = window._tab_oled.findChild(QCheckBox, "left_wpm_check")
+    cb_caps = window._tab_oled.findChild(QCheckBox, "left_caps_check")
     assert cb_layer.isChecked()
     assert cb_wpm.isChecked()
     assert not cb_caps.isChecked()
@@ -187,7 +188,7 @@ def test_initial_tab_state_reflects_default_keyboard_capabilities(qtbot):
     if keyboards and 0 <= default_idx < len(keyboards):
         default_kb = keyboards[default_idx]
         assert window._tabs.isTabEnabled(1) == bool(default_kb.capabilities.get("oled", False))
-        assert window._tabs.isTabEnabled(2) == bool(default_kb.capabilities.get("rgb", False))
+        assert window._tabs.isTabEnabled(2) is True  # RGB toujours actif
 
 
 def test_open_project_preserves_mcu_selection(qtbot, tmp_path):

@@ -17,3 +17,76 @@ capabilities:
 matrix:
   rows: 4
   cols: 6
+# Physical key positions (x, y in key units). Source: QMK info.json splitkb/aurora/lily58/rev1
+# Right side positions normalized (x_min = 9.5 subtracted)
+layout:
+  left:
+    # row 0 — number row
+    - {row: 0, col: 0, x: 0.0,  y: 0.5}
+    - {row: 0, col: 1, x: 1.0,  y: 0.375}
+    - {row: 0, col: 2, x: 2.0,  y: 0.125}
+    - {row: 0, col: 3, x: 3.0,  y: 0.0}
+    - {row: 0, col: 4, x: 4.0,  y: 0.125}
+    - {row: 0, col: 5, x: 5.0,  y: 0.25}
+    # row 1
+    - {row: 1, col: 0, x: 0.0,  y: 1.5}
+    - {row: 1, col: 1, x: 1.0,  y: 1.375}
+    - {row: 1, col: 2, x: 2.0,  y: 1.125}
+    - {row: 1, col: 3, x: 3.0,  y: 1.0}
+    - {row: 1, col: 4, x: 4.0,  y: 1.125}
+    - {row: 1, col: 5, x: 5.0,  y: 1.25}
+    # row 2
+    - {row: 2, col: 0, x: 0.0,  y: 2.5}
+    - {row: 2, col: 1, x: 1.0,  y: 2.375}
+    - {row: 2, col: 2, x: 2.0,  y: 2.125}
+    - {row: 2, col: 3, x: 3.0,  y: 2.0}
+    - {row: 2, col: 4, x: 4.0,  y: 2.125}
+    - {row: 2, col: 5, x: 5.0,  y: 2.25}
+    # row 3 — bottom row
+    - {row: 3, col: 0, x: 0.0,  y: 3.5}
+    - {row: 3, col: 1, x: 1.0,  y: 3.375}
+    - {row: 3, col: 2, x: 2.0,  y: 3.125}
+    - {row: 3, col: 3, x: 3.0,  y: 3.0}
+    - {row: 3, col: 4, x: 4.0,  y: 3.125}
+    - {row: 3, col: 5, x: 5.0,  y: 3.25}
+    # row 4 — extra inner key + thumb cluster (c2-c4 décalés pour coller c4 à c5)
+    - {row: 4, col: 1, x: 6.0,  y: 2.75}
+    - {row: 4, col: 2, x: 3.0,  y: 4.15}
+    - {row: 4, col: 3, x: 4.0,  y: 4.15}
+    - {row: 4, col: 4, x: 5.0,  y: 4.25}
+    - {row: 4, col: 5, x: 6.0,  y: 4.25}
+  right:
+    # row 0 (miroir exact du côté gauche, x_right = 6 - x_left)
+    - {row: 0, col: 5, x: 1.0,  y: 0.25}
+    - {row: 0, col: 4, x: 2.0,  y: 0.125}
+    - {row: 0, col: 3, x: 3.0,  y: 0.0}
+    - {row: 0, col: 2, x: 4.0,  y: 0.125}
+    - {row: 0, col: 1, x: 5.0,  y: 0.375}
+    - {row: 0, col: 0, x: 6.0,  y: 0.5}
+    # row 1
+    - {row: 1, col: 5, x: 1.0,  y: 1.25}
+    - {row: 1, col: 4, x: 2.0,  y: 1.125}
+    - {row: 1, col: 3, x: 3.0,  y: 1.0}
+    - {row: 1, col: 2, x: 4.0,  y: 1.125}
+    - {row: 1, col: 1, x: 5.0,  y: 1.375}
+    - {row: 1, col: 0, x: 6.0,  y: 1.5}
+    # row 2
+    - {row: 2, col: 5, x: 1.0,  y: 2.25}
+    - {row: 2, col: 4, x: 2.0,  y: 2.125}
+    - {row: 2, col: 3, x: 3.0,  y: 2.0}
+    - {row: 2, col: 2, x: 4.0,  y: 2.125}
+    - {row: 2, col: 1, x: 5.0,  y: 2.375}
+    - {row: 2, col: 0, x: 6.0,  y: 2.5}
+    # row 3
+    - {row: 3, col: 5, x: 1.0,  y: 3.25}
+    - {row: 3, col: 4, x: 2.0,  y: 3.125}
+    - {row: 3, col: 3, x: 3.0,  y: 3.0}
+    - {row: 3, col: 2, x: 4.0,  y: 3.125}
+    - {row: 3, col: 1, x: 5.0,  y: 3.375}
+    - {row: 3, col: 0, x: 6.0,  y: 3.5}
+    # row 4 — miroir du left corrigé : x_right = 6 - x_left
+    - {row: 4, col: 1, x: 0.0,  y: 2.75}
+    - {row: 4, col: 5, x: 0.0,  y: 4.25}
+    - {row: 4, col: 4, x: 1.0,  y: 4.25}
+    - {row: 4, col: 3, x: 2.0,  y: 4.15}
+    - {row: 4, col: 2, x: 3.0,  y: 4.15}

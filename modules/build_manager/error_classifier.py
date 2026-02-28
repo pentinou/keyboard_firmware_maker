@@ -131,6 +131,20 @@ _ERROR_PATTERNS: list[tuple[re.Pattern, str, str, str]] = [
         "Vérifiez que le MCU (ex: RP2040) est correctement défini dans rules.mk.\n"
         "Si l'erreur persiste après regénération, vérifiez les erreurs API ci-dessus.",
     ),
+    (
+        re.compile(r"Please use.*vendor.*WS2812 driver for RP2040", re.IGNORECASE),
+        "ws2812_bitbang_rp2040",
+        "Le driver WS2812 bitbang n'est pas supporté sur RP2040.",
+        "Ce problème a été corrigé : WS2812_DRIVER = vendor est maintenant défini.\n"
+        "Regénérez le firmware depuis l'application.",
+    ),
+    (
+        re.compile(r"palWaitLineTimeout|palEnablePadEvent.*implicit", re.IGNORECASE),
+        "serial_bitbang_rp2040",
+        "Le driver série bitbang n'est pas supporté sur RP2040.",
+        "Ce problème a été corrigé : SERIAL_DRIVER = vendor est maintenant défini.\n"
+        "Regénérez le firmware depuis l'application.",
+    ),
 ]
 
 _GENERIC_MESSAGE = "La compilation a échoué."
