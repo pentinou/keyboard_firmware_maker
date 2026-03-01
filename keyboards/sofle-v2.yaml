@@ -8,6 +8,22 @@ mcu_options:
   - id: rp2040
     display_name: "RP2040 (Sea Picro / Pro Micro RP2040)"
     description: "Microcontrôleur dual-core ARM Cortex-M0+ à 133 MHz, 264 KB RAM, 2 MB Flash. Recommandé pour Vial-QMK avec support OLED et RGB complet."
+    bootloader: "rp2040"
+    pins:
+      matrix_rows: ["GP5", "GP6", "GP7", "GP8", "GP9"]
+      matrix_cols: ["GP27", "GP26", "GP22", "GP20", "GP23", "GP21"]
+      encoder_a: ["GP29"]
+      encoder_b: ["GP28"]
+      encoder_a_right: ["GP28"]
+      encoder_b_right: ["GP29"]
+      ws2812: "GP0"
+      serial_tx: "GP1"
+      serial_driver: "vendor"
+      ws2812_driver: "vendor"
+      encoder_default_pos: "0x3"
+diode_direction: "COL2ROW"
+layout_macro: "LAYOUT_sofle"
+has_encoder: true
 capabilities:
   oled: true
   rgb: true
@@ -18,6 +34,11 @@ oled:
   width: 64
   height: 128
   bits: 1
+  driver: "ssd1306"
+  rotation: 270
+  display: "128X32"
+rgb:
+  max_brightness: 200
 # Physical key positions (x, y in key units). Source: QMK info.json sofle/rev1
 # Right side positions are normalized relative to left (x_min subtracted = 9.5)
 layout:

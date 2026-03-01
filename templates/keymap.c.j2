@@ -8,13 +8,13 @@
 #define _LOWER 1
 #define _RAISE 2
 
-/* LAYOUT_sofle : 4 main rows × 6 keys per side + 5 thumbs per side = 58 keys.
+/* {{ layout_macro }} : 4 main rows × 6 keys per side + 5 thumbs per side = 58 keys.
  * Argument order: row0_left(6), row0_right(6), row1_left(6), row1_right(6),
  *                 row2_left(6), row2_right(6), row3_left(6), row3_right(6),
  *                 thumbs_left(5), thumbs_right(5).                          */
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
-    [_BASE] = LAYOUT_sofle(
+    [_BASE] = {{ layout_macro }}(
         KC_GRV,  KC_1,    KC_2,    KC_3,    KC_4,    KC_5,    KC_6,    KC_7,    KC_8,    KC_9,    KC_0,    KC_MINS,
         KC_TAB,  KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,    KC_Y,    KC_U,    KC_I,    KC_O,    KC_P,    KC_BSPC,
         KC_LCTL, KC_A,    KC_S,    KC_D,    KC_F,    KC_G,    KC_H,    KC_J,    KC_K,    KC_L,    KC_SCLN, KC_QUOT,
@@ -22,7 +22,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_LGUI, KC_LALT, MO(_LOWER), KC_SPC, KC_DEL, KC_ENT, MO(_RAISE), KC_RALT, KC_RGUI, XXXXXXX
     ),
 
-    [_LOWER] = LAYOUT_sofle(
+    [_LOWER] = {{ layout_macro }}(
         KC_ESC,  KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,   KC_F6,   KC_F7,   KC_F8,   KC_F9,   KC_F10,  KC_DEL,
         _______, _______, _______, _______, _______, _______, _______, _______, KC_UP,   _______, _______, KC_BSPC,
         _______, _______, _______, _______, _______, _______, KC_HOME, KC_LEFT, KC_DOWN, KC_RGHT, KC_END,  _______,
@@ -30,7 +30,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         _______, _______, _______, _______, _______, _______, _______, _______, _______, _______
     ),
 
-    [_RAISE] = LAYOUT_sofle(
+    [_RAISE] = {{ layout_macro }}(
         _______, KC_EXLM, KC_AT,   KC_HASH, KC_DLR,  KC_PERC, KC_CIRC, KC_AMPR, KC_ASTR, KC_LPRN, KC_RPRN, KC_BSPC,
         KC_TILD, _______, _______, _______, _______, _______, KC_MINS, KC_EQL,  KC_LBRC, KC_RBRC, KC_BSLS, KC_GRV,
         KC_CAPS, _______, _______, _______, _______, _______, KC_UNDS, KC_PLUS, KC_LCBR, KC_RCBR, KC_PIPE, _______,
@@ -39,6 +39,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     ),
 };
 
+{% if has_encoder %}
 /* Encoder map — 1 encoder per side, configurable via Vial */
 #if defined(ENCODER_MAP_ENABLE)
 const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
@@ -47,6 +48,7 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
     [_RAISE] = { ENCODER_CCW_CW(KC_BRID, KC_BRIU), ENCODER_CCW_CW(KC_LEFT, KC_RGHT) },
 };
 #endif
+{% endif %}
 
 {% if rgb_enabled %}
 /* Force RGB on at every boot (overrides EEPROM saved state) */
@@ -73,16 +75,16 @@ void keyboard_post_init_user(void) {
 {% if oled_enabled %}
 /* ─── OLED ─────────────────────────────────────────────────────────────── */
 
-/* Shared separator bar: 32px wide, thin line near top of page */
+/* Shared separator bar: 32px wide, empty row then lit row (top of page) */
 static const char PROGMEM oled_sep[32] = {
-    0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
-    0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
-    0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
-    0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
+    0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02,
+    0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02,
+    0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02,
+    0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02,
 };
 
 oled_rotation_t oled_init_user(oled_rotation_t rotation) {
-    return OLED_ROTATION_270;
+    return OLED_ROTATION_{{ oled_rotation }};
 }
 
 {% if left_rgb_mode.enabled or right_rgb_mode.enabled %}
@@ -317,10 +319,6 @@ bool oled_task_user(void) {
 {% endif %}
 {% if left_wpm.enabled %}
         oled_set_cursor({{ left_wpm.col }}, {{ left_wpm.line }});
-        oled_write_P(PSTR("WPM :"), false);
-        oled_set_cursor(0, {{ left_wpm.line + 1 }});
-        oled_write_raw_P(oled_sep, sizeof(oled_sep));
-        oled_set_cursor({{ left_wpm.col }}, {{ left_wpm.line + 2 }});
         oled_write(get_u8_str(get_current_wpm(), ' '), false);
 {% endif %}
 {% if left_rgb_mode.enabled %}
@@ -388,10 +386,6 @@ bool oled_task_user(void) {
 {% endif %}
 {% if right_wpm.enabled %}
         oled_set_cursor({{ right_wpm.col }}, {{ right_wpm.line }});
-        oled_write_P(PSTR("WPM :"), false);
-        oled_set_cursor(0, {{ right_wpm.line + 1 }});
-        oled_write_raw_P(oled_sep, sizeof(oled_sep));
-        oled_set_cursor({{ right_wpm.col }}, {{ right_wpm.line + 2 }});
         oled_write(get_u8_str(get_current_wpm(), ' '), false);
 {% endif %}
 {% if right_rgb_mode.enabled %}

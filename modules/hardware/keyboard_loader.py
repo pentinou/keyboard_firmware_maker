@@ -15,12 +15,31 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class McuPins:
+    """Brochage matériel d'un MCU pour un clavier donné."""
+
+    matrix_rows: list[str] = field(default_factory=list)
+    matrix_cols: list[str] = field(default_factory=list)
+    encoder_a: list[str] = field(default_factory=list)
+    encoder_b: list[str] = field(default_factory=list)
+    encoder_a_right: list[str] = field(default_factory=list)
+    encoder_b_right: list[str] = field(default_factory=list)
+    ws2812: str = ""
+    serial_tx: str = ""
+    serial_driver: str = ""
+    ws2812_driver: str = ""
+    encoder_default_pos: str = ""
+
+
+@dataclass
 class McuOption:
     """Description d'un microcontrôleur compatible avec un modèle de clavier."""
 
     id: str
     display_name: str
     description: str = ""
+    bootloader: str = ""
+    pins: McuPins = field(default_factory=McuPins)
 
 
 @dataclass
@@ -32,6 +51,22 @@ class KeyLayout:
     x: float
     y: float
     encoder: bool = False
+
+
+@dataclass
+class OledHardwareConfig:
+    """Configuration matérielle OLED depuis le YAML clavier."""
+
+    driver: str = "ssd1306"
+    rotation: int = 270
+    display: str = "128X32"
+
+
+@dataclass
+class RgbHardwareConfig:
+    """Configuration matérielle RGB depuis le YAML clavier."""
+
+    max_brightness: int = 200
 
 
 @dataclass
@@ -52,6 +87,30 @@ class KeyboardDefinition:
     """Vendor ID USB pour Vial."""
     vial_pid: str = "0x0001"
     """Product ID USB pour Vial."""
+    diode_direction: str = "COL2ROW"
+    layout_macro: str = "LAYOUT"
+    has_encoder: bool = False
+    oled_hw: OledHardwareConfig = field(default_factory=OledHardwareConfig)
+    rgb_hw: RgbHardwareConfig = field(default_factory=RgbHardwareConfig)
+
+
+def _parse_pins(raw: dict | None) -> McuPins:
+    """Parse un bloc 'pins' YAML en McuPins dataclass."""
+    if not raw or not isinstance(raw, dict):
+        return McuPins()
+    return McuPins(
+        matrix_rows=raw.get("matrix_rows", []),
+        matrix_cols=raw.get("matrix_cols", []),
+        encoder_a=raw.get("encoder_a", []),
+        encoder_b=raw.get("encoder_b", []),
+        encoder_a_right=raw.get("encoder_a_right", []),
+        encoder_b_right=raw.get("encoder_b_right", []),
+        ws2812=raw.get("ws2812", ""),
+        serial_tx=raw.get("serial_tx", ""),
+        serial_driver=raw.get("serial_driver", ""),
+        ws2812_driver=raw.get("ws2812_driver", ""),
+        encoder_default_pos=raw.get("encoder_default_pos", ""),
+    )
 
 
 def load_keyboard(path: Path) -> KeyboardDefinition:
@@ -75,6 +134,8 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
             id=mcu["id"],
             display_name=mcu["display_name"],
             description=mcu.get("description", ""),
+            bootloader=mcu.get("bootloader", ""),
+            pins=_parse_pins(mcu.get("pins", {})),
         )
         for mcu in (data.get("mcu_options") or [])
     ]
@@ -106,6 +167,20 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
                 if isinstance(k, dict)
             ]
 
+    # Parse OLED hardware config
+    raw_oled = data.get("oled", {})
+    oled_hw = OledHardwareConfig(
+        driver=raw_oled.get("driver", "ssd1306") if isinstance(raw_oled, dict) else "ssd1306",
+        rotation=raw_oled.get("rotation", 270) if isinstance(raw_oled, dict) else 270,
+        display=raw_oled.get("display", "128X32") if isinstance(raw_oled, dict) else "128X32",
+    )
+
+    # Parse RGB hardware config
+    raw_rgb = data.get("rgb", {})
+    rgb_hw = RgbHardwareConfig(
+        max_brightness=raw_rgb.get("max_brightness", 200) if isinstance(raw_rgb, dict) else 200,
+    )
+
     return KeyboardDefinition(
         model=data["model"],
         display_name=data["display_name"],
@@ -117,6 +192,11 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
         vial_name=data.get("vial_name", ""),
         vial_vid=data.get("vial_vid", "0xFEED"),
         vial_pid=data.get("vial_pid", "0x0001"),
+        diode_direction=data.get("diode_direction", "COL2ROW"),
+        layout_macro=data.get("layout_macro", "LAYOUT"),
+        has_encoder=bool(data.get("has_encoder", False)),
+        oled_hw=oled_hw,
+        rgb_hw=rgb_hw,
     )
 
 

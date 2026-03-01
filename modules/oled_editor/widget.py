@@ -107,7 +107,7 @@ class _OledCanvas(QWidget):
                     OLED_WIDTH * self.SCALE, 3 * self.PAGE_H)
         if name == "wpm" and s.wpm.enabled:
             return (s.wpm.col * self.CHAR_W, s.wpm.line * self.PAGE_H,
-                    OLED_WIDTH * self.SCALE, 3 * self.PAGE_H)
+                    OLED_WIDTH * self.SCALE, 1 * self.PAGE_H)
         if name == "rgb_mode" and s.rgb_mode.enabled:
             return (s.rgb_mode.col * self.CHAR_W, s.rgb_mode.line * self.PAGE_H,
                     OLED_WIDTH * self.SCALE, 4 * self.PAGE_H)
@@ -238,13 +238,22 @@ class _OledCanvas(QWidget):
         self._selected_item = None
         self.update()
 
+    # Height in pages for each item type (for drag clamping)
+    _ITEM_PAGES = {
+        "layer": 3, "caps_lock": 3, "rgb_mode": 4,
+        "wpm": 1, "kfm": 1,
+        "katawajojo": 3, "luna": 3, "ocean_dream": 16, "bongo": 4,
+    }
+
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
         if not self._dragging_item:
             return
         px = int(event.position().x())
         py = int(event.position().y())
         new_col = max(0, min((px - self._drag_offset_x) // self.CHAR_W, 4))
-        new_line = max(0, min((py - self._drag_offset_y) // self.PAGE_H, 15))
+        item_pages = self._ITEM_PAGES.get(self._dragging_item, 1)
+        max_line = 16 - item_pages
+        new_line = max(0, min((py - self._drag_offset_y) // self.PAGE_H, max_line))
         s = self._side
         if self._dragging_item.startswith("image:"):
             idx = int(self._dragging_item.split(":")[1])
@@ -318,6 +327,8 @@ class OledWidget(QWidget):
         self._frame_delays: dict[str, list[list[int]]] = {"left": [], "right": []}
         self._anim_idx: dict[str, list[int]] = {"left": [], "right": []}
         self._timers: dict[str, QTimer] = {}
+        self._reimport_queue: list[tuple[str, int, str]] = []  # (side, idx, path)
+        self._reimport_worker: _ConversionWorker | None = None
         self._canvas_left: _OledCanvas | None = None
         self._canvas_right: _OledCanvas | None = None
         self._group_left: QGroupBox | None = None
@@ -374,9 +385,7 @@ class OledWidget(QWidget):
         for name, label in [
             ("layer", tr("oled.overlay.layer")),
             ("caps", tr("oled.overlay.caps_lock")),
-            ("wpm", tr("oled.overlay.wpm")),
             ("rgb_mode", tr("oled.overlay.rgb_mode")),
-            ("kfm", tr("oled.overlay.kfm")),
         ]:
             cb = QCheckBox(label)
             cb.setObjectName(f"{side}_{name}_check")
@@ -388,6 +397,8 @@ class OledWidget(QWidget):
         eyecandy_label = QLabel(f"<b>{tr('oled.group.eyecandy')}</b>")
         vl.addWidget(eyecandy_label)
         for name, label in [
+            ("wpm", tr("oled.overlay.wpm")),
+            ("kfm", tr("oled.overlay.kfm")),
             ("katawajojo", tr("oled.overlay.katawajojo")),
             ("luna", tr("oled.overlay.luna")),
             ("ocean_dream", tr("oled.overlay.ocean_dream")),
@@ -409,6 +420,11 @@ class OledWidget(QWidget):
         btn_rot.setObjectName(f"rotate_btn_{side}")
         btn_rot.clicked.connect(lambda _=None, s=side: self._on_rotate_clicked(s))
         vl.addWidget(btn_rot)
+
+        btn_reset = QPushButton(tr("oled.btn.reset"))
+        btn_reset.setObjectName(f"reset_btn_{side}")
+        btn_reset.clicked.connect(lambda _=None, s=side: self._on_reset_clicked(s))
+        vl.addWidget(btn_reset)
 
         side_config = self._model.oled.left if side == "left" else self._model.oled.right
         canvas = _OledCanvas(side_config)
@@ -592,6 +608,32 @@ class OledWidget(QWidget):
         self._show_frame(side, idx, frame_idx)
         logger.info("Rotation 90° %s[%d] (%d frame(s))", side, idx, len(img_item.frames))
 
+    def _on_reset_clicked(self, side: str) -> None:
+        """Efface toutes les images et désactive tous les overlays de ce côté."""
+        side_config = self._model.oled.left if side == "left" else self._model.oled.right
+        # Clear images
+        side_config.images.clear()
+        # Disable all overlays
+        side_config.layer.enabled = False
+        side_config.caps_lock.enabled = False
+        side_config.wpm.enabled = False
+        side_config.rgb_mode.enabled = False
+        side_config.kfm.enabled = False
+        side_config.katawajojo_enabled = False
+        side_config.luna_enabled = False
+        side_config.ocean_dream_enabled = False
+        side_config.bongo_enabled = False
+        # Clear animation state
+        self._anim_idx[side] = []
+        # Sync checkboxes and refresh canvas
+        self._sync_from_model()
+        canvas = self._canvas_left if side == "left" else self._canvas_right
+        if canvas:
+            canvas._pixmaps.clear()
+            canvas._selected_item = None
+            canvas.update()
+        logger.info("Reset écran %s", side)
+
     def set_active_sides(self, sides: list[str]) -> None:
         """Affiche/masque les groupes gauche/droite selon la config matérielle."""
         if self._group_left is not None:
@@ -600,7 +642,7 @@ class OledWidget(QWidget):
             self._group_right.setVisible("right" in sides)
 
     def _sync_from_model(self) -> None:
-        """Synchronise les checkboxes depuis le modèle (ex : après chargement projet)."""
+        """Synchronise les checkboxes et le canvas depuis le modèle (ex : après chargement projet)."""
         cb = self.findChild(QCheckBox, "anti_burnin_check")
         if cb:
             cb.blockSignals(True)
@@ -640,6 +682,98 @@ class OledWidget(QWidget):
                     cb.blockSignals(True)
                     cb.setChecked(value)
                     cb.blockSignals(False)
+
+            # Re-sync canvas images from model (handles project load)
+            canvas = self._canvas_left if side == "left" else self._canvas_right
+            if canvas is None:
+                continue
+            # Rebind canvas to new side config (model.oled may have been replaced)
+            canvas._side = side_config
+            canvas._pixmaps.clear()
+            canvas.sync_images(len(side_config.images))
+            self._anim_idx[side] = [0] * len(side_config.images)
+            self._frame_delays[side] = [[100]] * len(side_config.images)
+            for idx, img in enumerate(side_config.images):
+                if img.image_path and not img.frames:
+                    self._reimport_queue.append((side, idx, img.image_path))
+                elif img.frames:
+                    self._frame_delays[side][idx] = img.delays if img.delays else [100]
+                    self._show_frame(side, idx, 0)
+            canvas.update()
+        self._process_reimport_queue()
+
+    def _process_reimport_queue(self) -> None:
+        """Traite le prochain item de la queue de re-import d'images."""
+        if not self._reimport_queue:
+            return
+        if self._reimport_worker and self._reimport_worker.isRunning():
+            return  # Attendre la fin du worker en cours
+
+        side, idx, path = self._reimport_queue.pop(0)
+        p = Path(path)
+        if not p.is_file():
+            logger.warning("Re-import OLED ignoré : fichier introuvable %s", path)
+            self._process_reimport_queue()
+            return
+
+        self._reimport_worker = _ConversionWorker(p)
+        self._reimport_worker._reimport_side = side  # type: ignore[attr-defined]
+        self._reimport_worker._reimport_idx = idx  # type: ignore[attr-defined]
+        self._reimport_worker.finished.connect(self._on_reimport_done)
+        self._reimport_worker.error.connect(self._on_reimport_error)
+        self._reimport_worker.start()
+
+    def _on_reimport_done(self, frames: list, delays: list,
+                          natural_w: int, natural_h: int) -> None:
+        """Callback quand le re-import d'une image est terminé."""
+        worker = self._reimport_worker
+        if worker is None:
+            return
+        side = worker._reimport_side  # type: ignore[attr-defined]
+        idx = worker._reimport_idx  # type: ignore[attr-defined]
+        worker.finished.disconnect(self._on_reimport_done)
+        worker.error.disconnect(self._on_reimport_error)
+
+        side_config = self._model.oled.left if side == "left" else self._model.oled.right
+        if idx < len(side_config.images):
+            img_item = side_config.images[idx]
+            img_item.frames = frames
+            img_item.delays = delays
+            img_item.natural_w = natural_w
+            img_item.natural_h = natural_h
+
+            # Update animation tracking
+            while len(self._anim_idx[side]) <= idx:
+                self._anim_idx[side].append(0)
+            while len(self._frame_delays[side]) <= idx:
+                self._frame_delays[side].append([100])
+            self._frame_delays[side][idx] = delays
+            self._anim_idx[side][idx] = 0
+
+            canvas = self._canvas_left if side == "left" else self._canvas_right
+            if canvas:
+                canvas.sync_images(len(side_config.images))
+            self._show_frame(side, idx, 0)
+
+            if len(frames) > 1:
+                self._timers[side].setInterval(delays[0] if delays else 100)
+                self._timers[side].start()
+
+            logger.info("Re-import OLED %s[%d] terminé : %d frame(s) %dx%d px",
+                        side, idx, len(frames), natural_w, natural_h)
+
+        self._reimport_worker = None
+        self._process_reimport_queue()
+
+    def _on_reimport_error(self, message: str) -> None:
+        """Callback quand le re-import échoue — log silencieux, pas de popup."""
+        worker = self._reimport_worker
+        if worker is not None:
+            worker.finished.disconnect(self._on_reimport_done)
+            worker.error.disconnect(self._on_reimport_error)
+        logger.warning("Erreur re-import OLED : %s", message)
+        self._reimport_worker = None
+        self._process_reimport_queue()
 
     def _show_frame(self, side: str, img_idx: int, frame_idx: int) -> None:
         """Affiche la frame frame_idx de l'image img_idx sur le canvas du côté side.

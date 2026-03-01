@@ -22,7 +22,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from models.project_model import OledSideConfig, ProjectModel
 from modules.oled_editor.processor import frame_to_qmk_bytes
-from modules.hardware.keyboard_loader import load_keyboard
+from modules.hardware.keyboard_loader import KeyboardDefinition, McuPins, load_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -163,12 +163,36 @@ class TemplateGenerator:
 
         oled_enabled = _side_has_content(left) or _side_has_content(right)
 
-        rgb_enabled = bool(model.rgb.effects or model.rgb.per_key)
-
         mcu = model.keyboard.mcu or "rp2040"
-        matrix_rows, matrix_cols, kb_layout, vial_name, vial_vid, vial_pid = _load_keyboard_data(
-            model.keyboard.model, self._templates_dir.parent
-        )
+        kb_def = _load_keyboard_def(model.keyboard.model, self._templates_dir.parent)
+        matrix_rows = kb_def.matrix["rows"]
+        matrix_cols = kb_def.matrix["cols"]
+        vial_name = kb_def.vial_name or model.keyboard.model
+        vial_vid = kb_def.vial_vid
+        vial_pid = kb_def.vial_pid
+        capabilities = kb_def.capabilities
+
+        # Extract pins from the selected MCU
+        pins = McuPins()
+        bootloader = _BOOTLOADER_MAP.get(mcu, "rp2040")
+        for mcu_opt in kb_def.mcu_options:
+            if mcu_opt.id == mcu:
+                pins = mcu_opt.pins
+                if mcu_opt.bootloader:
+                    bootloader = mcu_opt.bootloader
+                break
+
+        # Build raw layout dict for vial.json
+        kb_layout: dict[str, list[dict]] = {}
+        for side in ("left", "right"):
+            kb_layout[side] = [
+                {"row": k.row, "col": k.col, "x": k.x, "y": k.y,
+                 "encoder": k.encoder}
+                for k in kb_def.layout.get(side, [])
+            ]
+
+        # RGB enabled if the keyboard hardware supports it (capability from YAML)
+        rgb_enabled = bool(capabilities.get("rgb", False))
 
         # Build flat key list for vial.json with physical positions
         vial_keys: list[dict] = []
@@ -241,14 +265,37 @@ class TemplateGenerator:
         uid_bytes = hashlib.md5(uid_seed).digest()[:8]
         vial_uid = ", ".join(f"0x{b:02X}" for b in uid_bytes)
 
+        # Pins as a dict for templates
+        pins_dict = {
+            "matrix_rows": pins.matrix_rows,
+            "matrix_cols": pins.matrix_cols,
+            "encoder_a": pins.encoder_a,
+            "encoder_b": pins.encoder_b,
+            "encoder_a_right": pins.encoder_a_right,
+            "encoder_b_right": pins.encoder_b_right,
+            "ws2812": pins.ws2812,
+            "serial_tx": pins.serial_tx,
+            "serial_driver": pins.serial_driver,
+            "ws2812_driver": pins.ws2812_driver,
+            "encoder_default_pos": pins.encoder_default_pos,
+        }
+
         return {
             "keyboard_model": model.keyboard.model or "keyboard_firmware_maker",
             "vial_name": vial_name,
             "vial_vid": vial_vid,
             "vial_pid": vial_pid,
             "mcu": mcu,
-            "bootloader": _BOOTLOADER_MAP.get(mcu, "rp2040"),
+            "bootloader": bootloader,
             "vial_uid": vial_uid,
+            "pins": pins_dict,
+            "diode_direction": kb_def.diode_direction,
+            "layout_macro": kb_def.layout_macro,
+            "has_encoder": kb_def.has_encoder,
+            "oled_driver": kb_def.oled_hw.driver,
+            "oled_rotation": kb_def.oled_hw.rotation,
+            "oled_display": kb_def.oled_hw.display,
+            "rgb_max_brightness": kb_def.rgb_hw.max_brightness,
             "oled_enabled": oled_enabled,
             "wpm_needed": wpm_needed,
             "rgb_enabled": rgb_enabled,
@@ -301,34 +348,22 @@ class TemplateGenerator:
         }
 
 
-def _load_keyboard_data(
-    model_name: str, project_root: Path
-) -> tuple[int, int, dict, str, str, str]:
-    """Charge les dimensions de matrice, le layout et les métadonnées Vial depuis le YAML.
+def _load_keyboard_def(model_name: str, project_root: Path) -> KeyboardDefinition:
+    """Charge la définition complète du clavier depuis le YAML.
 
-    Returns:
-        (rows_per_half, cols, layout, vial_name, vial_vid, vial_pid)
-        layout = {"left": [...], "right": [...]} where each entry is a dict with
-        keys row, col, x, y.
+    Retourne un KeyboardDefinition par défaut en cas d'erreur.
     """
     kb_file = project_root / "keyboards" / f"{model_name}.yaml"
     try:
-        kb = load_keyboard(kb_file)
-        raw_layout: dict[str, list[dict]] = {}
-        for side in ("left", "right"):
-            raw_layout[side] = [
-                {"row": k.row, "col": k.col, "x": k.x, "y": k.y,
-                 "encoder": k.encoder}
-                for k in kb.layout.get(side, [])
-            ]
-        vial_name = kb.vial_name or model_name
-        return kb.matrix["rows"], kb.matrix["cols"], raw_layout, vial_name, kb.vial_vid, kb.vial_pid
+        return load_keyboard(kb_file)
     except Exception:
         logger.warning(
-            "Impossible de lire la matrice pour '%s' depuis %s — défaut 5×6",
+            "Impossible de lire la définition pour '%s' depuis %s — défaut",
             model_name, kb_file,
         )
-        return 5, 6, {}, model_name, "0xFEED", "0x0001"
+        return KeyboardDefinition(
+            model=model_name, display_name=model_name, description="",
+        )
 
 
 def _invert_frames(frames: list[bytes], nat_w: int, nat_h: int) -> list[bytes]:

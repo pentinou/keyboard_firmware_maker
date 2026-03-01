@@ -26,30 +26,35 @@
         "device_version": "0.0.1"
     },
     "features": {
-        "encoder": true
+{% if has_encoder %}
+        "encoder": true,
+{% endif %}
+        "extrakey": true
     },
+{% if has_encoder %}
     "encoder": {
         "rotary": [
-{% if mcu == "rp2040" %}
-            { "pin_a": "GP28", "pin_b": "GP29", "resolution": 2 }
-{% else %}
-            { "pin_a": "F5", "pin_b": "F4", "resolution": 2 }
+{% if pins.encoder_a %}
+            { "pin_a": "{{ pins.encoder_a[0] }}", "pin_b": "{{ pins.encoder_b[0] }}", "resolution": 2 }
 {% endif %}
         ]
     },
+{% endif %}
     "split": {
         "enabled": true,
+{% if has_encoder %}
         "encoder": {
             "right": {
                 "rotary": [
-{% if mcu == "rp2040" %}
-                    { "pin_a": "GP29", "pin_b": "GP28", "resolution": 2 }
-{% else %}
-                    { "pin_a": "F4", "pin_b": "F5", "resolution": 2 }
+{% if pins.encoder_a_right %}
+                    { "pin_a": "{{ pins.encoder_a_right[0] }}", "pin_b": "{{ pins.encoder_b_right[0] }}", "resolution": 2 }
+{% elif pins.encoder_a %}
+                    { "pin_a": "{{ pins.encoder_a[0] }}", "pin_b": "{{ pins.encoder_b[0] }}", "resolution": 2 }
 {% endif %}
                 ]
             }
         },
+{% endif %}
         "transport": {
             "sync": {
                 "oled": true,
@@ -57,15 +62,15 @@
             }
         }
     },
-    "diode_direction": "COL2ROW",
-{% if mcu == "rp2040" %}
+    "diode_direction": "{{ diode_direction }}",
+{% if pins.matrix_rows %}
     "matrix_pins": {
-        "rows": ["GP5", "GP6", "GP7", "GP8", "GP9"],
-        "cols": ["GP27", "GP26", "GP22", "GP20", "GP23", "GP21"]
+        "rows": {{ pins.matrix_rows | tojson }},
+        "cols": {{ pins.matrix_cols | tojson }}
     },
 {% endif %}
     "layouts": {
-        "LAYOUT_sofle": {
+        "{{ layout_macro }}": {
             "layout": [
 {% for key in ns.keys %}
                 {"matrix": [{{ key[0] }}, {{ key[1] }}], "x": {{ key[2] }}, "y": {{ key[3] }}}{% if not loop.last %},{% endif %}

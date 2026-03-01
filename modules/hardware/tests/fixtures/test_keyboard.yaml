@@ -5,12 +5,25 @@ mcu_options:
   - id: test_mcu
     display_name: "Test MCU"
     description: "MCU de test pour les tests unitaires."
+    bootloader: "test-boot"
+    pins:
+      matrix_rows: ["D0", "D1", "D2", "D3"]
+      matrix_cols: ["F0", "F1", "F2", "F3", "F4", "F5"]
+      serial_tx: "D4"
+      serial_driver: "bitbang"
   - id: test_mcu_2
     display_name: "Test MCU 2"
     description: "Second MCU de test."
+diode_direction: "COL2ROW"
+layout_macro: "LAYOUT_test"
+has_encoder: false
 capabilities:
   oled: true
   rgb: false
 matrix:
   rows: 4
   cols: 6
+oled:
+  driver: "ssd1306"
+  rotation: 270
+  display: "128X32"
