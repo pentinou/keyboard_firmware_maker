@@ -7,7 +7,16 @@ from __future__ import annotations
 import logging
 import sys
 
-from PySide6.QtWidgets import QApplication
+try:
+    from PySide6.QtWidgets import QApplication
+except ModuleNotFoundError:
+    print("Error: PySide6 is not installed.")
+    print("Run one of the following commands to install all dependencies:")
+    print()
+    print("  pip install -e .")
+    print("  # or")
+    print("  pip install -r requirements.txt")
+    sys.exit(1)
 
 from models.project_model import ProjectModel
 from ui.main_window import MainWindow

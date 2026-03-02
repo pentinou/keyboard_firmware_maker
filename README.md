@@ -45,8 +45,10 @@ A desktop application to create, customize, and compile Vial-QMK firmware for sp
 ```bash
 git clone https://github.com/pentinou/keyboard_firmware_maker.git
 cd keyboard_firmware_maker
-pip install -e .
+pip install -r requirements.txt
 ```
+
+> Alternatively, if you plan to contribute: `pip install -e ".[dev]"`
 
 ## Quick Start
 
