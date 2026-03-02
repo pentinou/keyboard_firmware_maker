@@ -17,17 +17,13 @@
 #define WS2812_DI_PIN {{ pins.ws2812 }}
 {% endif %}
 #define RGB_MATRIX_MAXIMUM_BRIGHTNESS {{ rgb_max_brightness }}
-/* Startup defaults — solid color on at connection */
+/* Factory defaults — used only when EEPROM is blank (first flash).
+ * After that, QMK restores the last saved state from EEPROM. */
 #define RGB_MATRIX_DEFAULT_ON         true
 #define RGB_MATRIX_DEFAULT_MODE       RGB_MATRIX_SOLID_COLOR
 #define RGB_MATRIX_DEFAULT_HUE        0
 #define RGB_MATRIX_DEFAULT_SAT        255
 #define RGB_MATRIX_DEFAULT_VAL        128
-/* Legacy names for older QMK/Vial-QMK builds */
-#define RGB_MATRIX_STARTUP_MODE       RGB_MATRIX_SOLID_COLOR
-#define RGB_MATRIX_STARTUP_HUE        0
-#define RGB_MATRIX_STARTUP_SAT        255
-#define RGB_MATRIX_STARTUP_VAL        128
 /* Built-in effects enabled for mode cycling (RGB_MOD) */
 #define ENABLE_RGB_MATRIX_ALPHAS_MODS
 #define ENABLE_RGB_MATRIX_GRADIENT_UP_DOWN

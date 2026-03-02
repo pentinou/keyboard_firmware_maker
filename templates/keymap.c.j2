@@ -50,14 +50,6 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
 #endif
 {% endif %}
 
-{% if rgb_enabled %}
-/* Force RGB on at every boot (overrides EEPROM saved state) */
-void keyboard_post_init_user(void) {
-    rgb_matrix_enable_noeeprom();
-    rgb_matrix_mode_noeeprom(RGB_MATRIX_SOLID_COLOR);
-    rgb_matrix_sethsv_noeeprom(0, 255, 128);
-}
-{% endif %}
 
 {% if katawajojo_enabled %}
 #include "katawajojo.c"
