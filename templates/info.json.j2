@@ -1,3 +1,4 @@
+{%- if split -%}
 {%- set half_rows = matrix_rows - 1 -%}
 {%- set gap = matrix_cols + 1 -%}
 {%- set ns = namespace(keys=[]) -%}
@@ -15,6 +16,7 @@
 {%- for col in range(1, matrix_cols) -%}
   {%- set ns.keys = ns.keys + [[half_rows + matrix_rows, col, col + gap, half_rows]] -%}
 {%- endfor -%}
+{%- endif -%}
 {
     "keyboard_name": "{{ vial_name }}",
     "url": "",
@@ -40,6 +42,7 @@
         ]
     },
 {% endif %}
+{% if split %}
     "split": {
         "enabled": true,
 {% if has_encoder %}
@@ -62,6 +65,7 @@
             }
         }
     },
+{% endif %}
     "diode_direction": "{{ diode_direction }}",
 {% if pins.matrix_rows %}
     "matrix_pins": {
@@ -72,10 +76,17 @@
     "layouts": {
         "{{ layout_macro }}": {
             "layout": [
+{% if split %}
 {% for key in ns.keys %}
                 {"matrix": [{{ key[0] }}, {{ key[1] }}], "x": {{ key[2] }}, "y": {{ key[3] }}}{% if not loop.last %},{% endif %}
 
 {% endfor %}
+{% else %}
+{% for key in vial_keys %}
+                {"matrix": [{{ key.matrix_row }}, {{ key.matrix_col }}], "x": {{ key.x }}, "y": {{ key.y }}}{% if not loop.last %},{% endif %}
+
+{% endfor %}
+{% endif %}
             ]
         }
     }
