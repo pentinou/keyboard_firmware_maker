@@ -90,6 +90,11 @@ class TemplateGenerator:
         if model.oled.left.bongo_enabled or model.oled.right.bongo_enabled:
             template_files.append(("bongocat.c.j2", "keymaps/default/bongocat.c"))
             template_files.append(("bongocat.h.j2", "keymaps/default/bongocat.h"))
+        if model.oled.left.crab_enabled or model.oled.right.crab_enabled:
+            template_files.append(("crab.c.j2", "keymaps/default/crab.c"))
+            template_files.append(("crab.h.j2", "keymaps/default/crab.h"))
+            template_files.append(("animation-utils.c.j2", "keymaps/default/animation-utils.c"))
+            template_files.append(("animation-utils.h.j2", "keymaps/default/animation-utils.h"))
         custom_effects = [e for e in model.rgb.effects if e.type in _CUSTOM_EFFECT_TYPES]
         if custom_effects:
             template_files.append(("rgb_matrix_user.inc.j2", "keymaps/default/rgb_matrix_user.inc"))
@@ -139,12 +144,16 @@ class TemplateGenerator:
         left_bongo = left.bongo_enabled
         right_bongo = right.bongo_enabled
 
+        left_crab = left.crab_enabled
+        right_crab = right.crab_enabled
+
         wpm_needed = (
             left.wpm.enabled or right.wpm.enabled
             or left_katawajojo or right_katawajojo
             or left_luna or right_luna
             or left_ocean_dream or right_ocean_dream
             or left_bongo or right_bongo
+            or left_crab or right_crab
         )
 
         def _side_has_content(side: OledSideConfig) -> bool:
@@ -159,6 +168,7 @@ class TemplateGenerator:
                 or side.luna_enabled
                 or side.ocean_dream_enabled
                 or side.bongo_enabled
+                or side.crab_enabled
             )
 
         oled_enabled = _side_has_content(left) or _side_has_content(right)
@@ -317,6 +327,8 @@ class TemplateGenerator:
             "left_ocean_dream_line": left.ocean_dream_line,
             "left_bongo_enabled": left_bongo,
             "left_bongo_line": left.bongo_line,
+            "left_crab_enabled": left_crab,
+            "left_crab_line": left.crab_line,
             # Right side
             "right_images": _build_images(right),
             "right_layer": {"enabled": right.layer.enabled, "col": right.layer.col, "line": right.layer.line},
@@ -332,6 +344,8 @@ class TemplateGenerator:
             "right_ocean_dream_line": right.ocean_dream_line,
             "right_bongo_enabled": right_bongo,
             "right_bongo_line": right.bongo_line,
+            "right_crab_enabled": right_crab,
+            "right_crab_line": right.crab_line,
             # RGB
             "rgb_effects": [e.to_dict() for e in model.rgb.effects],
             "per_key_colors": model.rgb.per_key,

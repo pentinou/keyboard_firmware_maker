@@ -119,6 +119,8 @@ class OledSideConfig:
     ocean_dream_line: int = 0  # plein écran
     bongo_enabled: bool = False
     bongo_line: int = 0  # page de départ Bongo Cat (0-15)
+    crab_enabled: bool = False
+    crab_line: int = 0  # page de départ Crab (0-15)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -136,6 +138,8 @@ class OledSideConfig:
             "ocean_dream_line": self.ocean_dream_line,
             "bongo_enabled": self.bongo_enabled,
             "bongo_line": self.bongo_line,
+            "crab_enabled": self.crab_enabled,
+            "crab_line": self.crab_line,
         }
 
     @classmethod
@@ -179,6 +183,8 @@ class OledSideConfig:
             ocean_dream_line=int(data.get("ocean_dream_line", 0)),
             bongo_enabled=bool(data.get("bongo_enabled", False)),
             bongo_line=int(data.get("bongo_line", 0)),
+            crab_enabled=bool(data.get("crab_enabled", False)),
+            crab_line=int(data.get("crab_line", 0)),
         )
 
 

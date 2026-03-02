@@ -63,6 +63,10 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
 {% if left_bongo_enabled or right_bongo_enabled %}
 #include "bongocat.c"
 {% endif %}
+{% if left_crab_enabled or right_crab_enabled %}
+#include "animation-utils.c"
+#include "crab.c"
+{% endif %}
 
 {% if oled_enabled %}
 /* ─── OLED ─────────────────────────────────────────────────────────────── */
@@ -76,7 +80,23 @@ static const char PROGMEM oled_sep[32] = {
 };
 
 oled_rotation_t oled_init_user(oled_rotation_t rotation) {
+{% if left_bongo_enabled or left_crab_enabled or right_bongo_enabled or right_crab_enabled %}
+    if (is_keyboard_left()) {
+{% if left_bongo_enabled or left_crab_enabled %}
+        return OLED_ROTATION_180;
+{% else %}
+        return OLED_ROTATION_{{ oled_rotation }};
+{% endif %}
+    } else {
+{% if right_bongo_enabled or right_crab_enabled %}
+        return OLED_ROTATION_180;
+{% else %}
+        return OLED_ROTATION_{{ oled_rotation }};
+{% endif %}
+    }
+{% else %}
     return OLED_ROTATION_{{ oled_rotation }};
+{% endif %}
 }
 
 {% if left_rgb_mode.enabled or right_rgb_mode.enabled %}
@@ -340,6 +360,9 @@ bool oled_task_user(void) {
         oled_set_cursor(0, {{ left_bongo_line }});
         render_anim_bongocat();
 {% endif %}
+{% if left_crab_enabled %}
+        oled_render_anim();
+{% endif %}
 {% if left_kfm.enabled %}
         /* KFM rendered last so it overlays on animations */
         oled_set_cursor({{ left_kfm.col }}, {{ left_kfm.line }});
@@ -406,6 +429,9 @@ bool oled_task_user(void) {
 {% if right_bongo_enabled %}
         oled_set_cursor(0, {{ right_bongo_line }});
         render_anim_bongocat();
+{% endif %}
+{% if right_crab_enabled %}
+        oled_render_anim();
 {% endif %}
 {% if right_kfm.enabled %}
         /* KFM rendered last so it overlays on animations */

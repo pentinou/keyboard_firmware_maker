@@ -126,6 +126,9 @@ class _OledCanvas(QWidget):
         if name == "bongo" and s.bongo_enabled:
             return (0, s.bongo_line * self.PAGE_H,
                     OLED_WIDTH * self.SCALE, 4 * self.PAGE_H)
+        if name == "crab" and s.crab_enabled:
+            return (0, s.crab_line * self.PAGE_H,
+                    OLED_WIDTH * self.SCALE, 4 * self.PAGE_H)
         return None
 
     def _overlay_items(self) -> list[tuple[str, tuple[int, int, int, int], QColor, str]]:
@@ -158,6 +161,9 @@ class _OledCanvas(QWidget):
         r = self._item_rect("bongo")
         if r:
             result.append(("bongo", r, QColor(220, 100, 0, 160), "BngoCat"))
+        r = self._item_rect("crab")
+        if r:
+            result.append(("crab", r, QColor(200, 60, 60, 160), "Crab"))
         return result
 
     def paintEvent(self, event) -> None:  # noqa: N802
@@ -242,7 +248,7 @@ class _OledCanvas(QWidget):
     _ITEM_PAGES = {
         "layer": 3, "caps_lock": 3, "rgb_mode": 4,
         "wpm": 1, "kfm": 1,
-        "katawajojo": 3, "luna": 3, "ocean_dream": 16, "bongo": 4,
+        "katawajojo": 3, "luna": 3, "ocean_dream": 16, "bongo": 4, "crab": 4,
     }
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
@@ -283,6 +289,8 @@ class _OledCanvas(QWidget):
             s.ocean_dream_line = new_line
         elif self._dragging_item == "bongo":
             s.bongo_line = new_line
+        elif self._dragging_item == "crab":
+            s.crab_line = new_line
         self.update()
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
@@ -403,6 +411,7 @@ class OledWidget(QWidget):
             ("luna", tr("oled.overlay.luna")),
             ("ocean_dream", tr("oled.overlay.ocean_dream")),
             ("bongo", tr("oled.overlay.bongo")),
+            ("crab", tr("oled.overlay.crab")),
         ]:
             cb = QCheckBox(label)
             cb.setObjectName(f"{side}_{name}_check")
@@ -564,6 +573,8 @@ class OledWidget(QWidget):
             side_config.ocean_dream_enabled = checked
         elif name == "bongo":
             side_config.bongo_enabled = checked
+        elif name == "crab":
+            side_config.crab_enabled = checked
         canvas = self._canvas_left if side == "left" else self._canvas_right
         if canvas:
             canvas.update()
@@ -623,6 +634,7 @@ class OledWidget(QWidget):
         side_config.luna_enabled = False
         side_config.ocean_dream_enabled = False
         side_config.bongo_enabled = False
+        side_config.crab_enabled = False
         # Clear animation state
         self._anim_idx[side] = []
         # Sync checkboxes and refresh canvas
@@ -675,6 +687,7 @@ class OledWidget(QWidget):
                 (f"{side}_luna_check", side_config.luna_enabled),
                 (f"{side}_ocean_dream_check", side_config.ocean_dream_enabled),
                 (f"{side}_bongo_check", side_config.bongo_enabled),
+                (f"{side}_crab_check", side_config.crab_enabled),
             ]
             for obj_name, value in mapping:
                 cb = self.findChild(QCheckBox, obj_name)

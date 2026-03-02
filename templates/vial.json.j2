@@ -2,6 +2,9 @@
     "name": "{{ vial_name }}",
     "vendorId": "{{ vial_vid }}",
     "productId": "{{ vial_pid }}",
+{% if rgb_enabled %}
+    "lighting": "qmk_rgblight",
+{% endif %}
     "matrix": {
         "rows": {{ matrix_rows * 2 }},
         "cols": {{ matrix_cols }}
