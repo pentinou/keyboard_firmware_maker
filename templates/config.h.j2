@@ -5,7 +5,7 @@
 #pragma once
 
 /* Matrix */
-#define MATRIX_ROWS {{ matrix_rows * 2 }}
+#define MATRIX_ROWS {% if split %}{{ matrix_rows * 2 }}{% else %}{{ matrix_rows }}{% endif %}
 #define MATRIX_COLS {{ matrix_cols }}
 
 {% if rgb_enabled %}
@@ -98,11 +98,13 @@
 {% endif %}
 {% endif %}
 
+{% if split %}
 /* Split keyboard serial */
 {% if pins.serial_driver == "vendor" %}
 #define SERIAL_USART_TX_PIN {{ pins.serial_tx }}
 {% elif pins.serial_tx %}
 #define SOFT_SERIAL_PIN {{ pins.serial_tx }}
+{% endif %}
 {% endif %}
 
 /* Vial — UID and unlock auto-generated from vial.json */

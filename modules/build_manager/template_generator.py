@@ -194,7 +194,7 @@ class TemplateGenerator:
 
         # Build raw layout dict for vial.json
         kb_layout: dict[str, list[dict]] = {}
-        for side in ("left", "right"):
+        for side in ("left", "right", "keys"):
             kb_layout[side] = [
                 {"row": k.row, "col": k.col, "x": k.x, "y": k.y,
                  "encoder": k.encoder}
@@ -206,36 +206,46 @@ class TemplateGenerator:
 
         # Build flat key list for vial.json with physical positions
         vial_keys: list[dict] = []
-        left_keys = kb_layout.get("left", [])
-        right_keys = kb_layout.get("right", [])
-        if left_keys and right_keys:
-            max_left_x = max(k["x"] for k in left_keys)
-            x_offset = max_left_x + 1.5
-            for k in left_keys:
+        if not kb_def.split:
+            # Non-split: flat key list, no matrix row offset
+            for k in kb_layout.get("keys", []):
                 if k.get("encoder"):
-                    continue  # Skip encoder positions (not in LAYOUT_sofle)
+                    continue
                 vial_keys.append({
                     "matrix_row": k["row"], "matrix_col": k["col"],
                     "x": round(k["x"], 3), "y": round(k["y"], 3),
                 })
-            for k in right_keys:
-                if k.get("encoder"):
-                    continue  # Skip encoder positions (not in LAYOUT_sofle)
-                vial_keys.append({
-                    "matrix_row": k["row"] + matrix_rows, "matrix_col": k["col"],
-                    "x": round(k["x"] + x_offset, 3), "y": round(k["y"], 3),
-                })
         else:
-            # Fallback: simple grid
-            for row in range(matrix_rows):
-                for col in range(matrix_cols):
-                    vial_keys.append({"matrix_row": row, "matrix_col": col,
-                                      "x": col, "y": row})
-            x_offset = matrix_cols + 1
-            for row in range(matrix_rows):
-                for col in range(matrix_cols):
-                    vial_keys.append({"matrix_row": row + matrix_rows,
-                                      "matrix_col": col, "x": col + x_offset, "y": row})
+            left_keys = kb_layout.get("left", [])
+            right_keys = kb_layout.get("right", [])
+            if left_keys and right_keys:
+                max_left_x = max(k["x"] for k in left_keys)
+                x_offset = max_left_x + 1.5
+                for k in left_keys:
+                    if k.get("encoder"):
+                        continue  # Skip encoder positions (not in LAYOUT_sofle)
+                    vial_keys.append({
+                        "matrix_row": k["row"], "matrix_col": k["col"],
+                        "x": round(k["x"], 3), "y": round(k["y"], 3),
+                    })
+                for k in right_keys:
+                    if k.get("encoder"):
+                        continue  # Skip encoder positions (not in LAYOUT_sofle)
+                    vial_keys.append({
+                        "matrix_row": k["row"] + matrix_rows, "matrix_col": k["col"],
+                        "x": round(k["x"] + x_offset, 3), "y": round(k["y"], 3),
+                    })
+            else:
+                # Fallback: simple grid
+                for row in range(matrix_rows):
+                    for col in range(matrix_cols):
+                        vial_keys.append({"matrix_row": row, "matrix_col": col,
+                                          "x": col, "y": row})
+                x_offset = matrix_cols + 1
+                for row in range(matrix_rows):
+                    for col in range(matrix_cols):
+                        vial_keys.append({"matrix_row": row + matrix_rows,
+                                          "matrix_col": col, "x": col + x_offset, "y": row})
 
         def _build_images(side: OledSideConfig) -> list[dict]:
             result = []
@@ -302,6 +312,7 @@ class TemplateGenerator:
             "diode_direction": kb_def.diode_direction,
             "layout_macro": kb_def.layout_macro,
             "has_encoder": kb_def.has_encoder,
+            "split": kb_def.split,
             "oled_driver": kb_def.oled_hw.driver,
             "oled_rotation": kb_def.oled_hw.rotation,
             "oled_display": kb_def.oled_hw.display,

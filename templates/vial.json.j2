@@ -6,7 +6,7 @@
     "lighting": "qmk_rgblight",
 {% endif %}
     "matrix": {
-        "rows": {{ matrix_rows * 2 }},
+        "rows": {% if split %}{{ matrix_rows * 2 }}{% else %}{{ matrix_rows }}{% endif %},
         "cols": {{ matrix_cols }}
     },
     "layouts": {

@@ -1,0 +1,74 @@
+model: pancakexxl
+display_name: "PancakeXXL"
+description: "Clavier 40% monoface 39 touches sur RP2040. Pas de split, pas d'OLED, pas de RGB."
+split: false
+
+mcu_options:
+  - id: rp2040
+    display_name: "RP2040"
+    description: "RP2040 intégré. Bootloader UF2."
+    bootloader: "rp2040"
+    pins:
+      matrix_rows: ["GP6", "GP4", "GP2", "GP25"]
+      matrix_cols: ["GP12", "GP17", "GP18", "GP19", "GP20", "GP21", "GP22", "GP23", "GP24", "GP7", "GP3", "GP5"]
+
+diode_direction: "COL2ROW"
+layout_macro: "LAYOUT"
+has_encoder: false
+
+vial_vid: "0xEC08"
+vial_pid: "0x8751"
+
+capabilities:
+  oled: false
+  rgb: false
+
+matrix:
+  rows: 4
+  cols: 12
+
+layout:
+  keys:
+    # Row 0
+    - {row: 0, col:  0, x:  0, y: 0}
+    - {row: 0, col:  1, x:  1, y: 0}
+    - {row: 0, col:  2, x:  2, y: 0}
+    - {row: 0, col:  3, x:  3, y: 0}
+    - {row: 0, col:  4, x:  4, y: 0}
+    - {row: 0, col:  5, x:  5, y: 0}
+    - {row: 0, col:  6, x:  6, y: 0}
+    - {row: 0, col:  7, x:  7, y: 0}
+    - {row: 0, col:  8, x:  8, y: 0}
+    - {row: 0, col:  9, x:  9, y: 0}
+    - {row: 0, col: 10, x: 10, y: 0}
+    - {row: 0, col: 11, x: 11, y: 0}
+    # Row 1
+    - {row: 1, col:  0, x:  0, y: 1}
+    - {row: 1, col:  1, x:  1, y: 1}
+    - {row: 1, col:  2, x:  2, y: 1}
+    - {row: 1, col:  3, x:  3, y: 1}
+    - {row: 1, col:  4, x:  4, y: 1}
+    - {row: 1, col:  5, x:  5, y: 1}
+    - {row: 1, col:  6, x:  6, y: 1}
+    - {row: 1, col:  7, x:  7, y: 1}
+    - {row: 1, col:  8, x:  8, y: 1}
+    - {row: 1, col:  9, x:  9, y: 1}
+    - {row: 1, col: 10, x: 10, y: 1}
+    - {row: 1, col: 11, x: 11, y: 1}
+    # Row 2
+    - {row: 2, col:  0, x:  0, y: 2}
+    - {row: 2, col:  1, x:  1, y: 2}
+    - {row: 2, col:  2, x:  2, y: 2}
+    - {row: 2, col:  3, x:  3, y: 2}
+    - {row: 2, col:  4, x:  4, y: 2}
+    - {row: 2, col:  5, x:  5, y: 2}
+    - {row: 2, col:  6, x:  6, y: 2}
+    - {row: 2, col:  7, x:  7, y: 2}
+    - {row: 2, col:  8, x:  8, y: 2}
+    - {row: 2, col:  9, x:  9, y: 2}
+    - {row: 2, col: 10, x: 10, y: 2}
+    - {row: 2, col: 11, x: 11, y: 2}
+    # Row 3 — 3 physical keys (left modifier, spacebar, right modifier)
+    - {row: 3, col:  0, x:  0,   y: 3}
+    - {row: 3, col:  5, x:  4.5, y: 3}
+    - {row: 3, col: 11, x: 11,   y: 3}

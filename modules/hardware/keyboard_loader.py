@@ -90,6 +90,7 @@ class KeyboardDefinition:
     diode_direction: str = "COL2ROW"
     layout_macro: str = "LAYOUT"
     has_encoder: bool = False
+    split: bool = True
     oled_hw: OledHardwareConfig = field(default_factory=OledHardwareConfig)
     rgb_hw: RgbHardwareConfig = field(default_factory=RgbHardwareConfig)
 
@@ -152,7 +153,7 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
 
     raw_layout = data.get("layout", {})
     layout: dict[str, list[KeyLayout]] = {}
-    for side in ("left", "right"):
+    for side in ("left", "right", "keys"):
         keys = raw_layout.get(side, [])
         if isinstance(keys, list):
             layout[side] = [
@@ -195,6 +196,7 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
         diode_direction=data.get("diode_direction", "COL2ROW"),
         layout_macro=data.get("layout_macro", "LAYOUT"),
         has_encoder=bool(data.get("has_encoder", False)),
+        split=bool(data.get("split", True)),
         oled_hw=oled_hw,
         rgb_hw=rgb_hw,
     )
