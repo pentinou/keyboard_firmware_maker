@@ -9,6 +9,16 @@ echo -e "${BOLD}=== Keyboard Firmware Maker ===${NC}"
 echo ""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APT_UPDATED=0
+
+# Lance "sudo apt-get update" une seule fois si nécessaire
+_apt_update_once() {
+    if [ "$APT_UPDATED" -eq 0 ]; then
+        echo "Mise à jour des listes de paquets (sudo apt-get update)..."
+        sudo apt-get update -qq
+        APT_UPDATED=1
+    fi
+}
 
 # ── Python 3.11+ ──────────────────────────────────────────────────────────────
 if ! command -v python3 &>/dev/null; then
@@ -27,6 +37,14 @@ if [ "$PY_MAJ" -lt 3 ] || { [ "$PY_MAJ" -eq 3 ] && [ "$PY_MIN" -lt 11 ]; }; then
 fi
 echo -e "${GREEN}[OK]${NC} Python $PY_VER"
 
+# ── python3-venv ──────────────────────────────────────────────────────────────
+if ! python3 -c "import ensurepip" &>/dev/null; then
+    echo -e "${YELLOW}[INFO]${NC} python3-venv manquant — installation..."
+    _apt_update_once
+    sudo apt-get install -y "python${PY_VER}-venv" 2>/dev/null \
+        || sudo apt-get install -y python3-venv
+fi
+
 # ── Environnement virtuel ─────────────────────────────────────────────────────
 VENV_DIR="$SCRIPT_DIR/.venv"
 if [ ! -d "$VENV_DIR" ]; then
@@ -44,30 +62,28 @@ echo -e "${GREEN}[OK]${NC} Dépendances Python"
 
 # ── git ───────────────────────────────────────────────────────────────────────
 if ! command -v git &>/dev/null; then
-    echo -e "${RED}[ERREUR] git introuvable.${NC}"
-    echo "  sudo apt install git"
-    exit 1
+    echo -e "${YELLOW}[INFO]${NC} git manquant — installation..."
+    _apt_update_once
+    sudo apt-get install -y git
 fi
 echo -e "${GREEN}[OK]${NC} git $(git --version | awk '{print $3}')"
 
 # ── make ──────────────────────────────────────────────────────────────────────
 if ! command -v make &>/dev/null; then
-    echo -e "${RED}[ERREUR] make introuvable.${NC}"
-    echo "  sudo apt install make"
-    exit 1
+    echo -e "${YELLOW}[INFO]${NC} make manquant — installation..."
+    _apt_update_once
+    sudo apt-get install -y make
 fi
 echo -e "${GREEN}[OK]${NC} make"
 
-# ── arm-none-eabi-gcc (optionnel — avertissement seulement) ───────────────────
+# ── arm-none-eabi-gcc ─────────────────────────────────────────────────────────
 if ! command -v arm-none-eabi-gcc &>/dev/null; then
-    echo -e "${YELLOW}[AVERT]${NC} arm-none-eabi-gcc introuvable."
-    echo "        La compilation firmware sera désactivée jusqu'à son installation :"
-    echo "          sudo apt install gcc-arm-none-eabi   # Ubuntu/Debian"
-    echo "          sudo dnf install arm-none-eabi-gcc   # Fedora/RHEL"
-else
-    GCC_VER=$(arm-none-eabi-gcc --version | head -1 | grep -oP '\d+\.\d+(\.\d+)?' | head -1)
-    echo -e "${GREEN}[OK]${NC} arm-none-eabi-gcc $GCC_VER"
+    echo -e "${YELLOW}[INFO]${NC} arm-none-eabi-gcc manquant — installation..."
+    _apt_update_once
+    sudo apt-get install -y gcc-arm-none-eabi
 fi
+GCC_VER=$(arm-none-eabi-gcc --version | head -1 | grep -oP '\d+\.\d+(\.\d+)?' | head -1)
+echo -e "${GREEN}[OK]${NC} arm-none-eabi-gcc $GCC_VER"
 
 # ── Lancement ─────────────────────────────────────────────────────────────────
 echo ""
