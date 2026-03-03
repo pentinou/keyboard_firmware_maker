@@ -1,6 +1,6 @@
 model: pancakexxl
 display_name: "PancakeXXL"
-description: "Clavier 40% monoface 39 touches sur RP2040. Pas de split, pas d'OLED, pas de RGB."
+description: "Clavier 40% monoface 43 touches sur RP2040. Pas de split, pas d'OLED, pas de RGB."
 split: false
 
 mcu_options:
@@ -68,7 +68,11 @@ layout:
     - {row: 2, col:  9, x:  9, y: 2}
     - {row: 2, col: 10, x: 10, y: 2}
     - {row: 2, col: 11, x: 11, y: 2}
-    # Row 3 — 3 physical keys (left modifier, spacebar, right modifier)
-    - {row: 3, col:  0, x:  0,   y: 3}
-    - {row: 3, col:  5, x:  4.5, y: 3}
-    - {row: 3, col: 11, x: 11,   y: 3}
+    # Row 3 — 7 physical keys : 1.25 + 1 + 2 + 1 + 2 + 1 + 1.25 U
+    - {row: 3, col:  1, x:  1,    y: 3}
+    - {row: 3, col:  2, x:  2.25, y: 3}
+    - {row: 3, col:  4, x:  3.25, y: 3}
+    - {row: 3, col:  5, x:  5.25, y: 3}
+    - {row: 3, col:  7, x:  6.25, y: 3}
+    - {row: 3, col:  8, x:  8.25, y: 3}
+    - {row: 3, col:  9, x:  9.25, y: 3}
