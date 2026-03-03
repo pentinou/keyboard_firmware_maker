@@ -82,37 +82,20 @@ class VialQmkManager:
         def _git(*args: str) -> None:
             subprocess.run(list(args), check=True, capture_output=True, text=True)
 
-        # Étape 1 — init + remote (5 %)
-        _log("Initialisation du dépôt git…")
-        _git("git", "init", str(VIAL_QMK_DIR))
-        _git("git", "-C", str(VIAL_QMK_DIR), "remote", "add", "origin", VIAL_QMK_REPO)
+        # Clone shallow de la branche vial + sous-modules en une seule commande.
+        # Note : git fetch --depth 1 origin <SHA> ne fonctionne pas sur GitHub
+        # (les SHA arbitraires ne sont pas advertisés). On clone la branche nommée.
+        _log("Téléchargement de Vial-QMK (branche vial)…")
         if progress_callback:
             progress_callback(5)
-
-        # Étape 2 — fetch SHA précis (5 → 50 %)
-        _log(f"Téléchargement de Vial-QMK (SHA {VIAL_QMK_SHA[:8]}…)…")
         _git(
-            "git", "-C", str(VIAL_QMK_DIR),
-            "fetch", "--depth", "1", "origin", VIAL_QMK_SHA,
-        )
-        if progress_callback:
-            progress_callback(50)
-
-        # Étape 3 — checkout (50 → 55 %)
-        _log("Extraction des fichiers…")
-        _git(
-            "git", "-C", str(VIAL_QMK_DIR),
-            "-c", "advice.detachedHead=false",
-            "checkout", "FETCH_HEAD",
-        )
-        if progress_callback:
-            progress_callback(55)
-
-        # Étape 4 — sous-modules (55 → 95 %)
-        _log("Téléchargement des sous-modules (ChibiOS, lufa…) — peut prendre plusieurs minutes…")
-        _git(
-            "git", "-C", str(VIAL_QMK_DIR),
-            "submodule", "update", "--init", "--recursive", "--depth", "1",
+            "git", "clone",
+            "--depth", "1",
+            "--branch", "vial",
+            "--recurse-submodules",
+            "--shallow-submodules",
+            VIAL_QMK_REPO,
+            str(VIAL_QMK_DIR),
         )
         if progress_callback:
             progress_callback(95)
