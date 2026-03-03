@@ -121,11 +121,13 @@ class TestVialQmkManagerIsReady:
 
 class TestVialQmkManagerDownload:
     def _fake_git_side_effect(self, vqmk_dir: Path):
-        """Retourne un side_effect pour subprocess.run simulant git clone."""
+        """Retourne un side_effect pour subprocess.run simulant les commandes git."""
         def fake_git(args, **kwargs):
             if "clone" in args:
                 vqmk_dir.mkdir(exist_ok=True)
+            elif "checkout" in args:
                 (vqmk_dir / "Makefile").touch()
+            elif "submodule" in args:
                 (vqmk_dir / "lib" / "chibios" / "os").mkdir(parents=True, exist_ok=True)
             return MagicMock(returncode=0)
         return fake_git
@@ -150,7 +152,7 @@ class TestVialQmkManagerDownload:
         with patch("subprocess.run", side_effect=self._fake_git_side_effect(vqmk_dir)):
             vqm.VialQmkManager().download(progress_callback=calls.append)
 
-        assert 95 in calls
+        assert 50 in calls
         assert 100 in calls
 
     def test_download_calls_log_callback(self, tmp_path, monkeypatch):
@@ -162,7 +164,7 @@ class TestVialQmkManagerDownload:
         with patch("subprocess.run", side_effect=self._fake_git_side_effect(vqmk_dir)):
             vqm.VialQmkManager().download(log_callback=logs.append)
 
-        assert any("vial" in log.lower() for log in logs)
+        assert any("sous-modules" in log for log in logs)
 
     def test_download_git_failure_propagates(self, tmp_path, monkeypatch):
         """Un échec git lève subprocess.CalledProcessError."""
