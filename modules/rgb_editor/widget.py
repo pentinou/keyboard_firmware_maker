@@ -36,6 +36,7 @@ from modules.rgb_editor.effects import EFFECT_TYPES
 logger = logging.getLogger(__name__)
 
 KEYBOARDS_DIR = Path(__file__).parent.parent.parent / "keyboards"
+CUSTOM_KEYBOARDS_DIR = Path.home() / ".keyboard_firmware_maker" / "custom_keyboards"
 KEY_SIZE = 36  # px
 
 # Index dans EFFECT_TYPES
@@ -304,7 +305,7 @@ class RgbWidget(QWidget):
             self._keys_hbox.addSpacing(16)
 
     def _find_current_keyboard(self) -> KeyboardDefinition | None:
-        keyboards = load_all_keyboards(KEYBOARDS_DIR)
+        keyboards = load_all_keyboards(KEYBOARDS_DIR, CUSTOM_KEYBOARDS_DIR)
         return next((kb for kb in keyboards if kb.model == self._model.keyboard.model), None)
 
     # ────────────────────────────────────────────────── Key click handlers ──

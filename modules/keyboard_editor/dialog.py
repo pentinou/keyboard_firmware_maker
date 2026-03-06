@@ -210,6 +210,11 @@ class CustomKeyboardEditorDialog(QDialog):
         self._snap_check.setChecked(True)
         toolbar.addWidget(self._snap_check)
 
+        self._mirror_btn = QPushButton(tr("keyboard_editor.mirror_btn"))
+        self._mirror_btn.setObjectName("mirror_btn")
+        self._mirror_btn.setVisible(False)  # affiché uniquement en mode split
+        toolbar.addWidget(self._mirror_btn)
+
         self._add_key_btn = QPushButton(tr("keyboard_editor.add_key"))
         self._add_key_btn.setObjectName("add_key_btn")
         toolbar.addWidget(self._add_key_btn)
@@ -232,6 +237,7 @@ class CustomKeyboardEditorDialog(QDialog):
         self._snap_check.toggled.connect(self._on_snap_toggled)
         self._add_key_btn.clicked.connect(self._on_add_key)
         self._delete_key_btn.clicked.connect(self._canvas.remove_selected)
+        self._mirror_btn.clicked.connect(self._canvas.mirror_left_to_right)
         self._oled_check.toggled.connect(self._on_oled_toggled)
         self._encoder_check.toggled.connect(self._on_encoder_toggled)
         self._save_btn.clicked.connect(self._on_save)
@@ -250,7 +256,8 @@ class CustomKeyboardEditorDialog(QDialog):
         self._canvas.remove_background_images()
 
         if index == 0:
-            # Canvas vide — réinitialiser aussi les indicateurs
+            # Canvas vide — réinitialiser aussi les indicateurs et le bouton miroir
+            self._mirror_btn.setVisible(self._split_check.isChecked())
             self._canvas.set_oled_indicators(False, False)
             self._canvas.set_encoder_indicator(False, False)
             return
@@ -296,6 +303,7 @@ class CustomKeyboardEditorDialog(QDialog):
         self._rgb_check.setChecked(bool(kb.capabilities.get("rgb", False)))
         self._encoder_check.setChecked(kb.has_encoder)
 
+        self._mirror_btn.setVisible(kb.split)
         # Mettre à jour les indicateurs visuels
         self._canvas.set_oled_indicators(bool(kb.capabilities.get("oled", False)), kb.split)
         self._canvas.set_encoder_indicator(kb.has_encoder, kb.split)
@@ -322,6 +330,7 @@ class CustomKeyboardEditorDialog(QDialog):
         else:
             self._canvas.add_split_separator()
 
+        self._mirror_btn.setVisible(checked)
         # Mettre à jour les indicateurs visuels selon le nouveau mode split
         self._canvas.set_oled_indicators(self._oled_check.isChecked(), checked)
         self._canvas.set_encoder_indicator(self._encoder_check.isChecked(), checked)

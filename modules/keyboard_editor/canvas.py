@@ -380,6 +380,30 @@ class KeyboardCanvas(QGraphicsView):
         for item in self.get_keys(side):
             self._scene.removeItem(item)
 
+    def mirror_left_to_right(self) -> None:
+        """Duplique les touches gauche en miroir vers le côté droit.
+
+        Utilise la position du séparateur comme axe de symétrie (défaut : 7U).
+        La rotation est inversée (ex : 15° → -15°) pour un vrai miroir physique.
+        """
+        sep_px = self._separator.line().x1() if self._separator else 7 * GRID_PX
+        sep_u = sep_px / GRID_PX
+        self.clear_keys(side="right")
+        for item in self.get_keys(side="left"):
+            x_u = item.pos().x() / GRID_PX
+            y_u = item.pos().y() / GRID_PX
+            right_x_u = 2 * sep_u - x_u - item.w_u
+            self.add_key(
+                row=-1,
+                col=-1,
+                x_u=right_x_u,
+                y_u=y_u,
+                w_u=item.w_u,
+                h_u=item.h_u,
+                side="right",
+                r_deg=-item.rotation(),
+            )
+
     def load_from_layout(self, keys: list, side: str = "keys") -> None:
         """Peuple le canvas depuis une liste de KeyLayout."""
         for k in keys:
