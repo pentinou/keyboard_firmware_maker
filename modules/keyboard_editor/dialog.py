@@ -451,6 +451,7 @@ class CustomKeyboardEditorDialog(QDialog):
                     y=round(it.pos().y() / GRID_PX, 2),
                     w=it.w_u,
                     h=it.h_u,
+                    r=round(it.rotation(), 1),
                 ))
             return result
 

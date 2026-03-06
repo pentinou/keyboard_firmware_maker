@@ -53,6 +53,7 @@ class KeyLayout:
     encoder: bool = False
     w: float = 1.0  # largeur en unités clavier (1.0 = 1U standard, 2.0 = 2U, etc.)
     h: float = 1.0  # hauteur en unités clavier (1.0 = standard, 1.5 = tall thumb key)
+    r: float = 0.0  # rotation en degrés (sens horaire, 0 = pas de rotation)
 
 
 @dataclass
@@ -177,6 +178,7 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
                     encoder=bool(k.get("encoder", False)),
                     w=float(k.get("w", 1.0)),
                     h=float(k.get("h", 1.0)),
+                    r=float(k.get("r", 0.0)),
                 )
                 for k in keys
                 if isinstance(k, dict)
@@ -204,6 +206,7 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
                 encoder=bool(k.get("encoder", False)),
                 w=float(k.get("w", 1.0)),
                 h=float(k.get("h", 1.0)),
+                r=float(k.get("r", 0.0)),
             )
             for k in (v.get("keys", []) or [])
             if isinstance(k, dict)

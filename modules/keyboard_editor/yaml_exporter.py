@@ -24,6 +24,8 @@ def _key_dict(k: KeyLayout) -> dict:
         d["w"] = float(k.w)
     if k.h != 1.0:
         d["h"] = float(k.h)
+    if getattr(k, "r", 0.0) != 0.0:
+        d["r"] = float(k.r)
     if k.encoder:
         d["encoder"] = True
     return d

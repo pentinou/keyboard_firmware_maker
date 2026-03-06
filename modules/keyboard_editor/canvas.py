@@ -55,6 +55,7 @@ class KeyItem(QGraphicsRectItem):
         h_u: float,
         side: str,
         canvas: "KeyboardCanvas",
+        r_deg: float = 0.0,
     ) -> None:
         px_x = x_u * GRID_PX
         px_y = y_u * GRID_PX
@@ -71,6 +72,10 @@ class KeyItem(QGraphicsRectItem):
         self._manually_fixed = (row >= 0 and col >= 0)
 
         self.setPos(px_x, px_y)
+        # Rotation autour du centre de la touche
+        self.setTransformOriginPoint((px_w - 2) / 2, (px_h - 2) / 2)
+        if r_deg:
+            self.setRotation(r_deg)
         self.setFlags(
             QGraphicsRectItem.GraphicsItemFlag.ItemIsMovable
             | QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable
@@ -201,6 +206,15 @@ class KeyPropsDialog(QDialog):
         self._w_spin.setValue(item.w_u)
         form.addRow(tr("keyboard_editor.key_w"), self._w_spin)
 
+        self._r_spin = QDoubleSpinBox()
+        self._r_spin.setRange(-180.0, 180.0)
+        self._r_spin.setSingleStep(5.0)
+        self._r_spin.setDecimals(1)
+        self._r_spin.setSuffix("°")
+        self._r_spin.setWrapping(True)
+        self._r_spin.setValue(round(item.rotation(), 1))
+        form.addRow(tr("keyboard_editor.key_r"), self._r_spin)
+
         layout.addLayout(form)
 
         buttons = QDialogButtonBox(
@@ -214,6 +228,7 @@ class KeyPropsDialog(QDialog):
         self._item.row = self._row_spin.value()
         self._item.col = self._col_spin.value()
         self._item.w_u = self._w_spin.value()
+        self._item.setRotation(self._r_spin.value())
         self._item._manually_fixed = True
         self._item._update_appearance()
         self.accept()
@@ -233,12 +248,18 @@ class PcbImageItem(QGraphicsPixmapItem):
 
 
 class OledIndicatorItem(QGraphicsRectItem):
-    """Indicateur OLED déplaçable sur le canvas."""
+    """Indicateur OLED déplaçable sur le canvas.
+
+    Double-clic → rotation horizontal ↔ vertical.
+    """
+
+    _W_H = (2.0 * GRID_PX - 2, 0.75 * GRID_PX - 2)  # horizontal (défaut)
+    _W_V = (0.75 * GRID_PX - 2, 2.0 * GRID_PX - 2)  # vertical
 
     def __init__(self, label: str, x_u: float, y_u: float) -> None:
-        w_px = 2.0 * GRID_PX
-        h_px = 0.75 * GRID_PX
-        super().__init__(0, 0, w_px - 2, h_px - 2)
+        w, h = self._W_H
+        super().__init__(0, 0, w, h)
+        self._horizontal = True
         self.setPos(x_u * GRID_PX, y_u * GRID_PX)
         self._label = label
         self.setBrush(QBrush(INDICATOR_OLED_COLOR))
@@ -247,6 +268,17 @@ class OledIndicatorItem(QGraphicsRectItem):
             QGraphicsRectItem.GraphicsItemFlag.ItemIsMovable
             | QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable
         )
+        self.setToolTip("Double-clic : pivoter")
+
+    def rotate(self) -> None:
+        """Bascule orientation horizontal ↔ vertical."""
+        self._horizontal = not self._horizontal
+        w, h = self._W_H if self._horizontal else self._W_V
+        self.setRect(0, 0, w, h)
+        self.update()
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        self.rotate()
 
     def paint(self, painter, option, widget=None) -> None:
         super().paint(painter, option, widget)
@@ -315,17 +347,26 @@ class KeyboardCanvas(QGraphicsView):
         w_u: float = 1.0,
         h_u: float = 1.0,
         side: str = "keys",
+        r_deg: float = 0.0,
     ) -> KeyItem:
         """Ajoute une touche au canvas et retourne le KeyItem créé."""
-        item = KeyItem(row, col, x_u, y_u, w_u, h_u, side, self)
+        item = KeyItem(row, col, x_u, y_u, w_u, h_u, side, self, r_deg)
         self._scene.addItem(item)
         return item
 
     def remove_selected(self) -> None:
-        """Supprime les items sélectionnés (KeyItem uniquement)."""
-        for item in self._scene.selectedItems():
+        """Supprime les items sélectionnés (touches, indicateurs OLED/encodeur)."""
+        for item in list(self._scene.selectedItems()):
             if isinstance(item, KeyItem):
                 self._scene.removeItem(item)
+            elif isinstance(item, OledIndicatorItem):
+                self._scene.removeItem(item)
+                if item in self._oled_indicators:
+                    self._oled_indicators.remove(item)
+            elif isinstance(item, EncoderIndicatorItem):
+                self._scene.removeItem(item)
+                if item in self._encoder_indicators:
+                    self._encoder_indicators.remove(item)
 
     def get_keys(self, side: str | None = None) -> list[KeyItem]:
         """Retourne les KeyItems, filtrés par side si fourni."""
@@ -341,7 +382,6 @@ class KeyboardCanvas(QGraphicsView):
 
     def load_from_layout(self, keys: list, side: str = "keys") -> None:
         """Peuple le canvas depuis une liste de KeyLayout."""
-        from modules.hardware.keyboard_loader import KeyLayout
         for k in keys:
             self.add_key(
                 row=k.row,
@@ -351,6 +391,7 @@ class KeyboardCanvas(QGraphicsView):
                 w_u=k.w,
                 h_u=k.h,
                 side=side,
+                r_deg=getattr(k, "r", 0.0),
             )
 
     def add_pcb_image(self, pixmap, x_offset_px: int = 0) -> PcbImageItem:
