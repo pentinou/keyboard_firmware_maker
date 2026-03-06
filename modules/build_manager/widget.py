@@ -209,10 +209,13 @@ class BuildWidget(QWidget):
             self._btn_export.setEnabled(False)
             self._last_uf2 = None
             return
+        model = self._model.keyboard.model or "firmware"
+        variant = self._model.keyboard.layout_variant
+        default_name = f"KFM_{model}_{variant}.uf2" if variant else f"KFM_{model}.uf2"
         dest, _ = QFileDialog.getSaveFileName(
             self,
             tr("build.export_dialog_title"),
-            src.name,
+            default_name,
             tr("build.uf2_filter"),
         )
         if dest:
