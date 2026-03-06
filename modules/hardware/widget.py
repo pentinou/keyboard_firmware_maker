@@ -7,12 +7,16 @@ from __future__ import annotations
 
 import logging
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDialog,
     QFormLayout,
     QLabel,
+    QPushButton,
     QWidget,
 )
 
@@ -20,6 +24,8 @@ from config import KEYBOARDS_DIR
 from i18n import tr
 from models.project_model import ProjectModel
 from modules.hardware.keyboard_loader import KeyboardDefinition, load_all_keyboards
+
+CUSTOM_KEYBOARDS_DIR: Path = Path.home() / ".keyboard_firmware_maker" / "custom_keyboards"
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +52,7 @@ class HardwareWidget(QWidget):
     def __init__(self, model: ProjectModel, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._model = model
-        self._keyboards: list[KeyboardDefinition] = load_all_keyboards(KEYBOARDS_DIR)
+        self._keyboards: list[KeyboardDefinition] = load_all_keyboards(KEYBOARDS_DIR, CUSTOM_KEYBOARDS_DIR)
         self._setup_ui()
         self._connect_signals()
         # Initialise le ProjectModel avec la sélection par défaut
@@ -94,12 +100,18 @@ class HardwareWidget(QWidget):
         self._rgb_checkbox.setObjectName("rgb_checkbox")
         layout.addRow(QLabel(tr("hardware.rgb")), self._rgb_checkbox)
 
+        # Bouton créer clavier custom
+        self._custom_btn = QPushButton(tr("hardware.custom_btn"))
+        self._custom_btn.setObjectName("custom_keyboard_btn")
+        layout.addRow(self._custom_btn)
+
     def _connect_signals(self) -> None:
         self._keyboard_combo.currentIndexChanged.connect(self._on_model_changed)
         self._mcu_combo.currentIndexChanged.connect(self._on_mcu_changed)
         self._variant_combo.currentIndexChanged.connect(self._on_variant_changed)
         self._oled_combo.currentIndexChanged.connect(self._on_oled_changed)
         self._rgb_checkbox.stateChanged.connect(self._on_rgb_changed)
+        self._custom_btn.clicked.connect(self._open_custom_editor)
 
     def _on_model_changed(self, index: int) -> None:
         """Met à jour le combo MCU et le ProjectModel quand le clavier change."""
@@ -231,6 +243,29 @@ class HardwareWidget(QWidget):
         self._oled_combo.blockSignals(False)
         self._model.keyboard.oled_sides = list(sides)
         self.oled_sides_changed.emit(list(sides))
+
+    def _open_custom_editor(self) -> None:
+        """Ouvre le dialog d'édition de clavier custom."""
+        from modules.keyboard_editor.dialog import CustomKeyboardEditorDialog
+        dlg = CustomKeyboardEditorDialog(list(self._keyboards), parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.saved_model_id:
+            self._reload_keyboards(dlg.saved_model_id)
+
+    def _reload_keyboards(self, select_model: str = "") -> None:
+        """Recharge la liste des claviers (prédéfinis + custom) et sélectionne select_model."""
+        self._keyboards = load_all_keyboards(KEYBOARDS_DIR, CUSTOM_KEYBOARDS_DIR)
+        self._keyboard_combo.blockSignals(True)
+        self._keyboard_combo.clear()
+        for kb in self._keyboards:
+            self._keyboard_combo.addItem(kb.display_name)
+            idx = self._keyboard_combo.count() - 1
+            self._keyboard_combo.setItemData(idx, kb.description, Qt.ItemDataRole.ToolTipRole)
+        self._keyboard_combo.blockSignals(False)
+        target_idx = next(
+            (i for i, kb in enumerate(self._keyboards) if kb.model == select_model), 0
+        )
+        self._keyboard_combo.setCurrentIndex(target_idx)
+        self._on_model_changed(target_idx)
 
     def set_rgb_enabled(self, value: bool) -> None:
         """API publique pour restaurer l'état RGB depuis un projet sauvegardé."""

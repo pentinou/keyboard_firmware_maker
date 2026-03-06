@@ -255,25 +255,40 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
     )
 
 
-def load_all_keyboards(keyboards_dir: Path) -> list[KeyboardDefinition]:
-    """Charge tous les fichiers *.yaml du répertoire keyboards/.
+def load_all_keyboards(
+    keyboards_dir: Path,
+    custom_dir: Path | None = None,
+) -> list[KeyboardDefinition]:
+    """Charge tous les fichiers *.yaml depuis keyboards_dir et custom_dir.
 
     Les claviers invalides sont ignorés (log warning) sans interrompre le chargement.
+    Les claviers custom apparaissent après les prédéfinis dans la liste.
 
     Args:
-        keyboards_dir: Répertoire contenant les fichiers YAML de définition.
+        keyboards_dir: Répertoire contenant les fichiers YAML prédéfinis.
+        custom_dir: Répertoire optionnel des claviers custom utilisateur.
 
     Returns:
         Liste de KeyboardDefinition triée alphabétiquement par display_name.
     """
-    keyboards: list[KeyboardDefinition] = []
-
+    predefined: list[KeyboardDefinition] = []
     for yaml_path in sorted(
         p for p in keyboards_dir.glob("*.yaml") if not p.name.startswith("_")
     ):
         try:
-            keyboards.append(load_keyboard(yaml_path))
+            predefined.append(load_keyboard(yaml_path))
         except Exception as exc:
             logger.warning("Impossible de charger %s : %s", yaml_path.name, exc)
 
-    return sorted(keyboards, key=lambda kb: kb.display_name)
+    customs: list[KeyboardDefinition] = []
+    if custom_dir is not None and custom_dir.is_dir():
+        for yaml_path in sorted(
+            p for p in custom_dir.glob("*.yaml") if not p.name.startswith("_")
+        ):
+            try:
+                customs.append(load_keyboard(yaml_path))
+            except Exception as exc:
+                logger.warning("Impossible de charger custom %s : %s", yaml_path.name, exc)
+
+    # Prédéfinis triés alphabétiquement d'abord, puis customs triés alphabétiquement
+    return sorted(predefined, key=lambda kb: kb.display_name) + sorted(customs, key=lambda kb: kb.display_name)
