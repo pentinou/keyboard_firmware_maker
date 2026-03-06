@@ -88,7 +88,7 @@ class MainWindow(QMainWindow):
     def _on_capabilities_changed(self, capabilities: dict) -> None:
         """Met à jour la visibilité des onglets selon les capacités du clavier sélectionné."""
         # L'onglet OLED est géré par _on_oled_sides_changed
-        self._tabs.setTabEnabled(2, True)
+        self._tabs.setTabEnabled(2, bool(capabilities.get("rgb", False)))
         self._tab_rgb.refresh_layout()
         logger.info(
             "Capacités mises à jour : OLED=%s, RGB=%s",
@@ -198,8 +198,12 @@ class MainWindow(QMainWindow):
             if mcu_opt.id == target_mcu:
                 mcu_combo.setCurrentIndex(i)  # déclenche _on_mcu_changed → met à jour model
                 break
+        # Restaurer la variante layout sauvegardée (écrasée par _on_model_changed)
+        self._tab_hardware.set_layout_variant(self._model.keyboard.layout_variant)
         # Restaurer oled_sides sauvegardé (écrasé par _on_model_changed qui met le défaut)
         self._tab_hardware.set_oled_sides(target_oled_sides)
+        # Restaurer rgb_enabled sauvegardé (écrasé par _on_model_changed qui lit le YAML)
+        self._tab_hardware.set_rgb_enabled(self._model.keyboard.rgb_enabled)
 
     def _check_vial_qmk(self) -> None:
         """Lance le dialogue de setup si le cache Vial-QMK est absent (AC: 1, 3)."""

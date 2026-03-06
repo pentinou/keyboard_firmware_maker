@@ -57,8 +57,8 @@ def test_oled_tab_enabled_for_sofle(qtbot):
     assert window._tabs.isTabEnabled(2) is True   # RGB
 
 
-def test_rgb_tab_always_enabled(qtbot):
-    """L'onglet RGB est toujours accessible (layout physique visible pour tous les claviers)."""
+def test_rgb_tab_enabled_only_with_rgb_capability(qtbot):
+    """L'onglet RGB est activé selon la capacité rgb du clavier."""
     model = ProjectModel()
     window = MainWindow(model)
     qtbot.addWidget(window)
@@ -70,8 +70,8 @@ def test_rgb_tab_always_enabled(qtbot):
     )
     assert corne_index is not None
     keyboard_combo.setCurrentIndex(corne_index)
-    assert window._tabs.isTabEnabled(2) is True   # RGB toujours actif
-    assert window._tabs.isTabEnabled(1) is True   # OLED toujours actif
+    assert window._tabs.isTabEnabled(2) is False  # Corne : pas de RGB
+    assert window._tabs.isTabEnabled(1) is True   # Corne : OLED actif
 
 
 def test_tabs_update_dynamically_on_keyboard_change(qtbot):
@@ -86,10 +86,10 @@ def test_tabs_update_dynamically_on_keyboard_change(qtbot):
     keyboard_combo.setCurrentIndex(sofle_index)
     assert window._tabs.isTabEnabled(1) is True
     assert window._tabs.isTabEnabled(2) is True
-    # Passer sur Corne → RGB toujours actif (layout physique visible)
+    # Passer sur Corne → RGB désactivé (pas de RGB sur Corne)
     corne_index = next(i for i in range(keyboard_combo.count()) if "Corne" in keyboard_combo.itemText(i))
     keyboard_combo.setCurrentIndex(corne_index)
-    assert window._tabs.isTabEnabled(2) is True
+    assert window._tabs.isTabEnabled(2) is False
 
 
 def test_build_tab_always_enabled(qtbot):
@@ -188,7 +188,7 @@ def test_initial_tab_state_reflects_default_keyboard_capabilities(qtbot):
     if keyboards and 0 <= default_idx < len(keyboards):
         default_kb = keyboards[default_idx]
         assert window._tabs.isTabEnabled(1) == bool(default_kb.capabilities.get("oled", False))
-        assert window._tabs.isTabEnabled(2) is True  # RGB toujours actif
+        assert window._tabs.isTabEnabled(2) == bool(default_kb.capabilities.get("rgb", False))
 
 
 def test_open_project_preserves_mcu_selection(qtbot, tmp_path):
@@ -226,6 +226,89 @@ def test_check_vial_qmk_shows_warning_on_rejection(qtbot):
                 window = MainWindow(model)
                 qtbot.addWidget(window)
     mock_warn.assert_called_once()
+
+
+def test_rgb_checkbox_overrides_yaml_capability(qtbot):
+    """La checkbox RGB permet d'activer l'onglet même si YAML dit rgb=false."""
+    model = ProjectModel()
+    window = MainWindow(model)
+    qtbot.addWidget(window)
+    from PySide6.QtWidgets import QComboBox, QCheckBox
+    keyboard_combo = window._tab_hardware.findChild(QComboBox, "keyboard_combo")
+    corne_index = next(i for i in range(keyboard_combo.count()) if "Corne" in keyboard_combo.itemText(i))
+    keyboard_combo.setCurrentIndex(corne_index)
+    assert window._tabs.isTabEnabled(2) is False
+    rgb_checkbox = window._tab_hardware.findChild(QCheckBox, "rgb_checkbox")
+    rgb_checkbox.setChecked(True)
+    assert window._tabs.isTabEnabled(2) is True
+
+
+def test_open_project_restores_rgb_enabled(qtbot, tmp_path):
+    """_open_project() doit restaurer rgb_enabled depuis le fichier .kfm.json."""
+    from unittest.mock import patch
+    from modules.project_manager.file_io import save_project
+    from PySide6.QtWidgets import QCheckBox
+    model = ProjectModel()
+    model.keyboard.model = "corne"
+    model.keyboard.rgb_enabled = True
+    proj_path = tmp_path / "proj_rgb_toggle.kfm.json"
+    save_project(model, proj_path)
+    window = MainWindow(ProjectModel())
+    qtbot.addWidget(window)
+    with patch("ui.main_window.QFileDialog.getOpenFileName", return_value=(str(proj_path), "")):
+        window._open_project()
+    rgb_checkbox = window._tab_hardware.findChild(QCheckBox, "rgb_checkbox")
+    assert rgb_checkbox.isChecked()
+    assert window._tabs.isTabEnabled(2) is True
+    assert window.model.keyboard.rgb_enabled is True  # F5: verifier le modele aussi
+
+
+def test_rgb_checkbox_uncheck_disables_tab(qtbot):
+    """AC3 — Décocher la checkbox RGB désactive l'onglet RGB."""
+    model = ProjectModel()
+    window = MainWindow(model)
+    qtbot.addWidget(window)
+    from PySide6.QtWidgets import QComboBox, QCheckBox
+    keyboard_combo = window._tab_hardware.findChild(QComboBox, "keyboard_combo")
+    sofle_index = next(i for i in range(keyboard_combo.count()) if "Sofle" in keyboard_combo.itemText(i))
+    keyboard_combo.setCurrentIndex(sofle_index)
+    assert window._tabs.isTabEnabled(2) is True  # Sofle : RGB actif par defaut
+    rgb_checkbox = window._tab_hardware.findChild(QCheckBox, "rgb_checkbox")
+    rgb_checkbox.setChecked(False)
+    assert window._tabs.isTabEnabled(2) is False  # AC3 : decocher desactive l'onglet
+
+
+def test_keyboard_change_resets_rgb_checkbox(qtbot):
+    """AC6 — Changer de clavier réinitialise la checkbox depuis le YAML du nouveau clavier."""
+    model = ProjectModel()
+    window = MainWindow(model)
+    qtbot.addWidget(window)
+    from PySide6.QtWidgets import QComboBox, QCheckBox
+    keyboard_combo = window._tab_hardware.findChild(QComboBox, "keyboard_combo")
+    rgb_checkbox = window._tab_hardware.findChild(QCheckBox, "rgb_checkbox")
+    # Selectionner Corne et cocher manuellement RGB
+    corne_index = next(i for i in range(keyboard_combo.count()) if "Corne" in keyboard_combo.itemText(i))
+    keyboard_combo.setCurrentIndex(corne_index)
+    rgb_checkbox.setChecked(True)
+    assert rgb_checkbox.isChecked() is True
+    # Changer vers Sofle → checkbox doit se reinitialiser depuis YAML Sofle (rgb: true)
+    sofle_index = next(i for i in range(keyboard_combo.count()) if "Sofle" in keyboard_combo.itemText(i))
+    keyboard_combo.setCurrentIndex(sofle_index)
+    assert rgb_checkbox.isChecked() is True   # Sofle a rgb: true dans YAML
+    # Repasser sur Corne → checkbox réinitialisée depuis YAML Corne (rgb: false)
+    keyboard_combo.setCurrentIndex(corne_index)
+    assert rgb_checkbox.isChecked() is False  # AC6 : reinitialisation depuis YAML
+
+
+def test_keyboard_config_rgb_enabled_round_trip():
+    """F7 — KeyboardConfig.to_dict()/from_dict() preserve rgb_enabled."""
+    config = ProjectModel().keyboard
+    config.rgb_enabled = True
+    restored = type(config).from_dict(config.to_dict())
+    assert restored.rgb_enabled is True
+    config.rgb_enabled = False
+    restored = type(config).from_dict(config.to_dict())
+    assert restored.rgb_enabled is False
 
 
 def test_check_vial_qmk_no_warning_on_acceptance(qtbot):

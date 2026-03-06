@@ -175,6 +175,7 @@ class TemplateGenerator:
 
         mcu = model.keyboard.mcu or "rp2040"
         kb_def = _load_keyboard_def(model.keyboard.model, self._templates_dir.parent)
+        active_variant_keys = _resolve_active_layout(kb_def, model.keyboard.layout_variant)
         matrix_rows = kb_def.matrix["rows"]
         matrix_cols = kb_def.matrix["cols"]
         vial_name = kb_def.vial_name or model.keyboard.model
@@ -197,7 +198,7 @@ class TemplateGenerator:
         for side in ("left", "right", "keys"):
             kb_layout[side] = [
                 {"row": k.row, "col": k.col, "x": k.x, "y": k.y,
-                 "encoder": k.encoder}
+                 "encoder": k.encoder, "w": k.w, "h": k.h}
                 for k in kb_def.layout.get(side, [])
             ]
 
@@ -207,14 +208,30 @@ class TemplateGenerator:
         # Build flat key list for vial.json with physical positions
         vial_keys: list[dict] = []
         if not kb_def.split:
-            # Non-split: flat key list, no matrix row offset
-            for k in kb_layout.get("keys", []):
-                if k.get("encoder"):
-                    continue
-                vial_keys.append({
-                    "matrix_row": k["row"], "matrix_col": k["col"],
-                    "x": round(k["x"], 3), "y": round(k["y"], 3),
-                })
+            if active_variant_keys:
+                # Chemin variante : layout_variants présent, utiliser la variante résolue
+                for k in active_variant_keys:
+                    if k.encoder:
+                        continue
+                    entry: dict = {
+                        "matrix_row": k.row, "matrix_col": k.col,
+                        "x": round(k.x, 3), "y": round(k.y, 3),
+                    }
+                    if k.w != 1.0:
+                        entry["w"] = round(k.w, 3)
+                    vial_keys.append(entry)
+            else:
+                # Chemin legacy : pas de layout_variants, utiliser kb_def.layout["keys"]
+                for k in kb_layout.get("keys", []):
+                    if k.get("encoder"):
+                        continue
+                    entry = {
+                        "matrix_row": k["row"], "matrix_col": k["col"],
+                        "x": round(k["x"], 3), "y": round(k["y"], 3),
+                    }
+                    if k.get("w", 1.0) != 1.0:
+                        entry["w"] = round(k["w"], 3)
+                    vial_keys.append(entry)
         else:
             left_keys = kb_layout.get("left", [])
             right_keys = kb_layout.get("right", [])
@@ -224,17 +241,27 @@ class TemplateGenerator:
                 for k in left_keys:
                     if k.get("encoder"):
                         continue  # Skip encoder positions (not in LAYOUT_sofle)
-                    vial_keys.append({
+                    entry: dict = {
                         "matrix_row": k["row"], "matrix_col": k["col"],
                         "x": round(k["x"], 3), "y": round(k["y"], 3),
-                    })
+                    }
+                    if k.get("w", 1.0) != 1.0:
+                        entry["w"] = round(k["w"], 3)
+                    if k.get("h", 1.0) != 1.0:
+                        entry["h"] = round(k["h"], 3)
+                    vial_keys.append(entry)
                 for k in right_keys:
                     if k.get("encoder"):
                         continue  # Skip encoder positions (not in LAYOUT_sofle)
-                    vial_keys.append({
+                    entry = {
                         "matrix_row": k["row"] + matrix_rows, "matrix_col": k["col"],
                         "x": round(k["x"] + x_offset, 3), "y": round(k["y"], 3),
-                    })
+                    }
+                    if k.get("w", 1.0) != 1.0:
+                        entry["w"] = round(k["w"], 3)
+                    if k.get("h", 1.0) != 1.0:
+                        entry["h"] = round(k["h"], 3)
+                    vial_keys.append(entry)
             else:
                 # Fallback: simple grid
                 for row in range(matrix_rows):
@@ -371,6 +398,26 @@ class TemplateGenerator:
             "oled_sleep_timeout_ms": model.oled.sleep_timeout_s * 1000,
             "rgb_sleep": model.oled.sleep_enabled and rgb_enabled,
         }
+
+
+def _resolve_active_layout(kb_def: KeyboardDefinition, variant_slug: str) -> list:
+    """Retourne les KeyLayout de la variante active.
+
+    Comportement :
+    - layout_variants vide → retourne [] (appelant utilise kb_def.layout directement)
+    - slug vide ou non trouvé → première variante + logger.warning() si slug non vide
+    - 1 seule variante + slug vide → retourne ses keys (combo masqué côté widget)
+    """
+    if not kb_def.layout_variants:
+        return []
+    for v in kb_def.layout_variants:
+        if not variant_slug or v.slug == variant_slug:
+            return v.keys
+    logger.warning(
+        "Variante '%s' introuvable pour '%s' — fallback première variante '%s'",
+        variant_slug, kb_def.model, kb_def.layout_variants[0].slug,
+    )
+    return kb_def.layout_variants[0].keys
 
 
 def _load_keyboard_def(model_name: str, project_root: Path) -> KeyboardDefinition:

@@ -29,6 +29,8 @@ mcu_options:
       matrix_cols: ["GP29", "GP28", "GP27", "GP26", "GP22", "GP20"]
       serial_tx: "GP1"
       serial_driver: "vendor"
+vial_vid: "0x4653"
+vial_pid: "0x0001"
 diode_direction: "COL2ROW"
 layout_macro: "LAYOUT_split_3x6_3"
 has_encoder: false

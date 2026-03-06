@@ -51,6 +51,17 @@ class KeyLayout:
     x: float
     y: float
     encoder: bool = False
+    w: float = 1.0  # largeur en unités clavier (1.0 = 1U standard, 2.0 = 2U, etc.)
+    h: float = 1.0  # hauteur en unités clavier (1.0 = standard, 1.5 = tall thumb key)
+
+
+@dataclass
+class LayoutVariant:
+    """Variante physique d'un layout (ex: standard vs 7U spacebar)."""
+
+    slug: str
+    label: str
+    keys: list[KeyLayout] = field(default_factory=list)
 
 
 @dataclass
@@ -91,6 +102,7 @@ class KeyboardDefinition:
     layout_macro: str = "LAYOUT"
     has_encoder: bool = False
     split: bool = True
+    layout_variants: list[LayoutVariant] = field(default_factory=list)
     oled_hw: OledHardwareConfig = field(default_factory=OledHardwareConfig)
     rgb_hw: RgbHardwareConfig = field(default_factory=RgbHardwareConfig)
 
@@ -163,10 +175,50 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
                     x=float(k["x"]),
                     y=float(k["y"]),
                     encoder=bool(k.get("encoder", False)),
+                    w=float(k.get("w", 1.0)),
+                    h=float(k.get("h", 1.0)),
                 )
                 for k in keys
                 if isinstance(k, dict)
             ]
+
+    raw_variants = data.get("layout_variants", []) or []
+    seen_slugs: set[str] = set()
+    layout_variants: list[LayoutVariant] = []
+    for v in raw_variants:
+        if not isinstance(v, dict):
+            continue
+        slug = str(v.get("slug", ""))
+        if slug in seen_slugs:
+            logger.warning(
+                "Slug dupliqué '%s' dans %s — première occurrence conservée", slug, path.name
+            )
+            continue
+        seen_slugs.add(slug)
+        variant_keys = [
+            KeyLayout(
+                row=int(k["row"]),
+                col=int(k["col"]),
+                x=float(k["x"]),
+                y=float(k["y"]),
+                encoder=bool(k.get("encoder", False)),
+                w=float(k.get("w", 1.0)),
+                h=float(k.get("h", 1.0)),
+            )
+            for k in (v.get("keys", []) or [])
+            if isinstance(k, dict)
+        ]
+        layout_variants.append(LayoutVariant(
+            slug=slug,
+            label=str(v.get("label", "")),
+            keys=variant_keys,
+        ))
+
+    if bool(data.get("split", True)) and layout_variants:
+        logger.warning(
+            "layout_variants ignoré pour clavier split '%s' — non supporté en génération",
+            data.get("model", path.name),
+        )
 
     # Parse OLED hardware config
     raw_oled = data.get("oled", {})
@@ -197,6 +249,7 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
         layout_macro=data.get("layout_macro", "LAYOUT"),
         has_encoder=bool(data.get("has_encoder", False)),
         split=bool(data.get("split", True)),
+        layout_variants=layout_variants,
         oled_hw=oled_hw,
         rgb_hw=rgb_hw,
     )
@@ -215,7 +268,9 @@ def load_all_keyboards(keyboards_dir: Path) -> list[KeyboardDefinition]:
     """
     keyboards: list[KeyboardDefinition] = []
 
-    for yaml_path in sorted(keyboards_dir.glob("*.yaml")):
+    for yaml_path in sorted(
+        p for p in keyboards_dir.glob("*.yaml") if not p.name.startswith("_")
+    ):
         try:
             keyboards.append(load_keyboard(yaml_path))
         except Exception as exc:

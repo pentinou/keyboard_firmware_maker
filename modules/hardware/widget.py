@@ -9,6 +9,7 @@ import logging
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFormLayout,
     QLabel,
@@ -70,6 +71,14 @@ class HardwareWidget(QWidget):
         self._mcu_combo.setObjectName("mcu_combo")
         layout.addRow(QLabel(tr("hardware.mcu")), self._mcu_combo)
 
+        # Combo de sélection de variante layout (masqué par défaut)
+        self._variant_label = QLabel(tr("hardware.layout_variant"))
+        self._variant_combo = QComboBox()
+        self._variant_combo.setObjectName("variant_combo")
+        layout.addRow(self._variant_label, self._variant_combo)
+        self._variant_label.hide()
+        self._variant_combo.hide()
+
         # Combo de sélection des écrans OLED (masqué par défaut)
         self._oled_label = QLabel(tr("hardware.oled"))
         self._oled_combo = QComboBox()
@@ -80,10 +89,17 @@ class HardwareWidget(QWidget):
         self._oled_label.hide()
         self._oled_combo.hide()
 
+        # Checkbox RGB — toujours visible (choix de build, pas contrainte PCB)
+        self._rgb_checkbox = QCheckBox()
+        self._rgb_checkbox.setObjectName("rgb_checkbox")
+        layout.addRow(QLabel(tr("hardware.rgb")), self._rgb_checkbox)
+
     def _connect_signals(self) -> None:
         self._keyboard_combo.currentIndexChanged.connect(self._on_model_changed)
         self._mcu_combo.currentIndexChanged.connect(self._on_mcu_changed)
+        self._variant_combo.currentIndexChanged.connect(self._on_variant_changed)
         self._oled_combo.currentIndexChanged.connect(self._on_oled_changed)
+        self._rgb_checkbox.stateChanged.connect(self._on_rgb_changed)
 
     def _on_model_changed(self, index: int) -> None:
         """Met à jour le combo MCU et le ProjectModel quand le clavier change."""
@@ -108,6 +124,21 @@ class HardwareWidget(QWidget):
             self._model.keyboard.mcu = kb.mcu_options[0].id
             logger.info("MCU par défaut : %s", kb.mcu_options[0].id)
 
+        # Afficher/masquer le combo variante selon le nombre de variantes
+        self._variant_combo.blockSignals(True)
+        self._variant_combo.clear()
+        for v in kb.layout_variants:
+            self._variant_combo.addItem(v.label)
+        self._variant_combo.blockSignals(False)
+        if len(kb.layout_variants) > 1:
+            self._model.keyboard.layout_variant = kb.layout_variants[0].slug
+            self._variant_label.show()
+            self._variant_combo.show()
+        else:
+            self._model.keyboard.layout_variant = ""
+            self._variant_label.hide()
+            self._variant_combo.hide()
+
         # Afficher/masquer le combo OLED selon les capacités
         if kb.capabilities.get("oled", False):
             default_sides = ["left", "right"]
@@ -125,8 +156,16 @@ class HardwareWidget(QWidget):
             self._oled_label.hide()
             self._oled_combo.hide()
 
+        # Initialiser la checkbox RGB depuis la capability YAML du clavier
+        self._rgb_checkbox.blockSignals(True)
+        self._rgb_checkbox.setChecked(kb.capabilities.get("rgb", False))
+        self._rgb_checkbox.blockSignals(False)
+        self._model.keyboard.rgb_enabled = kb.capabilities.get("rgb", False)
+
         # Notifier MainWindow des capacités du clavier sélectionné (FR3, FR4)
-        self.capabilities_changed.emit(kb.capabilities)
+        # La checkbox vient d'être réinitialisée depuis le YAML — isChecked() == capabilities["rgb"]
+        # set_rgb_enabled() surviendra ensuite si le projet sauvegardé override cette valeur
+        self.capabilities_changed.emit({**kb.capabilities, "rgb": self._rgb_checkbox.isChecked()})
         self.oled_sides_changed.emit(list(self._model.keyboard.oled_sides))
 
     def _on_mcu_changed(self, index: int) -> None:
@@ -141,12 +180,45 @@ class HardwareWidget(QWidget):
         self._model.keyboard.mcu = mcu.id
         logger.info("MCU sélectionné : %s (%s)", mcu.display_name, mcu.id)
 
+    def _on_variant_changed(self, index: int) -> None:
+        """Met à jour ProjectModel quand la variante layout change."""
+        kb_index = self._keyboard_combo.currentIndex()
+        if kb_index < 0 or kb_index >= len(self._keyboards):
+            return
+        kb = self._keyboards[kb_index]
+        if 0 <= index < len(kb.layout_variants):
+            self._model.keyboard.layout_variant = kb.layout_variants[index].slug
+
     def _on_oled_changed(self, index: int) -> None:
         """Met à jour ProjectModel et émet oled_sides_changed quand le combo OLED change."""
         if 0 <= index < len(_OLED_SIDES_OPTIONS):
             sides, _ = _OLED_SIDES_OPTIONS[index]
             self._model.keyboard.oled_sides = list(sides)
             self.oled_sides_changed.emit(list(sides))
+
+    def _on_rgb_changed(self, state: int) -> None:
+        """Met à jour ProjectModel et émet capabilities_changed quand la checkbox RGB change."""
+        enabled = bool(state)
+        self._model.keyboard.rgb_enabled = enabled
+        kb_index = self._keyboard_combo.currentIndex()
+        if 0 <= kb_index < len(self._keyboards):
+            kb = self._keyboards[kb_index]
+            self.capabilities_changed.emit({**kb.capabilities, "rgb": enabled})
+
+    def set_layout_variant(self, variant_slug: str) -> None:
+        """API publique pour restaurer la variante depuis un projet sauvegardé."""
+        kb_index = self._keyboard_combo.currentIndex()
+        if kb_index < 0 or kb_index >= len(self._keyboards):
+            return
+        kb = self._keyboards[kb_index]
+        idx = next(
+            (i for i, v in enumerate(kb.layout_variants) if v.slug == variant_slug), 0
+        )
+        resolved_slug = kb.layout_variants[idx].slug if kb.layout_variants else ""
+        self._variant_combo.blockSignals(True)
+        self._variant_combo.setCurrentIndex(idx)
+        self._variant_combo.blockSignals(False)
+        self._model.keyboard.layout_variant = resolved_slug
 
     def set_oled_sides(self, sides: list[str]) -> None:
         """API publique pour restaurer la sélection OLED depuis un projet sauvegardé."""
@@ -159,3 +231,17 @@ class HardwareWidget(QWidget):
         self._oled_combo.blockSignals(False)
         self._model.keyboard.oled_sides = list(sides)
         self.oled_sides_changed.emit(list(sides))
+
+    def set_rgb_enabled(self, value: bool) -> None:
+        """API publique pour restaurer l'état RGB depuis un projet sauvegardé."""
+        current = self._rgb_checkbox.isChecked()
+        self._rgb_checkbox.blockSignals(True)
+        self._rgb_checkbox.setChecked(value)
+        self._rgb_checkbox.blockSignals(False)
+        self._model.keyboard.rgb_enabled = value
+        # N'emettre que si la valeur change pour eviter un double refresh_layout()
+        if value != current:
+            kb_index = self._keyboard_combo.currentIndex()
+            if 0 <= kb_index < len(self._keyboards):
+                kb = self._keyboards[kb_index]
+                self.capabilities_changed.emit({**kb.capabilities, "rgb": value})

@@ -21,9 +21,19 @@ class KeyboardConfig:
     mcu: str = ""
     oled_sides: list[str] = field(default_factory=list)
     # [] = aucun  |  ["left"] | ["right"] | ["left","right"]
+    layout_variant: str = ""
+    # slug de la variante sélectionnée, "" = première variante (ou pas de variante)
+    rgb_enabled: bool = False
+    # override de la capability RGB YAML — choix de build de l'utilisateur
 
     def to_dict(self) -> dict[str, Any]:
-        return {"model": self.model, "mcu": self.mcu, "oled_sides": list(self.oled_sides)}
+        return {
+            "model": self.model,
+            "mcu": self.mcu,
+            "oled_sides": list(self.oled_sides),
+            "layout_variant": self.layout_variant,
+            "rgb_enabled": self.rgb_enabled,
+        }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "KeyboardConfig":
@@ -31,6 +41,8 @@ class KeyboardConfig:
             model=data.get("model", ""),
             mcu=data.get("mcu", ""),
             oled_sides=list(data.get("oled_sides", [])),
+            layout_variant=data.get("layout_variant", ""),
+            rgb_enabled=bool(data.get("rgb_enabled", False)),
         )
 
 

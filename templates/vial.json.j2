@@ -13,7 +13,7 @@
         "keymap": [
             [
 {% for key in vial_keys %}
-                {"matrix": [{{ key.matrix_row }}, {{ key.matrix_col }}], "x": {{ key.x }}, "y": {{ key.y }}{% if 'w' in key %}, "w": {{ key.w }}{% endif %}}{% if not loop.last %},{% endif %}
+                {"matrix": [{{ key.matrix_row }}, {{ key.matrix_col }}], "x": {{ key.x }}, "y": {{ key.y }}{% if 'w' in key %}, "w": {{ key.w }}{% endif %}{% if 'h' in key %}, "h": {{ key.h }}{% endif %}}{% if not loop.last %},{% endif %}
 
 {% endfor %}
             ]

@@ -26,7 +26,9 @@ STRINGS: dict[str, dict[str, str]] = {
         # Onglet Matériel
         "hardware.keyboard_model": "Mod\u00e8le de clavier :",
         "hardware.mcu": "Microcontr\u00f4leur :",
+        "hardware.layout_variant": "Variante de layout :",
         "hardware.oled": "\u00c9crans OLED :",
+        "hardware.rgb": "RGB (underglow / per-key) :",
         "hardware.oled.none": "Aucun",
         "hardware.oled.left_only": "Gauche seulement",
         "hardware.oled.right_only": "Droite seulement",
@@ -184,7 +186,9 @@ STRINGS: dict[str, dict[str, str]] = {
         # Hardware tab
         "hardware.keyboard_model": "Keyboard model:",
         "hardware.mcu": "Microcontroller:",
+        "hardware.layout_variant": "Layout variant:",
         "hardware.oled": "OLED screens:",
+        "hardware.rgb": "RGB (underglow / per-key):",
         "hardware.oled.none": "None",
         "hardware.oled.left_only": "Left only",
         "hardware.oled.right_only": "Right only",
@@ -342,7 +346,9 @@ STRINGS: dict[str, dict[str, str]] = {
         # Scheda Hardware
         "hardware.keyboard_model": "Modello tastiera:",
         "hardware.mcu": "Microcontrollore:",
+        "hardware.layout_variant": "Variante layout:",
         "hardware.oled": "Schermi OLED:",
+        "hardware.rgb": "RGB (underglow / per-key):",
         "hardware.oled.none": "Nessuno",
         "hardware.oled.left_only": "Solo sinistra",
         "hardware.oled.right_only": "Solo destra",
