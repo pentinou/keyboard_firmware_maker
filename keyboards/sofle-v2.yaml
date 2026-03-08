@@ -22,7 +22,8 @@ mcu_options:
       ws2812_driver: "vendor"
       encoder_default_pos: "0x3"
 diode_direction: "COL2ROW"
-layout_macro: "LAYOUT_sofle"
+layout_macro: "LAYOUT"
+vial_qmk_keyboard: "sofle/rev1"
 has_encoder: true
 capabilities:
   oled: true

@@ -105,6 +105,22 @@ class CustomKeyboardEditorDialog(QDialog):
         # MCU
         mcu_box = QGroupBox(tr("keyboard_editor.section_mcu"))
         mcu_form = QFormLayout(mcu_box)
+
+        # Combo MCU présélection depuis claviers connus
+        seen_ids: set[str] = set()
+        self._mcu_presets: list = []
+        for kb in self._keyboards:
+            for mcu in kb.mcu_options:
+                if mcu.id not in seen_ids:
+                    seen_ids.add(mcu.id)
+                    self._mcu_presets.append(mcu)
+        self._mcu_preset_combo = QComboBox()
+        self._mcu_preset_combo.setObjectName("mcu_preset_combo")
+        self._mcu_preset_combo.addItem(tr("keyboard_editor.mcu_manual"))
+        for mcu in self._mcu_presets:
+            self._mcu_preset_combo.addItem(f"{mcu.display_name} ({mcu.id})")
+        mcu_form.addRow(tr("keyboard_editor.mcu_preset"), self._mcu_preset_combo)
+
         self._mcu_id_edit = QLineEdit()
         self._mcu_id_edit.setObjectName("mcu_id_edit")
         self._mcu_id_edit.setPlaceholderText("rp2040")
@@ -237,6 +253,7 @@ class CustomKeyboardEditorDialog(QDialog):
         self._snap_check.toggled.connect(self._on_snap_toggled)
         self._add_key_btn.clicked.connect(self._on_add_key)
         self._delete_key_btn.clicked.connect(self._canvas.remove_selected)
+        self._mcu_preset_combo.currentIndexChanged.connect(self._on_mcu_preset_changed)
         self._mirror_btn.clicked.connect(self._canvas.mirror_left_to_right)
         self._oled_check.toggled.connect(self._on_oled_toggled)
         self._encoder_check.toggled.connect(self._on_encoder_toggled)
@@ -244,6 +261,21 @@ class CustomKeyboardEditorDialog(QDialog):
         self._cancel_btn.clicked.connect(self.reject)
 
     # ── Handlers ──────────────────────────────────────────────────────────────
+
+    def _on_mcu_preset_changed(self, index: int) -> None:
+        """Pré-remplit les champs MCU depuis la sélection d'un MCU connu."""
+        if index <= 0:
+            return
+        mcu = self._mcu_presets[index - 1]
+        self._mcu_id_edit.setText(mcu.id)
+        self._mcu_name_edit.setText(mcu.display_name)
+        idx = self._mcu_boot_combo.findText(mcu.bootloader)
+        if idx >= 0:
+            self._mcu_boot_combo.setCurrentIndex(idx)
+        self._pins_rows_edit.setText(", ".join(mcu.pins.matrix_rows))
+        self._pins_cols_edit.setText(", ".join(mcu.pins.matrix_cols))
+        self._pins_serial_edit.setText(mcu.pins.serial_tx)
+        self._pins_ws2812_edit.setText(mcu.pins.ws2812)
 
     def _on_pins_toggle(self, checked: bool) -> None:
         self._pins_box.setVisible(checked)

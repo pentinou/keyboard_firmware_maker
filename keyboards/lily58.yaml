@@ -30,7 +30,8 @@ mcu_options:
       serial_tx: "GP1"
       serial_driver: "vendor"
 diode_direction: "COL2ROW"
-layout_macro: "LAYOUT_lily58"
+layout_macro: "LAYOUT"
+vial_qmk_keyboard: "lily58/rev1"
 has_encoder: false
 capabilities:
   oled: true

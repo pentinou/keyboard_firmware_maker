@@ -13,6 +13,7 @@ Structure de sortie dans output_dir/ :
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import sys
 from pathlib import Path
@@ -117,7 +118,7 @@ class TemplateGenerator:
             import shutil
             vial_out = output_dir / "keymaps" / "default" / "vial.json"
             vial_out.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(static_vial, vial_out)
+            shutil.copy(static_vial, vial_out)
             result["vial.json"] = vial_out
             logger.debug("Copie vial.json statique : %s → %s", static_vial, vial_out)
 
@@ -193,6 +194,21 @@ class TemplateGenerator:
                     bootloader = mcu_opt.bootloader
                 break
 
+        # For split keyboards, matrix_rows must equal rows per side (= pin count).
+        # yaml_exporter may store the total unique row index count instead.
+        if kb_def.split and pins.matrix_rows:
+            matrix_rows = len(pins.matrix_rows)
+
+        layout_macro = kb_def.layout_macro
+
+        # ── Native layouts from vial-qmk (bundled keyboards) ──
+        native_layouts_json = ""
+        native_layouts = None
+        if kb_def.vial_qmk_keyboard:
+            native_layouts, layout_macro = _load_native_layouts(
+                kb_def.vial_qmk_keyboard, layout_macro,
+            )
+
         # Build raw layout dict for vial.json
         kb_layout: dict[str, list[dict]] = {}
         for side in ("left", "right", "keys"):
@@ -207,7 +223,20 @@ class TemplateGenerator:
 
         # Build flat key list for vial.json with physical positions
         vial_keys: list[dict] = []
-        if not kb_def.split:
+
+        if native_layouts:
+            # ── Chemin natif : layout directement depuis vial-qmk ──
+            native_keys = native_layouts[layout_macro]["layout"]
+            vial_keys = _native_layout_to_vial_keys(native_keys)
+            # Derive matrix_rows from native layout for consistency
+            if kb_def.split:
+                max_row = max(k["matrix"][0] for k in native_keys)
+                matrix_rows = (max_row + 1) // 2
+            # Format the layouts section as raw JSON for info.json.j2
+            native_layouts_json = json.dumps(
+                native_layouts, indent=12, ensure_ascii=False,
+            )
+        elif not kb_def.split:
             if active_variant_keys:
                 # Chemin variante : layout_variants présent, utiliser la variante résolue
                 for k in active_variant_keys:
@@ -233,29 +262,54 @@ class TemplateGenerator:
                         entry["w"] = round(k["w"], 3)
                     vial_keys.append(entry)
         else:
+            # ── Chemin custom split : calculer depuis le YAML ──
             left_keys = kb_layout.get("left", [])
             right_keys = kb_layout.get("right", [])
             if left_keys and right_keys:
-                max_left_x = max(k["x"] for k in left_keys)
-                x_offset = max_left_x + 1.5
+                # QMK requires x >= 0. Normalize left side so min x = 0.
+                min_left_x = min(k["x"] for k in left_keys)
+                x_shift = -min_left_x if min_left_x < 0 else 0.0
+                max_left_x = max(k["x"] + k.get("w", 1.0) for k in left_keys)
+                x_offset = max_left_x + x_shift + 0.5  # gap between halves
+                # Normalize right-side rows: YAML may use a continuous index
+                # (e.g. 0-3 left, 4-8 right). QMK needs 0-based per-side index
+                # offset by matrix_rows (= rows per side from pin count).
+                min_right_row = min(k["row"] for k in right_keys)
+                min_right_x = min(k["x"] for k in right_keys)
+                # Also normalize y so min y = 0 across all keys
+                min_y = min(
+                    min(k["y"] for k in left_keys),
+                    min(k["y"] for k in right_keys),
+                )
                 for k in left_keys:
                     if k.get("encoder"):
-                        continue  # Skip encoder positions (not in LAYOUT_sofle)
+                        continue
                     entry: dict = {
                         "matrix_row": k["row"], "matrix_col": k["col"],
-                        "x": round(k["x"], 3), "y": round(k["y"], 3),
+                        "x": round(k["x"] + x_shift, 3), "y": round(k["y"] - min_y, 3),
                     }
                     if k.get("w", 1.0) != 1.0:
                         entry["w"] = round(k["w"], 3)
                     if k.get("h", 1.0) != 1.0:
                         entry["h"] = round(k["h"], 3)
                     vial_keys.append(entry)
+                max_qmk_row = matrix_rows * 2 - 1
                 for k in right_keys:
                     if k.get("encoder"):
-                        continue  # Skip encoder positions (not in LAYOUT_sofle)
+                        continue
+                    qmk_row = k["row"] - min_right_row + matrix_rows
+                    if qmk_row > max_qmk_row:
+                        logger.warning(
+                            "Touche (%d, %d) : ligne QMK %d dépasse MATRIX_ROWS=%d "
+                            "— clampée à %d. Vérifiez le nombre de broches de lignes.",
+                            k["row"], k["col"], qmk_row, matrix_rows * 2, max_qmk_row,
+                        )
+                        qmk_row = max_qmk_row
                     entry = {
-                        "matrix_row": k["row"] + matrix_rows, "matrix_col": k["col"],
-                        "x": round(k["x"] + x_offset, 3), "y": round(k["y"], 3),
+                        "matrix_row": qmk_row,
+                        "matrix_col": k["col"],
+                        "x": round(k["x"] - min_right_x + x_offset, 3),
+                        "y": round(k["y"] - min_y, 3),
                     }
                     if k.get("w", 1.0) != 1.0:
                         entry["w"] = round(k["w"], 3)
@@ -263,7 +317,7 @@ class TemplateGenerator:
                         entry["h"] = round(k["h"], 3)
                     vial_keys.append(entry)
             else:
-                # Fallback: simple grid
+                # Fallback: simple grid (rows_per_side = matrix_rows)
                 for row in range(matrix_rows):
                     for col in range(matrix_cols):
                         vial_keys.append({"matrix_row": row, "matrix_col": col,
@@ -273,6 +327,23 @@ class TemplateGenerator:
                     for col in range(matrix_cols):
                         vial_keys.append({"matrix_row": row + matrix_rows,
                                           "matrix_col": col, "x": col + x_offset, "y": row})
+
+        # Dédupliquer vial_keys : QMK rejette deux touches sur la même position matrice.
+        # Peut arriver quand le clavier a plus de rangées logiques que de pins physiques.
+        _seen_matrix: set[tuple[int, int]] = set()
+        deduped: list[dict] = []
+        for k in vial_keys:
+            pos = (k["matrix_row"], k["matrix_col"])
+            if pos in _seen_matrix:
+                logger.warning(
+                    "Position matrice %s dupliquée — touche ignorée. "
+                    "Corrigez le design : vérifiez le nombre de broches de lignes.",
+                    pos,
+                )
+            else:
+                _seen_matrix.add(pos)
+                deduped.append(k)
+        vial_keys = deduped
 
         def _build_images(side: OledSideConfig) -> list[dict]:
             result = []
@@ -312,6 +383,24 @@ class TemplateGenerator:
         uid_bytes = hashlib.md5(uid_seed).digest()[:8]
         vial_uid = ", ".join(f"0x{b:02X}" for b in uid_bytes)
 
+        # Disable RGB if no WS2812 data pin is defined
+        if rgb_enabled and not pins.ws2812:
+            logger.warning(
+                "RGB activé pour '%s' mais aucune broche WS2812 définie — RGB désactivé.",
+                model.keyboard.model,
+            )
+            rgb_enabled = False
+
+        # RP2040 requires the vendor WS2812 driver; default if not set
+        ws2812_driver = pins.ws2812_driver
+        if rgb_enabled and mcu == "rp2040" and not ws2812_driver:
+            ws2812_driver = "vendor"
+
+        # serial_driver defaults to vendor on RP2040 (bitbang unsupported)
+        serial_driver = pins.serial_driver
+        if kb_def.split and mcu == "rp2040" and not serial_driver:
+            serial_driver = "vendor"
+
         # Pins as a dict for templates
         pins_dict = {
             "matrix_rows": pins.matrix_rows,
@@ -322,8 +411,8 @@ class TemplateGenerator:
             "encoder_b_right": pins.encoder_b_right,
             "ws2812": pins.ws2812,
             "serial_tx": pins.serial_tx,
-            "serial_driver": pins.serial_driver,
-            "ws2812_driver": pins.ws2812_driver,
+            "serial_driver": serial_driver,
+            "ws2812_driver": ws2812_driver,
             "encoder_default_pos": pins.encoder_default_pos,
         }
 
@@ -337,7 +426,8 @@ class TemplateGenerator:
             "vial_uid": vial_uid,
             "pins": pins_dict,
             "diode_direction": kb_def.diode_direction,
-            "layout_macro": kb_def.layout_macro,
+            "layout_macro": layout_macro,
+            "native_layouts_json": native_layouts_json,
             "has_encoder": kb_def.has_encoder,
             "split": kb_def.split,
             "oled_driver": kb_def.oled_hw.driver,
@@ -420,22 +510,101 @@ def _resolve_active_layout(kb_def: KeyboardDefinition, variant_slug: str) -> lis
     return kb_def.layout_variants[0].keys
 
 
+_VIAL_QMK_DIR = Path.home() / ".keyboard_firmware_maker" / "vial-qmk"
+
+
+def _load_native_layouts(
+    keyboard_path: str,
+    layout_macro: str,
+    vial_qmk_dir: Path = _VIAL_QMK_DIR,
+) -> tuple[dict | None, str]:
+    """Charge la section 'layouts' du keyboard.json natif vial-qmk.
+
+    Cherche dans le répertoire du clavier puis remonte vers les parents
+    (QMK fusionne les JSON parent→enfant).
+
+    Returns:
+        (layouts_dict, layout_name) ou (None, layout_macro) si non trouvé.
+    """
+    keyboards_root = vial_qmk_dir / "keyboards"
+    search_dir = keyboards_root / keyboard_path
+
+    while search_dir != keyboards_root and search_dir.is_relative_to(keyboards_root):
+        for name in ("keyboard.json", "info.json"):
+            json_path = search_dir / name
+            if not json_path.is_file():
+                continue
+            try:
+                data = json.loads(json_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            layouts = data.get("layouts")
+            if not layouts:
+                continue
+            # Choisir le layout correspondant à layout_macro, sinon le premier
+            if layout_macro in layouts:
+                return layouts, layout_macro
+            first_name = next(iter(layouts))
+            logger.info(
+                "Layout '%s' absent du natif vial-qmk, utilisation de '%s'",
+                layout_macro, first_name,
+            )
+            return layouts, first_name
+        search_dir = search_dir.parent
+
+    logger.warning(
+        "Layouts natifs introuvables pour '%s' dans %s", keyboard_path, vial_qmk_dir,
+    )
+    return None, layout_macro
+
+
+def _native_layout_to_vial_keys(layout_keys: list[dict]) -> list[dict]:
+    """Convertit les entrées du layout natif QMK en format vial_keys."""
+    vial_keys: list[dict] = []
+    for k in layout_keys:
+        entry: dict = {
+            "matrix_row": k["matrix"][0],
+            "matrix_col": k["matrix"][1],
+            "x": k["x"],
+            "y": k["y"],
+        }
+        if k.get("w", 1) != 1:
+            entry["w"] = k["w"]
+        if k.get("h", 1) != 1:
+            entry["h"] = k["h"]
+        vial_keys.append(entry)
+    return vial_keys
+
+
+_CUSTOM_KEYBOARDS_DIR = Path.home() / ".keyboard_firmware_maker" / "custom_keyboards"
+
+
 def _load_keyboard_def(model_name: str, project_root: Path) -> KeyboardDefinition:
     """Charge la définition complète du clavier depuis le YAML.
 
+    Cherche d'abord dans keyboards/ (bundled), puis dans le dossier custom.
     Retourne un KeyboardDefinition par défaut en cas d'erreur.
     """
-    kb_file = project_root / "keyboards" / f"{model_name}.yaml"
-    try:
-        return load_keyboard(kb_file)
-    except Exception:
-        logger.warning(
-            "Impossible de lire la définition pour '%s' depuis %s — défaut",
-            model_name, kb_file,
-        )
-        return KeyboardDefinition(
-            model=model_name, display_name=model_name, description="",
-        )
+    candidates = [
+        project_root / "keyboards" / f"{model_name}.yaml",
+        _CUSTOM_KEYBOARDS_DIR / f"{model_name}.yaml",
+    ]
+    for kb_file in candidates:
+        if kb_file.is_file():
+            try:
+                return load_keyboard(kb_file)
+            except Exception:
+                logger.warning(
+                    "Impossible de lire la définition pour '%s' depuis %s — défaut",
+                    model_name, kb_file,
+                )
+    logger.warning(
+        "Définition '%s' introuvable (ni bundled ni custom) — défaut",
+        model_name,
+    )
+    return KeyboardDefinition(
+        model=model_name, display_name=model_name, description="",
+    )
 
 
 def _invert_frames(frames: list[bytes], nat_w: int, nat_h: int) -> list[bytes]:

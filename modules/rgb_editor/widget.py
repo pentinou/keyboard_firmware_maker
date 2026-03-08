@@ -9,11 +9,13 @@ import logging
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QHideEvent, QShowEvent
+from PySide6.QtGui import QBrush, QColor, QHideEvent, QPen, QShowEvent
 from PySide6.QtWidgets import (
     QColorDialog,
     QFrame,
-    QGridLayout,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsView,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -38,6 +40,38 @@ logger = logging.getLogger(__name__)
 KEYBOARDS_DIR = Path(__file__).parent.parent.parent / "keyboards"
 CUSTOM_KEYBOARDS_DIR = Path.home() / ".keyboard_firmware_maker" / "custom_keyboards"
 KEY_SIZE = 36  # px
+
+
+class KeyColorItem(QGraphicsRectItem):
+    """Touche cliquable pour l'onglet RGB — supporte taille réelle et rotation."""
+
+    def __init__(
+        self,
+        key_id: str,
+        w_u: float,
+        h_u: float,
+        r_deg: float,
+        on_click,
+    ) -> None:
+        w_px = w_u * KEY_SIZE - 2
+        h_px = h_u * KEY_SIZE - 2
+        super().__init__(0, 0, w_px, h_px)
+        self.key_id = key_id
+        self._on_click = on_click
+        self.setTransformOriginPoint(w_px / 2, h_px / 2)
+        if r_deg:
+            self.setRotation(r_deg)
+        self.setBrush(QBrush(QColor("#333333")))
+        self.setPen(QPen(QColor("#555555"), 1))
+        self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
+
+    def set_color(self, hex_color: str) -> None:
+        self.setBrush(QBrush(QColor(hex_color)))
+        self.update()
+
+    def mousePressEvent(self, event) -> None:
+        self._on_click(self.key_id)
+        super().mousePressEvent(event)
 
 # Index dans EFFECT_TYPES
 _EFFECT_IDS = [e.id for e in EFFECT_TYPES]
@@ -227,8 +261,6 @@ class RgbWidget(QWidget):
     # ────────────────────────────────────────────────────── Key layout ──
 
     def _build_layout(self) -> None:
-        for btn in self._key_buttons.values():
-            btn.setParent(None)  # type: ignore[arg-type]
         self._key_buttons.clear()
         while self._keys_hbox.count():
             item = self._keys_hbox.takeAt(0)
@@ -245,63 +277,67 @@ class RgbWidget(QWidget):
         """Fallback : grille uniforme rows × cols."""
         rows = kb.matrix.get("rows", 5) if kb else 5
         cols = kb.matrix.get("cols", 6) if kb else 6
-        for side in ("L", "R"):
-            frame = QFrame()
-            frame.setFrameShape(QFrame.Shape.StyledPanel)
-            frame.setObjectName(f"frame_{side}")
-            grid = QGridLayout(frame)
-            grid.setSpacing(2)
+        padding = 4
+        canvas_w = cols * KEY_SIZE + padding * 2
+        canvas_h = rows * KEY_SIZE + padding * 2
+        for side_code in ("L", "R"):
+            scene = QGraphicsScene(self)
+            scene.setSceneRect(0, 0, canvas_w, canvas_h)
+            view = QGraphicsView(scene)
+            view.setObjectName(f"frame_{side_code}")
+            view.setFixedSize(canvas_w + 4, canvas_h + 4)
+            view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            view.setBackgroundBrush(QBrush(QColor("#1E1E1E")))
+            view.setFrameShape(QFrame.Shape.StyledPanel)
+            view.setDragMode(QGraphicsView.DragMode.NoDrag)
             for r in range(rows):
                 for c in range(cols):
-                    key_id = f"{side}_r{r}_c{c}"
-                    btn = QPushButton()
-                    btn.setFixedSize(KEY_SIZE, KEY_SIZE)
-                    btn.setObjectName(key_id)
-                    btn.setToolTip(key_id)
-                    btn.clicked.connect(
-                        lambda checked=False, kid=key_id: self._on_key_clicked(kid)
-                    )
-                    grid.addWidget(btn, r, c)
-                    self._key_buttons[key_id] = btn
-            self._keys_hbox.addWidget(frame)
+                    key_id = f"{side_code}_r{r}_c{c}"
+                    item = KeyColorItem(key_id, 1.0, 1.0, 0.0, self._on_key_clicked)
+                    item.setPos(padding + c * KEY_SIZE, padding + r * KEY_SIZE)
+                    scene.addItem(item)
+                    self._key_buttons[key_id] = item
+            self._keys_hbox.addWidget(view)
             self._keys_hbox.addSpacing(16)
 
     def _build_physical_layout(self, kb: KeyboardDefinition) -> None:
         """Positionnement absolu d'après les coordonnées physiques du YAML."""
         side_map = {"L": "left", "R": "right"}
-        padding = 4  # px autour des touches
+        padding = 4
         for side_code, yaml_side in side_map.items():
             keys: list[KeyLayout] = kb.layout.get(yaml_side, [])
-            if not keys:
+            non_enc = [k for k in keys if not k.encoder]
+            if not non_enc:
                 continue
 
-            max_x = max(k.x for k in keys)
-            max_y = max(k.y for k in keys)
-            canvas_w = int((max_x + 1) * KEY_SIZE) + padding * 2
-            canvas_h = int((max_y + 1) * KEY_SIZE) + padding * 2
+            # Normalise les coordonnées : chaque panneau commence en (0,0)
+            min_x = min(k.x for k in non_enc)
+            min_y = min(k.y for k in non_enc)
+            canvas_w = int((max(k.x + k.w for k in non_enc) - min_x) * KEY_SIZE) + padding * 2
+            canvas_h = int((max(k.y + k.h for k in non_enc) - min_y) * KEY_SIZE) + padding * 2
 
-            frame = QFrame()
-            frame.setFrameShape(QFrame.Shape.StyledPanel)
-            frame.setObjectName(f"frame_{side_code}")
-            frame.setMinimumSize(canvas_w, canvas_h)
+            scene = QGraphicsScene(self)
+            scene.setSceneRect(0, 0, canvas_w, canvas_h)
+            view = QGraphicsView(scene)
+            view.setObjectName(f"frame_{side_code}")
+            view.setFixedSize(canvas_w + 4, canvas_h + 4)
+            view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            view.setBackgroundBrush(QBrush(QColor("#1E1E1E")))
+            view.setFrameShape(QFrame.Shape.StyledPanel)
+            view.setDragMode(QGraphicsView.DragMode.NoDrag)
 
-            for k in keys:
-                if k.encoder:
-                    continue  # Skip encoder positions (no RGB LED)
+            for k in non_enc:
                 key_id = f"{side_code}_r{k.row}_c{k.col}"
-                btn = QPushButton(parent=frame)
-                btn.setFixedSize(KEY_SIZE - 2, KEY_SIZE - 2)
-                btn.setObjectName(key_id)
-                btn.setToolTip(key_id)
-                px = padding + int(k.x * KEY_SIZE)
-                py = padding + int(k.y * KEY_SIZE)
-                btn.move(px, py)
-                btn.clicked.connect(
-                    lambda checked=False, kid=key_id: self._on_key_clicked(kid)
+                item = KeyColorItem(
+                    key_id, k.w, k.h, getattr(k, "r", 0.0), self._on_key_clicked
                 )
-                self._key_buttons[key_id] = btn
+                item.setPos(padding + (k.x - min_x) * KEY_SIZE, padding + (k.y - min_y) * KEY_SIZE)
+                scene.addItem(item)
+                self._key_buttons[key_id] = item
 
-            self._keys_hbox.addWidget(frame)
+            self._keys_hbox.addWidget(view)
             self._keys_hbox.addSpacing(16)
 
     def _find_current_keyboard(self) -> KeyboardDefinition | None:
@@ -327,9 +363,9 @@ class RgbWidget(QWidget):
             self._apply_color(key_id, hex_color)
 
     def _apply_color(self, key_id: str, hex_color: str) -> None:
-        btn = self._key_buttons.get(key_id)
-        if btn:
-            btn.setStyleSheet(f"background-color: {hex_color};")
+        item = self._key_buttons.get(key_id)
+        if item:
+            item.set_color(hex_color)
             self._model.rgb.per_key[key_id] = hex_color
         else:
             logger.warning("Clé inconnue '%s' ignorée dans _apply_color", key_id)

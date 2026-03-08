@@ -14,7 +14,6 @@ import math
 import random
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QPushButton
 
 from models.project_model import RgbEffect
 from modules.rgb_editor.effects import EFFECT_TYPES
@@ -63,7 +62,7 @@ def _hex_to_hsv(hex_color: str) -> tuple[float, float, float]:
 class EffectPreview:
     """Gère l'animation de prévisualisation des effets RGB sur les touches."""
 
-    def __init__(self, key_buttons: dict[str, QPushButton]) -> None:
+    def __init__(self, key_buttons: dict) -> None:
         self._key_buttons = key_buttons
         self._timer = QTimer()
         self._timer.timeout.connect(self._tick)
@@ -197,18 +196,18 @@ class EffectPreview:
 
         if preview == "solid":
             for btn in self._key_buttons.values():
-                btn.setStyleSheet(f"background-color: {self._effect.color_primary};")
+                btn.set_color(self._effect.color_primary)
 
         elif preview == "breathing":
             v = (1 - math.cos(phase * math.pi / 180)) / 2
             color = _hsv_to_hex(primary_h, primary_s, v)
             for btn in self._key_buttons.values():
-                btn.setStyleSheet(f"background-color: {color};")
+                btn.set_color(color)
 
         elif preview == "cycle_all":
             color = _hsv_to_hex(phase, 1.0, 1.0)
             for btn in self._key_buttons.values():
-                btn.setStyleSheet(f"background-color: {color};")
+                btn.set_color(color)
 
         elif preview == "cycle_lr":
             total_cols = self._max_col + 1
@@ -219,7 +218,7 @@ class EffectPreview:
                 r, c, side_idx = meta
                 col_total = c + side_idx * total_cols
                 hue = (phase + col_total * 360 / (total_cols * 2)) % 360
-                btn.setStyleSheet(f"background-color: {_hsv_to_hex(hue, 1.0, 1.0)};")
+                btn.set_color(_hsv_to_hex(hue, 1.0, 1.0))
 
         elif preview == "cycle_ud":
             for key_id, btn in self._key_buttons.items():
@@ -228,7 +227,7 @@ class EffectPreview:
                     continue
                 r, c, side_idx = meta
                 hue = (phase + r * 360 / (self._max_row + 1)) % 360
-                btn.setStyleSheet(f"background-color: {_hsv_to_hex(hue, 1.0, 1.0)};")
+                btn.set_color(_hsv_to_hex(hue, 1.0, 1.0))
 
         elif preview == "gradient_h":
             total_cols = (self._max_col + 1) * 2
@@ -239,7 +238,7 @@ class EffectPreview:
                 r, c, side_idx = meta
                 col_total = c + side_idx * (self._max_col + 1)
                 hue = col_total * 240 / total_cols
-                btn.setStyleSheet(f"background-color: {_hsv_to_hex(hue, 1.0, 1.0)};")
+                btn.set_color(_hsv_to_hex(hue, 1.0, 1.0))
 
         elif preview == "gradient_v":
             for key_id, btn in self._key_buttons.items():
@@ -248,7 +247,7 @@ class EffectPreview:
                     continue
                 r, c, side_idx = meta
                 hue = r * 240 / (self._max_row + 1)
-                btn.setStyleSheet(f"background-color: {_hsv_to_hex(hue, 1.0, 1.0)};")
+                btn.set_color(_hsv_to_hex(hue, 1.0, 1.0))
 
         elif preview == "band_v":
             band_row = phase * (self._max_row + 1) / 360
@@ -260,7 +259,7 @@ class EffectPreview:
                 dist = abs(r - band_row)
                 v = max(0.0, 1.0 - dist * 0.5)
                 color = _hsv_to_hex(primary_h, primary_s, v)
-                btn.setStyleSheet(f"background-color: {color};")
+                btn.set_color(color)
 
         elif preview == "pinwheel":
             for key_id, btn in self._key_buttons.items():
@@ -270,7 +269,7 @@ class EffectPreview:
                 r, c, side_idx = meta
                 angle = math.degrees(math.atan2(r - cr, c - cc))
                 hue = (angle + phase) % 360
-                btn.setStyleSheet(f"background-color: {_hsv_to_hex(hue, 1.0, 1.0)};")
+                btn.set_color(_hsv_to_hex(hue, 1.0, 1.0))
 
         elif preview == "spiral":
             for key_id, btn in self._key_buttons.items():
@@ -281,7 +280,7 @@ class EffectPreview:
                 angle = math.degrees(math.atan2(r - cr, c - cc))
                 dist = math.sqrt((r - cr) ** 2 + (c - cc) ** 2)
                 hue = (angle + dist * 20 + phase) % 360
-                btn.setStyleSheet(f"background-color: {_hsv_to_hex(hue, 1.0, 1.0)};")
+                btn.set_color(_hsv_to_hex(hue, 1.0, 1.0))
 
         elif preview == "cycle_out_in":
             max_dist = math.sqrt(cr ** 2 + cc ** 2) + 1
@@ -292,7 +291,7 @@ class EffectPreview:
                 r, c, side_idx = meta
                 dist_edge = min(r, self._max_row - r, c, self._max_col - c)
                 hue = (phase + dist_edge * 40) % 360
-                btn.setStyleSheet(f"background-color: {_hsv_to_hex(hue, 1.0, 1.0)};")
+                btn.set_color(_hsv_to_hex(hue, 1.0, 1.0))
 
         elif preview == "raindrops":
             new_drops: dict[str, tuple[float, float]] = {}
@@ -309,9 +308,9 @@ class EffectPreview:
             for key_id, btn in self._key_buttons.items():
                 hue, v = self._drops.get(key_id, (0.0, 0.0))
                 if v < 0.05:
-                    btn.setStyleSheet("background-color: #000000;")
+                    btn.set_color("#000000")
                 else:
-                    btn.setStyleSheet(f"background-color: {_hsv_to_hex(hue, 1.0, v)};")
+                    btn.set_color(_hsv_to_hex(hue, 1.0, v))
 
         elif preview == "heatmap":
             keys = list(self._key_buttons.keys())
@@ -326,7 +325,7 @@ class EffectPreview:
                 heat = self._heat.get(key_id, 0.0)
                 hue = 240 - heat * 240
                 v = 0.2 + heat * 0.8
-                btn.setStyleSheet(f"background-color: {_hsv_to_hex(hue, 1.0, v)};")
+                btn.set_color(_hsv_to_hex(hue, 1.0, v))
 
         elif preview == "two_zone":
             secondary_color = self._effect.color_secondary
@@ -336,9 +335,9 @@ class EffectPreview:
                     continue
                 r, c, side_idx = meta
                 if c == 0 or c == self._max_col:
-                    btn.setStyleSheet(f"background-color: {secondary_color};")
+                    btn.set_color(secondary_color)
                 else:
-                    btn.setStyleSheet(f"background-color: {self._effect.color_primary};")
+                    btn.set_color(self._effect.color_primary)
 
     # ─────────────────────────────────────────────── Static / Reset ──
 
@@ -346,11 +345,11 @@ class EffectPreview:
         if not self._effect:
             return
         for btn in self._key_buttons.values():
-            btn.setStyleSheet(f"background-color: {self._effect.color_primary};")
+            btn.set_color(self._effect.color_primary)
 
     def _reset_keys(self) -> None:
         for btn in self._key_buttons.values():
-            btn.setStyleSheet("")
+            btn.set_color("#000000")
 
     # ─────────────────────────────────────────────── Ripple / Reactive ──
 
@@ -390,28 +389,24 @@ class EffectPreview:
         if step == 0:
             center_id = f"{self._center[0]}_r{self._center[1]}_c{self._center[2]}"
             if center_id in self._key_buttons:
-                self._key_buttons[center_id].setStyleSheet(
-                    f"background-color: {self._effect.color_primary};"
-                )
+                self._key_buttons[center_id].set_color(self._effect.color_primary)
         elif step == 1:
             for kid, btn in self._key_buttons.items():
                 d = self._distance(kid)
                 if d == 0:
-                    btn.setStyleSheet(f"background-color: {self._effect.color_primary};")
+                    btn.set_color(self._effect.color_primary)
                 elif d == 1:
-                    btn.setStyleSheet(f"background-color: {self._effect.color_secondary};")
+                    btn.set_color(self._effect.color_secondary)
         elif step == 2:
             for kid, btn in self._key_buttons.items():
                 if self._distance(kid) == 1:
-                    btn.setStyleSheet(f"background-color: {self._effect.color_secondary};")
+                    btn.set_color(self._effect.color_secondary)
         elif step == 3:
             self._pick_new_center()
             if self._center:
                 center_id = f"{self._center[0]}_r{self._center[1]}_c{self._center[2]}"
                 if center_id in self._key_buttons:
-                    self._key_buttons[center_id].setStyleSheet(
-                        f"background-color: {self._effect.color_primary};"
-                    )
+                    self._key_buttons[center_id].set_color(self._effect.color_primary)
             self._step = 0
         self._step += 1
 

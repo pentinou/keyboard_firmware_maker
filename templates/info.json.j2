@@ -1,22 +1,3 @@
-{%- if split -%}
-{%- set half_rows = matrix_rows - 1 -%}
-{%- set gap = matrix_cols + 1 -%}
-{%- set ns = namespace(keys=[]) -%}
-{%- for row in range(half_rows) -%}
-  {%- for col in range(matrix_cols) -%}
-    {%- set ns.keys = ns.keys + [[row, col, col, row]] -%}
-  {%- endfor -%}
-  {%- for col in range(matrix_cols) -%}
-    {%- set ns.keys = ns.keys + [[row + matrix_rows, col, col + gap, row]] -%}
-  {%- endfor -%}
-{%- endfor -%}
-{%- for col in range(1, matrix_cols) -%}
-  {%- set ns.keys = ns.keys + [[half_rows, col, col, half_rows]] -%}
-{%- endfor -%}
-{%- for col in range(1, matrix_cols) -%}
-  {%- set ns.keys = ns.keys + [[half_rows + matrix_rows, col, col + gap, half_rows]] -%}
-{%- endfor -%}
-{%- endif -%}
 {
     "keyboard_name": "{{ vial_name }}",
     "url": "",
@@ -28,30 +9,28 @@
         "device_version": "0.0.1"
     },
     "features": {
-{% if has_encoder %}
+{% if has_encoder and pins.encoder_a %}
         "encoder": true,
 {% endif %}
         "extrakey": true
     },
-{% if has_encoder %}
+{% if has_encoder and pins.encoder_a %}
     "encoder": {
         "rotary": [
-{% if pins.encoder_a %}
             { "pin_a": "{{ pins.encoder_a[0] }}", "pin_b": "{{ pins.encoder_b[0] }}", "resolution": 2 }
-{% endif %}
         ]
     },
 {% endif %}
 {% if split %}
     "split": {
         "enabled": true,
-{% if has_encoder %}
+{% if has_encoder and pins.encoder_a %}
         "encoder": {
             "right": {
                 "rotary": [
 {% if pins.encoder_a_right %}
                     { "pin_a": "{{ pins.encoder_a_right[0] }}", "pin_b": "{{ pins.encoder_b_right[0] }}", "resolution": 2 }
-{% elif pins.encoder_a %}
+{% else %}
                     { "pin_a": "{{ pins.encoder_a[0] }}", "pin_b": "{{ pins.encoder_b[0] }}", "resolution": 2 }
 {% endif %}
                 ]
@@ -73,21 +52,18 @@
         "cols": {{ pins.matrix_cols | tojson }}
     },
 {% endif %}
+{% if native_layouts_json %}
+    "layouts": {{ native_layouts_json }}
+{% else %}
     "layouts": {
         "{{ layout_macro }}": {
             "layout": [
-{% if split %}
-{% for key in ns.keys %}
-                {"matrix": [{{ key[0] }}, {{ key[1] }}], "x": {{ key[2] }}, "y": {{ key[3] }}}{% if not loop.last %},{% endif %}
-
-{% endfor %}
-{% else %}
 {% for key in vial_keys %}
-                {"matrix": [{{ key.matrix_row }}, {{ key.matrix_col }}], "x": {{ key.x }}, "y": {{ key.y }}}{% if not loop.last %},{% endif %}
+                {"matrix": [{{ key.matrix_row }}, {{ key.matrix_col }}], "x": {{ key.x }}, "y": {{ key.y }}{% if key.w is defined %}, "w": {{ key.w }}{% endif %}{% if key.h is defined %}, "h": {{ key.h }}{% endif %}}{% if not loop.last %},{% endif %}
 
 {% endfor %}
-{% endif %}
             ]
         }
     }
+{% endif %}
 }

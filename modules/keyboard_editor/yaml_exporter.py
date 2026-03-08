@@ -54,8 +54,14 @@ def _keyboard_to_dict(kd: KeyboardDefinition) -> dict:
     for side_keys in kd.layout.values():
         all_keys.extend(side_keys)
 
-    rows = max((k.row for k in all_keys), default=0) + 1
     cols = max((k.col for k in all_keys), default=0) + 1
+    # For split keyboards, rows = per-side count (left keys start at row 0).
+    # Must equal len(matrix_row_pins) so MATRIX_ROWS = rows*2 is correct.
+    if kd.split:
+        left_keys = kd.layout.get("left", [])
+        rows = max((k.row for k in left_keys), default=0) + 1
+    else:
+        rows = max((k.row for k in all_keys), default=0) + 1
 
     mcu_options = []
     for mcu in kd.mcu_options:

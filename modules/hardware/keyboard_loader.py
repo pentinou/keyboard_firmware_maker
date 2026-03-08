@@ -104,6 +104,8 @@ class KeyboardDefinition:
     has_encoder: bool = False
     split: bool = True
     layout_variants: list[LayoutVariant] = field(default_factory=list)
+    vial_qmk_keyboard: str = ""
+    """Chemin relatif dans vial-qmk (ex: 'sofle/rev1'). Si défini, le layout natif est utilisé."""
     oled_hw: OledHardwareConfig = field(default_factory=OledHardwareConfig)
     rgb_hw: RgbHardwareConfig = field(default_factory=RgbHardwareConfig)
 
@@ -253,6 +255,7 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
         has_encoder=bool(data.get("has_encoder", False)),
         split=bool(data.get("split", True)),
         layout_variants=layout_variants,
+        vial_qmk_keyboard=data.get("vial_qmk_keyboard", ""),
         oled_hw=oled_hw,
         rgb_hw=rgb_hw,
     )

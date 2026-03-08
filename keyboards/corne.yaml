@@ -33,6 +33,7 @@ vial_vid: "0x4653"
 vial_pid: "0x0001"
 diode_direction: "COL2ROW"
 layout_macro: "LAYOUT_split_3x6_3"
+vial_qmk_keyboard: "crkbd"
 has_encoder: false
 capabilities:
   oled: true
