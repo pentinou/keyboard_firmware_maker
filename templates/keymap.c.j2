@@ -255,13 +255,20 @@ static void _burnin_apply(void) {
 
 bool oled_task_user(void) {
 {% if oled_sleep %}
-    /* Manual sleep — OLED_TIMEOUT built-in is unreliable in Vial-QMK.
-     * Mirror exactly what RGB_MATRIX_TIMEOUT does internally. */
+    /* Manual sleep — built-in OLED_TIMEOUT / RGB_MATRIX_SLEEP are unreliable
+     * in Vial-QMK on split keyboards (activity timer not always synced).
+     * We handle both OLED and RGB sleep explicitly here. */
     if (last_input_activity_elapsed() > OLED_TIMEOUT) {
         oled_off();
+{% if rgb_sleep %}
+        if (rgb_matrix_is_enabled()) { rgb_matrix_disable_noeeprom(); }
+{% endif %}
         return false;
     }
     if (!is_oled_on()) { oled_on(); }
+{% if rgb_sleep %}
+    if (!rgb_matrix_is_enabled()) { rgb_matrix_enable_noeeprom(); }
+{% endif %}
 {% else %}
     if (!is_oled_on()) return false;
 {% endif %}
@@ -424,6 +431,18 @@ bool oled_task_user(void) {
 
 {% if rgb_enabled %}
 /* ─── RGB ───────────────────────────────────────────────────────────────── */
+
+{% if rgb_sleep and not oled_enabled %}
+/* RGB sleep without OLED — need housekeeping to manage RGB power.
+ * When OLED is present, this is handled inside oled_task_user(). */
+void housekeeping_task_user(void) {
+    if (last_input_activity_elapsed() > RGB_SLEEP_TIMEOUT) {
+        if (rgb_matrix_is_enabled()) { rgb_matrix_disable_noeeprom(); }
+    } else {
+        if (!rgb_matrix_is_enabled()) { rgb_matrix_enable_noeeprom(); }
+    }
+}
+{% endif %}
 
 {% if has_reactive_effects %}
 uint8_t  _ripple_last_x = 128;

@@ -85,9 +85,9 @@
 {% endif %}
 
 {% if rgb_sleep %}
-/* RGB Matrix sleep */
-#define RGB_MATRIX_TIMEOUT {{ oled_sleep_timeout_ms }}
-#define RGB_MATRIX_SLEEP
+/* RGB Matrix sleep — handled manually in keymap.c (built-in is unreliable
+ * on split keyboards in Vial-QMK, same issue as OLED_TIMEOUT). */
+#define RGB_SLEEP_TIMEOUT {{ oled_sleep_timeout_ms }}
 {% endif %}
 
 {% if has_encoder %}
