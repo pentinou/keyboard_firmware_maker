@@ -87,7 +87,6 @@ class MainWindow(QMainWindow):
 
     def _on_capabilities_changed(self, capabilities: dict) -> None:
         """Met à jour la visibilité des onglets selon les capacités du clavier sélectionné."""
-        # L'onglet OLED est géré par _on_oled_sides_changed
         self._tabs.setTabEnabled(2, bool(capabilities.get("rgb", False)))
         self._tab_rgb.refresh_layout()
         logger.info(
@@ -144,7 +143,7 @@ class MainWindow(QMainWindow):
         if not path.endswith(".kfm.json"):
             path += ".kfm.json"
         try:
-            save_project(self._model, Path(path))  # L3 : file_io loggue déjà, pas besoin ici
+            save_project(self._model, Path(path))
         except OSError as e:
             QMessageBox.critical(self, tr("dlg.error"), tr("dlg.save_error").format(e=e))
 
@@ -167,7 +166,7 @@ class MainWindow(QMainWindow):
         self._model.build = loaded.build
 
         self._sync_hardware_widget()
-        # M1 : resynchroniser les widgets OLED et RGB avec les nouvelles données
+        # Resynchroniser les widgets OLED et RGB avec les nouvelles données
         self._tab_oled._sync_from_model()
         self._tab_rgb._sync_from_model()
         logger.info("Projet ouvert : %s", path)
@@ -177,32 +176,54 @@ class MainWindow(QMainWindow):
         target_kb_model = self._model.keyboard.model
         target_mcu = self._model.keyboard.mcu
         target_oled_sides = list(self._model.keyboard.oled_sides)
+
+        # Trouver le clavier dans la liste et le sélectionner
         combo = self._tab_hardware._keyboard_combo
         found = False
         for i in range(combo.count()):
-            if self._tab_hardware._keyboards[i].model == target_kb_model:
-                combo.setCurrentIndex(i)  # déclenche _on_model_changed() → réinitialise MCU
+            entry_idx = self._tab_hardware._filtered_entries[i] if i < len(self._tab_hardware._filtered_entries) else -1
+            if entry_idx < 0:
+                continue
+            kb, _, _ = self._tab_hardware._all_keyboard_entries[entry_idx]
+            if kb and kb.model == target_kb_model:
+                combo.setCurrentIndex(i)
                 found = True
                 break
+
+        if not found:
+            # Essayer avec catégorie "all"
+            self._tab_hardware._category_combo.setCurrentIndex(0)
+            for i in range(combo.count()):
+                entry_idx = self._tab_hardware._filtered_entries[i] if i < len(self._tab_hardware._filtered_entries) else -1
+                if entry_idx < 0:
+                    continue
+                kb, _, _ = self._tab_hardware._all_keyboard_entries[entry_idx]
+                if kb and kb.model == target_kb_model:
+                    combo.setCurrentIndex(i)
+                    found = True
+                    break
+
         if not found:
             logger.warning(
                 "Modèle de clavier '%s' introuvable dans la liste — widget non synchronisé",
                 target_kb_model,
             )
             return
-        # M1 : restaurer le MCU sauvegardé (écrasé par _on_model_changed qui choisit le premier)
-        kb_idx = combo.currentIndex()
-        kb = self._tab_hardware._keyboards[kb_idx]
-        mcu_combo = self._tab_hardware._mcu_combo
-        for i, mcu_opt in enumerate(kb.mcu_options):
-            if mcu_opt.id == target_mcu:
-                mcu_combo.setCurrentIndex(i)  # déclenche _on_mcu_changed → met à jour model
-                break
-        # Restaurer la variante layout sauvegardée (écrasée par _on_model_changed)
+
+        # Restaurer le MCU sauvegardé
+        kb = getattr(self._tab_hardware, "_current_kb", None)
+        if kb:
+            mcu_combo = self._tab_hardware._mcu_combo
+            for i, mcu_opt in enumerate(kb.mcu_options):
+                if mcu_opt.id == target_mcu:
+                    mcu_combo.setCurrentIndex(i)
+                    break
+
+        # Restaurer la variante layout sauvegardée
         self._tab_hardware.set_layout_variant(self._model.keyboard.layout_variant)
-        # Restaurer oled_sides sauvegardé (écrasé par _on_model_changed qui met le défaut)
+        # Restaurer oled_sides sauvegardé
         self._tab_hardware.set_oled_sides(target_oled_sides)
-        # Restaurer rgb_enabled sauvegardé (écrasé par _on_model_changed qui lit le YAML)
+        # Restaurer rgb_enabled sauvegardé
         self._tab_hardware.set_rgb_enabled(self._model.keyboard.rgb_enabled)
 
     def _check_vial_qmk(self) -> None:

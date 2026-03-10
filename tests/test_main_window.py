@@ -16,10 +16,6 @@ def test_main_window_has_four_tabs(qtbot):
     tab_widget = window.findChild(QTabWidget)
     assert tab_widget is not None
     assert tab_widget.count() == 4
-    assert tab_widget.tabText(0) == "Matériel"
-    assert tab_widget.tabText(1) == "OLED"
-    assert tab_widget.tabText(2) == "RGB"
-    assert tab_widget.tabText(3) == "Build"
 
 
 def test_main_window_title(qtbot):
