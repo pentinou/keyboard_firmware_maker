@@ -18,6 +18,7 @@ from PySide6.QtGui import QBrush, QColor, QFont, QPen
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QFileDialog,
     QFormLayout,
     QGraphicsRectItem,
     QGraphicsScene,
@@ -105,6 +106,32 @@ _WELL_KNOWN_MCUS: list[McuOption] = [
     ),
 ]
 
+class _DropPlainTextEdit(QPlainTextEdit):
+    """QPlainTextEdit acceptant le glisser-déposer de fichiers .json."""
+
+    def dragEnterEvent(self, event):  # noqa: N802
+        if event.mimeData().hasUrls():
+            for url in event.mimeData().urls():
+                if url.toLocalFile().lower().endswith(".json"):
+                    event.acceptProposedAction()
+                    return
+        super().dragEnterEvent(event)
+
+    def dropEvent(self, event):  # noqa: N802
+        if event.mimeData().hasUrls():
+            for url in event.mimeData().urls():
+                path = url.toLocalFile()
+                if path.lower().endswith(".json"):
+                    try:
+                        text = Path(path).read_text(encoding="utf-8")
+                        self.setPlainText(text)
+                    except OSError as exc:
+                        logger.warning("Impossible de lire %s : %s", path, exc)
+                    event.acceptProposedAction()
+                    return
+        super().dropEvent(event)
+
+
 _PREVIEW_PX = 30  # pixels per unit in the preview canvas
 _KEY_COLOR = QColor("#4A90D9")
 _KEY_BORDER = QColor("#1C3A5E")
@@ -150,6 +177,10 @@ class KleImportWidget(QWidget):
         kle_header.addWidget(kle_label)
         kle_header.addStretch()
 
+        self._open_file_btn = QPushButton(tr("keyboard_editor.open_file_btn"))
+        self._open_file_btn.setObjectName("open_file_btn")
+        kle_header.addWidget(self._open_file_btn)
+
         self._parse_btn = QPushButton(tr("keyboard_editor.parse_btn"))
         self._parse_btn.setObjectName("parse_btn")
         kle_header.addWidget(self._parse_btn)
@@ -157,11 +188,12 @@ class KleImportWidget(QWidget):
 
         help_label = QLabel(tr("keyboard_editor.kle_help"))
         help_label.setWordWrap(True)
+        help_label.setTextFormat(Qt.TextFormat.RichText)
         help_label.setStyleSheet("color: #AAA; font-size: 11px;")
         help_label.setOpenExternalLinks(True)
         kle_layout.addWidget(help_label)
 
-        self._kle_text = QPlainTextEdit()
+        self._kle_text = _DropPlainTextEdit()
         self._kle_text.setObjectName("kle_text")
         self._kle_text.setPlaceholderText(tr("keyboard_editor.kle_placeholder"))
         kle_layout.addWidget(self._kle_text)
@@ -317,6 +349,7 @@ class KleImportWidget(QWidget):
     # ── Connexions ────────────────────────────────────────────────────────────
 
     def _connect_signals(self) -> None:
+        self._open_file_btn.clicked.connect(self._on_open_file)
         self._parse_btn.clicked.connect(self._on_parse)
         self._pins_toggle.toggled.connect(self._on_pins_toggle)
         self._mcu_preset_combo.currentIndexChanged.connect(self._on_mcu_preset_changed)
@@ -329,6 +362,21 @@ class KleImportWidget(QWidget):
         self._keyboards = keyboards
 
     # ── Handlers ──────────────────────────────────────────────────────────────
+
+    def _on_open_file(self) -> None:
+        """Ouvre un fichier .json et charge son contenu dans la zone de texte."""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            tr("keyboard_editor.open_file_title"),
+            "",
+            "JSON (*.json)",
+        )
+        if path:
+            try:
+                text = Path(path).read_text(encoding="utf-8")
+                self._kle_text.setPlainText(text)
+            except OSError as exc:
+                QMessageBox.warning(self, tr("keyboard_editor.open_file_title"), str(exc))
 
     def _on_parse(self) -> None:
         """Parse le JSON KLE collé et met à jour la preview."""

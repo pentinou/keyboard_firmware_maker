@@ -5,6 +5,8 @@ Lance QApplication, instancie ProjectModel et MainWindow.
 from __future__ import annotations
 
 import logging
+import platform
+import subprocess
 import sys
 
 try:
@@ -18,8 +20,34 @@ except ModuleNotFoundError:
     print("  pip install -r requirements.txt")
     sys.exit(1)
 
+from PySide6.QtCore import QObject, QUrl, Slot
+from PySide6.QtGui import QDesktopServices
+
 from models.project_model import ProjectModel
 from ui.main_window import MainWindow
+
+
+def _is_wsl() -> bool:
+    """Détecte si on tourne sous WSL."""
+    try:
+        return "microsoft" in platform.uname().release.lower()
+    except Exception:
+        return False
+
+
+class _WslUrlHandler(QObject):
+    """Redirige les ouvertures d'URL vers le navigateur Windows sous WSL."""
+
+    @Slot(QUrl)
+    def handleUrl(self, url: QUrl) -> None:  # noqa: N802
+        try:
+            subprocess.Popen(
+                ["cmd.exe", "/c", "start", "", url.toString()],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError:
+            pass
 
 
 def _configure_logging() -> None:
@@ -39,6 +67,11 @@ def main() -> int:
     app.setApplicationName("keyboard_firmware_maker")
     app.setApplicationVersion("0.1.0")
     app.setOrganizationName("Pentinou")
+
+    if _is_wsl():
+        url_handler = _WslUrlHandler(app)
+        QDesktopServices.setUrlHandler("http", url_handler, "handleUrl")
+        QDesktopServices.setUrlHandler("https", url_handler, "handleUrl")
 
     model = ProjectModel()
     window = MainWindow(model)

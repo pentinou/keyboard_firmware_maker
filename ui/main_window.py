@@ -88,7 +88,9 @@ class MainWindow(QMainWindow):
     def _on_capabilities_changed(self, capabilities: dict) -> None:
         """Met à jour la visibilité des onglets selon les capacités du clavier sélectionné."""
         self._tabs.setTabEnabled(2, bool(capabilities.get("rgb", False)))
-        self._tab_rgb.refresh_layout()
+        # Passer le KeyboardDefinition courant au widget RGB
+        current_kb = getattr(self._tab_hardware, "_current_kb", None)
+        self._tab_rgb.refresh_layout(current_kb)
         logger.info(
             "Capacités mises à jour : OLED=%s, RGB=%s",
             capabilities.get("oled"),

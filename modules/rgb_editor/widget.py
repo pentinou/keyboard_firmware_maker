@@ -97,6 +97,7 @@ class RgbWidget(QWidget):
     def __init__(self, model: ProjectModel, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._model = model
+        self._current_kb: KeyboardDefinition | None = None
         self._key_buttons: dict[str, QPushButton] = {}
         self._trigger_mode: bool = False
         self._setup_ui()
@@ -277,10 +278,11 @@ class RgbWidget(QWidget):
         """Fallback : grille uniforme rows × cols."""
         rows = kb.matrix.get("rows", 5) if kb else 5
         cols = kb.matrix.get("cols", 6) if kb else 6
+        is_split = kb.split if kb else True
         padding = 4
         canvas_w = cols * KEY_SIZE + padding * 2
         canvas_h = rows * KEY_SIZE + padding * 2
-        for side_code in ("L", "R"):
+        for side_code in (("L", "R") if is_split else ("L",)):
             scene = QGraphicsScene(self)
             scene.setSceneRect(0, 0, canvas_w, canvas_h)
             view = QGraphicsView(scene)
@@ -303,9 +305,14 @@ class RgbWidget(QWidget):
 
     def _build_physical_layout(self, kb: KeyboardDefinition) -> None:
         """Positionnement absolu d'après les coordonnées physiques du YAML."""
-        side_map = {"L": "left", "R": "right"}
+        # Split : deux panneaux left/right ; non-split : un seul panneau "keys"
+        if kb.split:
+            panels = [("L", "left"), ("R", "right")]
+        else:
+            panels = [("L", "keys")]
+
         padding = 4
-        for side_code, yaml_side in side_map.items():
+        for side_code, yaml_side in panels:
             keys: list[KeyLayout] = kb.layout.get(yaml_side, [])
             non_enc = [k for k in keys if not k.encoder]
             if not non_enc:
@@ -341,6 +348,8 @@ class RgbWidget(QWidget):
             self._keys_hbox.addSpacing(16)
 
     def _find_current_keyboard(self) -> KeyboardDefinition | None:
+        if self._current_kb and self._current_kb.model == self._model.keyboard.model:
+            return self._current_kb
         keyboards = load_all_keyboards(KEYBOARDS_DIR, CUSTOM_KEYBOARDS_DIR)
         return next((kb for kb in keyboards if kb.model == self._model.keyboard.model), None)
 
@@ -464,8 +473,9 @@ class RgbWidget(QWidget):
                 self._lbl_trigger.setText(effect.trigger_key)
             self._refresh_effect_buttons()
 
-    def refresh_layout(self) -> None:
+    def refresh_layout(self, keyboard: KeyboardDefinition | None = None) -> None:
         """Reconstruit le layout quand le modèle de clavier change."""
+        self._current_kb = keyboard
         if self._preview:  # M1: arrêter l'ancien timer avant remplacement
             self._preview.stop()
         self._build_layout()

@@ -16,9 +16,11 @@ from pathlib import Path
 
 from modules.hardware.keyboard_loader import (
     KeyboardDefinition,
+    KeyLayout,
     McuOption,
     McuPins,
 )
+from modules.keyboard_editor.kle_parser import parse_kle_json
 
 logger = logging.getLogger(__name__)
 
@@ -293,6 +295,46 @@ def _deep_merge(base: dict, override: dict) -> None:
             base[key] = value
 
 
+def _build_layout_from_vial(vial_json_path: Path, is_split: bool) -> dict:
+    """Parse le keymap KLE du vial.json en layout dict de KeyLayout.
+
+    Pour les splits, les touches sont réparties gauche/droite par position x.
+    Pour les non-splits, toutes les touches vont dans 'keys'.
+    """
+    try:
+        vial_data = json.loads(vial_json_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+    keymap_raw = vial_data.get("layouts", {}).get("keymap", [])
+    if not keymap_raw:
+        return {}
+
+    result = parse_kle_json(json.dumps(keymap_raw))
+    if not result.keys:
+        return {}
+
+    def _to_key_layout(k) -> KeyLayout:
+        return KeyLayout(
+            row=max(k.row, 0), col=max(k.col, 0),
+            x=k.x, y=k.y,
+            w=k.w, h=k.h,
+            r=k.r,
+            encoder=k.encoder,
+        )
+
+    all_keys = [_to_key_layout(k) for k in result.keys]
+
+    if is_split and all_keys:
+        max_x = max(k.x + k.w for k in all_keys)
+        mid = max_x / 2
+        left = [k for k in all_keys if k.x + k.w / 2 < mid]
+        right = [k for k in all_keys if k.x + k.w / 2 >= mid]
+        return {"left": left, "right": right, "keys": []}
+
+    return {"left": [], "right": [], "keys": all_keys}
+
+
 def load_vial_keyboard(entry: VialKeyboardEntry) -> KeyboardDefinition:
     """Charge un KeyboardDefinition complet depuis un VialKeyboardEntry."""
     kb_dir = entry.keyboard_dir
@@ -381,6 +423,9 @@ def load_vial_keyboard(entry: VialKeyboardEntry) -> KeyboardDefinition:
         ),
     )
 
+    # Construire le layout physique depuis le keymap KLE du vial.json
+    layout = _build_layout_from_vial(entry.vial_json_path, is_split)
+
     return KeyboardDefinition(
         model=entry.qmk_path.replace("/", "-"),
         display_name=entry.name,
@@ -388,7 +433,7 @@ def load_vial_keyboard(entry: VialKeyboardEntry) -> KeyboardDefinition:
         mcu_options=[mcu],
         capabilities={"oled": has_oled, "rgb": has_rgb},
         matrix={"rows": max(matrix_rows, 1), "cols": max(matrix_cols, 1)},
-        layout={},  # layout sera chargé dynamiquement depuis vial-qmk natif
+        layout=layout,
         vial_name=entry.name,
         diode_direction=diode_direction,
         layout_macro="LAYOUT",
