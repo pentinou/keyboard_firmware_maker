@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QGraphicsSimpleTextItem,
     QGraphicsView,
     QGroupBox,
+    QMessageBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -87,7 +88,8 @@ class EventCartouche(QGraphicsRectItem):
         self._to_color = step.color_to if (step.fade_ms > 0 and step.color_to) else step.color
         self._on_select = on_select
         self._on_moved = on_moved
-        w = max(CARTOUCHE_MIN_W, step.fade_ms * PX_PER_MS) if step.fade_ms > 0 else CARTOUCHE_MIN_W
+        total_ms = step.hold_ms + step.fade_ms
+        w = max(CARTOUCHE_MIN_W, total_ms * PX_PER_MS) if total_ms > 0 else CARTOUCHE_MIN_W
         super().__init__(0, 0, w, CARTOUCHE_H)
         self.setPos(step.time_ms * PX_PER_MS, CARTOUCHE_Y)
         self.setBrush(QBrush(QColor("#252530")))
@@ -145,31 +147,52 @@ class EventCartouche(QGraphicsRectItem):
             swatch.setBrush(QBrush(QColor(step.color)))
             swatch.setPen(QPen(QColor("#777777"), 1))
 
-        # ── Ligne 3 : info fade ──
+        # ── Ligne 3 : info durée/fade ──
+        info_parts = []
+        if step.hold_ms > 0:
+            info_parts.append(f"{step.hold_ms} ms")
         if step.fade_ms > 0:
-            fade_label = QGraphicsSimpleTextItem(f"fondu {step.fade_ms} ms", self)
-            fade_label.setFont(QFont("sans-serif", 7))
-            fade_label.setBrush(QBrush(QColor("#AAAAAA")))
-            fade_label.setPos(4, 38)
+            info_parts.append(f"fondu {step.fade_ms} ms")
+        if info_parts:
+            info_label = QGraphicsSimpleTextItem(" + ".join(info_parts), self)
+            info_label.setFont(QFont("sans-serif", 7))
+            info_label.setBrush(QBrush(QColor("#AAAAAA")))
+            info_label.setPos(4, 38)
         else:
             instant_label = QGraphicsSimpleTextItem("instantan\u00e9", self)
             instant_label.setFont(QFont("sans-serif", 7))
             instant_label.setBrush(QBrush(QColor("#777777")))
             instant_label.setPos(4, 38)
 
-        # ── Bande de gradient en bas pour visualiser le fade ──
+        # ── Bande en bas : hold (couleur fixe) + fade (gradient) ──
         bar_h = 4
         bar_w = w
-        bar = QGraphicsRectItem(0, 0, bar_w, bar_h, self)
-        bar.setPos(0, CARTOUCHE_H - bar_h)
-        if step.fade_ms > 0:
-            grad = QLinearGradient(0, 0, bar_w, 0)
+        total_ms = step.hold_ms + step.fade_ms
+        if total_ms > 0 and step.hold_ms > 0 and step.fade_ms > 0:
+            # Deux segments : hold (fixe) puis fade (gradient)
+            hold_w = bar_w * step.hold_ms / total_ms
+            hold_bar = QGraphicsRectItem(0, 0, hold_w, bar_h, self)
+            hold_bar.setPos(0, CARTOUCHE_H - bar_h)
+            hold_bar.setBrush(QBrush(QColor(step.color)))
+            hold_bar.setPen(QPen(Qt.PenStyle.NoPen))
+            fade_bar = QGraphicsRectItem(0, 0, bar_w - hold_w, bar_h, self)
+            fade_bar.setPos(hold_w, CARTOUCHE_H - bar_h)
+            grad = QLinearGradient(0, 0, bar_w - hold_w, 0)
             grad.setColorAt(0.0, QColor(step.color))
             grad.setColorAt(1.0, QColor(self._to_color))
-            bar.setBrush(QBrush(grad))
+            fade_bar.setBrush(QBrush(grad))
+            fade_bar.setPen(QPen(Qt.PenStyle.NoPen))
         else:
-            bar.setBrush(QBrush(QColor(step.color)))
-        bar.setPen(QPen(Qt.PenStyle.NoPen))
+            bar = QGraphicsRectItem(0, 0, bar_w, bar_h, self)
+            bar.setPos(0, CARTOUCHE_H - bar_h)
+            if step.fade_ms > 0:
+                grad = QLinearGradient(0, 0, bar_w, 0)
+                grad.setColorAt(0.0, QColor(step.color))
+                grad.setColorAt(1.0, QColor(self._to_color))
+                bar.setBrush(QBrush(grad))
+            else:
+                bar.setBrush(QBrush(QColor(step.color)))
+            bar.setPen(QPen(Qt.PenStyle.NoPen))
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
@@ -687,6 +710,15 @@ class RgbWidget(QWidget):
         self._btn_step_color.setFixedSize(36, 24)
         self._btn_step_color.clicked.connect(self._on_step_color_clicked)
         row1.addWidget(self._btn_step_color)
+        row1.addSpacing(20)
+        row1.addWidget(QLabel(tr("rgb.custom_effects.hold_duration")))
+        self._spin_hold = QSpinBox()
+        self._spin_hold.setObjectName("spin_hold")
+        self._spin_hold.setRange(0, 4000)
+        self._spin_hold.setSingleStep(50)
+        self._spin_hold.setSuffix(" ms")
+        self._spin_hold.valueChanged.connect(self._on_step_hold_changed)
+        row1.addWidget(self._spin_hold)
         row1.addStretch()
         step_vlayout.addLayout(row1)
 
@@ -825,12 +857,22 @@ class RgbWidget(QWidget):
             logger.info("Nouvel effet custom créé : %s (%s)", name, effect_type)
 
     def _on_delete_custom_effect(self) -> None:
-        """Supprime l'effet custom actuellement sélectionné."""
+        """Supprime l'effet custom actuellement sélectionné après confirmation."""
         row = self._effect_list.currentRow()
         ci = self._row_to_custom.get(row)
         if ci is not None and 0 <= ci < len(self._model.rgb.custom_effects):
             name = self._model.rgb.custom_effects[ci].name
+            reply = QMessageBox.warning(
+                self,
+                tr("rgb.custom_effects.delete_title"),
+                tr("rgb.custom_effects.delete_confirm").format(name=name),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
             del self._model.rgb.custom_effects[ci]
+            self._editing_custom_idx = None
             self._rebuild_custom_section(self._custom_section_start)
             logger.info("Effet custom supprimé : %s", name)
 
@@ -999,6 +1041,7 @@ class RgbWidget(QWidget):
         # Activer/désactiver tous les contrôles
         self._spin_step_time.setEnabled(has_step)
         self._btn_step_color.setEnabled(has_step)
+        self._spin_hold.setEnabled(has_step)
         self._chk_fade.setEnabled(has_step)
         if not has_step:
             self._btn_color_to.setEnabled(False)
@@ -1012,6 +1055,10 @@ class RgbWidget(QWidget):
         self._spin_step_time.blockSignals(True)
         self._spin_step_time.setValue(step.time_ms)
         self._spin_step_time.blockSignals(False)
+        # Durée de maintien
+        self._spin_hold.blockSignals(True)
+        self._spin_hold.setValue(step.hold_ms)
+        self._spin_hold.blockSignals(False)
         # Couleur de départ (toujours visible)
         self._btn_step_color.setStyleSheet(f"background-color: {step.color};")
         # Fondu checkbox
@@ -1169,8 +1216,9 @@ class RgbWidget(QWidget):
             return
         last = track.steps[-1] if track.steps else EffectStep()
         new_step = EffectStep(
-            time_ms=last.time_ms + last.fade_ms + 100,
+            time_ms=last.time_ms + last.hold_ms + last.fade_ms + 100,
             color=last.color,
+            hold_ms=last.hold_ms,
             fade_ms=last.fade_ms,
         )
         track.steps.append(new_step)
@@ -1240,6 +1288,13 @@ class RgbWidget(QWidget):
         self._refresh_step_params()
         self._refresh_tracks_ui()
         self._restart_custom_preview()
+
+    def _on_step_hold_changed(self, value: int) -> None:
+        """Met à jour la durée de maintien du step sélectionné."""
+        step = self._current_step()
+        if step:
+            step.hold_ms = value
+            self._refresh_tracks_ui()
 
     def _on_step_fade_changed(self, value: int) -> None:
         """Met à jour la durée du fondu du step sélectionné."""

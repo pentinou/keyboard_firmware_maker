@@ -726,7 +726,7 @@ def _build_timeline_effects(
         for track in ce.tracks:
             if track.steps:
                 last = track.steps[-1]
-                total_duration = max(total_duration, last.time_ms + last.fade_ms)
+                total_duration = max(total_duration, last.time_ms + last.hold_ms + last.fade_ms)
         total_duration = max(total_duration, 100)
 
         tracks_ctx = []
@@ -756,8 +756,10 @@ def _build_timeline_effects(
                     end_r, end_g, end_b = start_r, start_g, start_b
                 steps_ctx.append({
                     "time_ms": step.time_ms,
+                    "hold_ms": step.hold_ms,
                     "fade_ms": step.fade_ms,
-                    "end_ms": step.time_ms + step.fade_ms,
+                    "hold_end_ms": step.time_ms + step.hold_ms,
+                    "end_ms": step.time_ms + step.hold_ms + step.fade_ms,
                     "r": end_r, "g": end_g, "b": end_b,
                     "prev_r": start_r, "prev_g": start_g, "prev_b": start_b,
                 })

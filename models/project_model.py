@@ -259,17 +259,23 @@ class EffectStep:
 
     time_ms  : temps en ms depuis le déclenchement (T0 = appui ou début boucle).
     color    : couleur hex #RRGGBB de la LED à cet instant (couleur de départ).
+    hold_ms  : durée de maintien de la couleur avant le fondu (0 = pas de maintien).
     fade_ms  : durée du fondu (0 = pas de fondu, la LED reste à ``color``).
     color_to : couleur d'arrivée du fondu ("" = pas de transition).
     """
 
     time_ms: int = 0
     color: str = "#FFFFFF"
+    hold_ms: int = 0
     fade_ms: int = 0
     color_to: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        d: dict[str, Any] = {"time_ms": self.time_ms, "color": self.color, "fade_ms": self.fade_ms}
+        d: dict[str, Any] = {"time_ms": self.time_ms, "color": self.color}
+        if self.hold_ms:
+            d["hold_ms"] = self.hold_ms
+        if self.fade_ms:
+            d["fade_ms"] = self.fade_ms
         if self.color_to:
             d["color_to"] = self.color_to
         return d
@@ -279,6 +285,7 @@ class EffectStep:
         return cls(
             time_ms=data.get("time_ms", 0),
             color=data.get("color", "#FFFFFF"),
+            hold_ms=data.get("hold_ms", 0),
             fade_ms=data.get("fade_ms", 0),
             color_to=data.get("color_to", ""),
         )

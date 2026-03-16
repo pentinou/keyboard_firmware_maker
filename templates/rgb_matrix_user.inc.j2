@@ -52,6 +52,34 @@ bool {{ e.name }}(effect_params_t* params) {
 }
 {% endif %}{% endfor %}
 
+{# ── Macro: animate steps with hold + fade ── #}
+{% macro render_steps(steps, indent) %}
+{% for step in steps %}
+{% if loop.first %}
+{{ indent }}if (t < {{ step.end_ms }}U) {
+{% else %}
+{{ indent }}} else if (t < {{ step.end_ms }}U) {
+{% endif %}
+{% if step.hold_ms > 0 and step.fade_ms > 0 %}
+{{ indent }}    _r = {{ step.prev_r }}; _g = {{ step.prev_g }}; _b = {{ step.prev_b }};
+{{ indent }}    if (t >= {{ step.hold_end_ms }}U) {
+{{ indent }}        uint8_t p = (uint8_t)((uint32_t)(t - {{ step.hold_end_ms }}U) * 255U / {{ step.fade_ms }}U);
+{{ indent }}        _r = {{ step.prev_r }} + (int16_t)({{ step.r }} - {{ step.prev_r }}) * p / 255;
+{{ indent }}        _g = {{ step.prev_g }} + (int16_t)({{ step.g }} - {{ step.prev_g }}) * p / 255;
+{{ indent }}        _b = {{ step.prev_b }} + (int16_t)({{ step.b }} - {{ step.prev_b }}) * p / 255;
+{{ indent }}    }
+{% elif step.fade_ms > 0 %}
+{{ indent }}    uint8_t p = (t >= {{ step.time_ms }}U) ? (uint8_t)((uint32_t)(t - {{ step.time_ms }}U) * 255U / {{ step.fade_ms }}U) : 0;
+{{ indent }}    _r = {{ step.prev_r }} + (int16_t)({{ step.r }} - {{ step.prev_r }}) * p / 255;
+{{ indent }}    _g = {{ step.prev_g }} + (int16_t)({{ step.g }} - {{ step.prev_g }}) * p / 255;
+{{ indent }}    _b = {{ step.prev_b }} + (int16_t)({{ step.b }} - {{ step.prev_b }}) * p / 255;
+{% else %}
+{{ indent }}    _r = {{ step.prev_r }}; _g = {{ step.prev_g }}; _b = {{ step.prev_b }};
+{% endif %}
+{% endfor %}
+{{ indent }}}
+{% endmacro %}
+
 {# ── Timeline-based custom effects ── #}
 {% for te in timeline_effects %}
 bool {{ te.name }}(effect_params_t* params) {
@@ -82,22 +110,7 @@ bool {{ te.name }}(effect_params_t* params) {
                 if (t > {{ te.total_duration }}U) t = {{ te.total_duration }}U;
             }
 {% endif %}
-{% for step in track.steps %}
-{% if loop.first %}
-            if (t < {{ step.end_ms }}U) {
-{% else %}
-            } else if (t < {{ step.end_ms }}U) {
-{% endif %}
-{% if step.fade_ms > 0 %}
-                uint8_t p = (t >= {{ step.time_ms }}U) ? (uint8_t)((uint32_t)(t - {{ step.time_ms }}U) * 255U / {{ step.fade_ms }}U) : 0;
-                _r = {{ step.prev_r }} + (int16_t)({{ step.r }} - {{ step.prev_r }}) * p / 255;
-                _g = {{ step.prev_g }} + (int16_t)({{ step.g }} - {{ step.prev_g }}) * p / 255;
-                _b = {{ step.prev_b }} + (int16_t)({{ step.b }} - {{ step.prev_b }}) * p / 255;
-{% else %}
-                _r = {{ step.r }}; _g = {{ step.g }}; _b = {{ step.b }};
-{% endif %}
-{% endfor %}
-            }
+{{ render_steps(track.steps, "            ") }}
         }
 {% elif track.target_mode == "relative" and track.key_offsets and te.effect_type == "reactive" %}
         // Reactive relative: animate offset keys around the pressed key
@@ -125,22 +138,7 @@ bool {{ te.name }}(effect_params_t* params) {
                   i == g_led_config.matrix_co[_tr][_tc]) _match = true; }
 {% endfor %}
             if (!_match) continue;
-{% for step in track.steps %}
-{% if loop.first %}
-            if (t < {{ step.end_ms }}U) {
-{% else %}
-            } else if (t < {{ step.end_ms }}U) {
-{% endif %}
-{% if step.fade_ms > 0 %}
-                uint8_t p = (t >= {{ step.time_ms }}U) ? (uint8_t)((uint32_t)(t - {{ step.time_ms }}U) * 255U / {{ step.fade_ms }}U) : 0;
-                _r = {{ step.prev_r }} + (int16_t)({{ step.r }} - {{ step.prev_r }}) * p / 255;
-                _g = {{ step.prev_g }} + (int16_t)({{ step.g }} - {{ step.prev_g }}) * p / 255;
-                _b = {{ step.prev_b }} + (int16_t)({{ step.b }} - {{ step.prev_b }}) * p / 255;
-{% else %}
-                _r = {{ step.r }}; _g = {{ step.g }}; _b = {{ step.b }};
-{% endif %}
-{% endfor %}
-            }
+{{ render_steps(track.steps, "            ") }}
         }
 {% elif track.target_mode == "default" and te.effect_type == "reactive" %}
         // Reactive default: animate on the pressed key
@@ -148,22 +146,7 @@ bool {{ te.name }}(effect_params_t* params) {
             uint16_t t = timer_elapsed(g_last_hit.tick[_h]);
             if (t > {{ te.total_duration }}U) continue;
             if (i != g_last_hit.index[_h]) continue;
-{% for step in track.steps %}
-{% if loop.first %}
-            if (t < {{ step.end_ms }}U) {
-{% else %}
-            } else if (t < {{ step.end_ms }}U) {
-{% endif %}
-{% if step.fade_ms > 0 %}
-                uint8_t p = (t >= {{ step.time_ms }}U) ? (uint8_t)((uint32_t)(t - {{ step.time_ms }}U) * 255U / {{ step.fade_ms }}U) : 0;
-                _r = {{ step.prev_r }} + (int16_t)({{ step.r }} - {{ step.prev_r }}) * p / 255;
-                _g = {{ step.prev_g }} + (int16_t)({{ step.g }} - {{ step.prev_g }}) * p / 255;
-                _b = {{ step.prev_b }} + (int16_t)({{ step.b }} - {{ step.prev_b }}) * p / 255;
-{% else %}
-                _r = {{ step.r }}; _g = {{ step.g }}; _b = {{ step.b }};
-{% endif %}
-{% endfor %}
-            }
+{{ render_steps(track.steps, "            ") }}
         }
 {% endif %}
 {% endfor %}

@@ -554,23 +554,25 @@ class EffectPreview:
                 break
         step = steps[active_idx]
         elapsed_in_step = t - step.time_ms
-        if step.fade_ms <= 0 or elapsed_in_step <= 0:
+        hold_ms = getattr(step, "hold_ms", 0)
+        total_ms = hold_ms + step.fade_ms
+        if elapsed_in_step <= 0:
             return step.color
-        if elapsed_in_step >= step.fade_ms:
-            # Après le fade, la couleur reste (ou on passe au prochain)
-            if active_idx + 1 < len(steps):
-                return step.color
-            # Dernier step — fade vers noir
-            ratio = min(elapsed_in_step / step.fade_ms, 1.0)
-            return _lerp_color(step.color, "#000000", ratio)
-        # Pendant le fade du step actif
-        # Fade-in depuis noir (ou depuis la couleur précédente)
-        if active_idx > 0:
-            prev_color = steps[active_idx - 1].color
-        else:
-            prev_color = "#000000"
-        ratio = elapsed_in_step / step.fade_ms
-        return _lerp_color(prev_color, step.color, ratio)
+        # Phase de maintien (hold)
+        if elapsed_in_step < hold_ms:
+            return step.color
+        # Pas de fade → couleur fixe pendant hold, puis reste
+        if step.fade_ms <= 0:
+            return step.color
+        # Phase de fondu
+        fade_elapsed = elapsed_in_step - hold_ms
+        if fade_elapsed >= step.fade_ms:
+            to_color = step.color_to if step.color_to else step.color
+            return to_color
+        # Pendant le fade
+        to_color = step.color_to if step.color_to else step.color
+        ratio = fade_elapsed / step.fade_ms
+        return _lerp_color(step.color, to_color, ratio)
 
 
 def _lerp_color(c1: str, c2: str, t: float) -> str:
