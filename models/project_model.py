@@ -239,6 +239,124 @@ class OledConfig:
 
 
 @dataclass
+class KeyOffset:
+    """Offset relatif d'une touche par rapport à la touche d'origine (row, col)."""
+
+    dr: int = 0   # delta row (négatif = vers le haut)
+    dc: int = 0   # delta col (négatif = vers la gauche)
+
+    def to_dict(self) -> dict[str, int]:
+        return {"dr": self.dr, "dc": self.dc}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "KeyOffset":
+        return cls(dr=data.get("dr", 0), dc=data.get("dc", 0))
+
+
+@dataclass
+class EffectStep:
+    """Un instant sur la timeline d'une piste d'effet custom.
+
+    time_ms  : temps en ms depuis le déclenchement (T0 = appui ou début boucle).
+    color    : couleur hex #RRGGBB de la LED à cet instant (couleur de départ).
+    fade_ms  : durée du fondu (0 = pas de fondu, la LED reste à ``color``).
+    color_to : couleur d'arrivée du fondu ("" = pas de transition).
+    """
+
+    time_ms: int = 0
+    color: str = "#FFFFFF"
+    fade_ms: int = 0
+    color_to: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"time_ms": self.time_ms, "color": self.color, "fade_ms": self.fade_ms}
+        if self.color_to:
+            d["color_to"] = self.color_to
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "EffectStep":
+        return cls(
+            time_ms=data.get("time_ms", 0),
+            color=data.get("color", "#FFFFFF"),
+            fade_ms=data.get("fade_ms", 0),
+            color_to=data.get("color_to", ""),
+        )
+
+
+@dataclass
+class EffectTrack:
+    """Piste d'animation dans un effet custom.
+
+    target_mode :
+      - "default"  → touche qui a déclenché l'effet (réactif uniquement)
+      - "relative" → offsets par rapport à la touche d'origine
+      - "fixed"    → touches absolues identifiées par key_id
+    keys_offset  : liste d'offsets (utilisé si target_mode == "relative")
+    keys_fixed   : liste de key_id (utilisé si target_mode == "fixed")
+    steps        : étapes temporelles de cette piste
+    """
+
+    name: str = "Piste 1"
+    target_mode: str = "default"  # "default" | "relative" | "fixed"
+    keys_offset: list[KeyOffset] = field(default_factory=list)
+    keys_fixed: list[str] = field(default_factory=list)  # ex: ["L_r2_c3", "R_r0_c5"]
+    steps: list[EffectStep] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
+            "name": self.name,
+            "target_mode": self.target_mode,
+            "steps": [s.to_dict() for s in self.steps],
+        }
+        if self.target_mode == "relative" and self.keys_offset:
+            d["keys_offset"] = [k.to_dict() for k in self.keys_offset]
+        if self.target_mode == "fixed" and self.keys_fixed:
+            d["keys_fixed"] = list(self.keys_fixed)
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "EffectTrack":
+        return cls(
+            name=data.get("name", "Piste 1"),
+            target_mode=data.get("target_mode", "default"),
+            keys_offset=[KeyOffset.from_dict(k) for k in (data.get("keys_offset") or [])],
+            keys_fixed=list(data.get("keys_fixed") or []),
+            steps=[EffectStep.from_dict(s) for s in (data.get("steps") or [])],
+        )
+
+
+@dataclass
+class CustomEffect:
+    """Effet RGB custom créé par l'utilisateur via l'éditeur timeline.
+
+    effect_type :
+      - "reactive" → déclenché par l'appui d'une touche
+      - "ambient"  → boucle en continu sans appui
+    tracks : pistes d'animation indépendantes (chacune avec sa timeline)
+    """
+
+    name: str = "Mon effet"
+    effect_type: str = "reactive"  # "reactive" | "ambient"
+    tracks: list[EffectTrack] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "effect_type": self.effect_type,
+            "tracks": [t.to_dict() for t in self.tracks],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "CustomEffect":
+        return cls(
+            name=data.get("name", "Mon effet"),
+            effect_type=data.get("effect_type", "reactive"),
+            tracks=[EffectTrack.from_dict(t) for t in (data.get("tracks") or [])],
+        )
+
+
+@dataclass
 class RgbEffect:
     """Définition d'un effet RGB.
 
@@ -249,6 +367,8 @@ class RgbEffect:
     color_primary: str = "#FFFFFF"
     color_secondary: str = "#888888"
     fade_ms: int = 500
+    speed: int = 128          # QMK RGB_MATRIX_DEFAULT_SPD (0-255)
+    brightness: int = 128     # QMK RGB_MATRIX_DEFAULT_VAL (0-255)
     trigger_key: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -257,6 +377,8 @@ class RgbEffect:
             "color_primary": self.color_primary,
             "color_secondary": self.color_secondary,
             "fade_ms": self.fade_ms,
+            "speed": self.speed,
+            "brightness": self.brightness,
             "trigger_key": self.trigger_key,
         }
 
@@ -267,6 +389,8 @@ class RgbEffect:
             color_primary=data.get("color_primary", "#FFFFFF"),
             color_secondary=data.get("color_secondary", "#888888"),
             fade_ms=data.get("fade_ms", 500),
+            speed=data.get("speed", 128),
+            brightness=data.get("brightness", 128),
             trigger_key=data.get("trigger_key"),
         )
 
@@ -277,18 +401,27 @@ class RgbConfig:
 
     effects: list[RgbEffect] = field(default_factory=list)
     per_key: dict[str, str] = field(default_factory=dict)
+    enabled_effects: list[str] = field(default_factory=list)  # vide = tous activés
+    custom_effects: list[CustomEffect] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "effects": [e.to_dict() for e in self.effects],
             "per_key": dict(self.per_key),
         }
+        if self.enabled_effects:
+            d["enabled_effects"] = list(self.enabled_effects)
+        if self.custom_effects:
+            d["custom_effects"] = [ce.to_dict() for ce in self.custom_effects]
+        return d
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "RgbConfig":
         return cls(
             effects=[RgbEffect.from_dict(e) for e in (data.get("effects") or []) if isinstance(e, dict)],
             per_key=dict(data.get("per_key") or {}),
+            enabled_effects=list(data.get("enabled_effects") or []),
+            custom_effects=[CustomEffect.from_dict(ce) for ce in (data.get("custom_effects") or []) if isinstance(ce, dict)],
         )
 
 

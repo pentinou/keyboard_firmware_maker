@@ -1,0 +1,238 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# TEMPLATE DE DÉFINITION DE CLAVIER — keyboard_firmware_maker
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Ce fichier est un exemple COMMENTÉ. Pour ajouter votre propre clavier :
+#   1. Copiez ce fichier et renommez-le (ex: monclavier.yaml) — SANS le "_"
+#   2. Remplissez chaque champ avec les specs de votre clavier
+#   3. Redémarrez l'application — votre clavier apparaît dans la liste
+#
+# Chaque champ explique POURQUOI il existe et comment le remplir.
+# Vous n'avez pas besoin de connaître Python ou QMK pour remplir ce fichier.
+#
+# Référence visuelle des unités clavier (U) :
+#   1U  = une touche standard (lettre, chiffre)
+#   1.25U = touche Ctrl, Alt, Shift de taille moyenne
+#   1.5U = touche Tab sur un clavier standard
+#   2U   = grosse touche comme Backspace ou Shift droit
+#   7U   = barre espace standard d'un clavier 60%+
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+# ── IDENTITÉ ──────────────────────────────────────────────────────────────────
+
+# Identifiant interne unique (minuscules, tirets, pas d'espaces ni d'accents).
+# Utilisé pour nommer les fichiers générés — ne pas changer après première utilisation.
+model: mon-clavier
+
+# Nom affiché dans l'interface de l'application (accents autorisés).
+display_name: "Mon Clavier"
+
+# Description courte affichée au survol dans la liste des claviers.
+description: "Description courte de votre clavier (MCU, nombre de touches, particularités)."
+
+# true  = clavier en deux moitiés reliées par un câble (split, ex: Sofle, Corne)
+# false = clavier d'un seul PCB (non-split, ex: PancakeXXL, clavier 60%, TKL)
+split: false
+
+
+# ── MICROCONTRÔLEURS COMPATIBLES ──────────────────────────────────────────────
+#
+# Listez tous les MCU que votre clavier peut utiliser. Si votre clavier n'a
+# qu'une seule option, mettez-en une seule. L'utilisateur choisira dans l'app.
+
+mcu_options:
+  - id: rp2040           # Identifiant interne (minuscules, pas d'espaces)
+    display_name: "RP2040"  # Affiché dans l'interface
+    description: "RP2040 intégré. Bootloader UF2 (glisser-déposer le .uf2)."
+
+    # Type de bootloader pour flasher le firmware.
+    # rp2040    → Raspberry Pi RP2040 (fichier .uf2, plug-and-play)
+    # caterina  → Pro Micro / Arduino Leonardo (via avrdude)
+    # atmel-dfu → Elite-C / ATmega32U4 DFU (via dfu-programmer)
+    bootloader: "rp2040"
+
+    # ── Broches de la matrice ──────────────────────────────────────────────
+    # Trouvez ces informations dans le schéma électronique (KiCad / EasyEDA)
+    # ou la documentation du PCB fournie par le fabricant.
+    pins:
+      # Broches connectées aux LIGNES de la matrice (ROW).
+      # Comptez le nombre de lignes dans votre matrice pour savoir combien en mettre.
+      matrix_rows: ["GP6", "GP4", "GP2", "GP25"]
+
+      # Broches connectées aux COLONNES de la matrice (COL).
+      matrix_cols: ["GP12", "GP17", "GP18", "GP19", "GP20", "GP21", "GP22", "GP23", "GP24", "GP7", "GP3", "GP5"]
+
+      # ── Encodeur rotatif (optionnel) ───────────────────────────────────
+      # Supprimez ces lignes si votre clavier n'a pas d'encodeur.
+      # encoder_a: ["GP21"]       # Broche signal A de l'encodeur gauche
+      # encoder_b: ["GP23"]       # Broche signal B de l'encodeur gauche
+      # encoder_a_right: ["GP21"] # Encodeur droit (split uniquement)
+      # encoder_b_right: ["GP23"] # Encodeur droit (split uniquement)
+
+      # ── LED RGB (optionnel) ────────────────────────────────────────────
+      # Supprimez si pas de LED RGB.
+      # ws2812: "GP0"             # Broche data du ruban WS2812/SK6812
+      # ws2812_driver: "vendor"   # Driver : "vendor" (RP2040) ou "i2c"
+
+      # ── Communication split (split uniquement) ─────────────────────────
+      # Supprimez si split: false.
+      # serial_tx: "GP1"          # Broche TX pour la communication entre les deux moitiés
+      # serial_driver: "usart"    # Driver série : "usart" ou "bitbang"
+
+  # Exemple avec un second MCU (Pro Micro) — supprimez si inutile
+  # - id: pro_micro
+  #   display_name: "Pro Micro"
+  #   description: "Pro Micro ATmega32U4. Bootloader Caterina."
+  #   bootloader: "caterina"
+  #   pins:
+  #     matrix_rows: ["B0", "B1", "B2", "B3"]
+  #     matrix_cols: ["D4", "C6", "D7", "E6", "B4", "B5"]
+
+
+# ── CONFIGURATION GÉNÉRALE ────────────────────────────────────────────────────
+
+# Direction de la diode dans la matrice.
+# COL2ROW = les diodes vont de colonne vers ligne (le plus courant)
+# ROW2COL = les diodes vont de ligne vers colonne
+diode_direction: "COL2ROW"
+
+# Nom de la macro de layout dans le code QMK.
+# Laissez "LAYOUT" pour les claviers simples. Changez uniquement si votre
+# keyboard.json QMK utilise un nom différent (ex: "LAYOUT_60_ansi").
+layout_macro: "LAYOUT"
+
+# true si votre clavier a un encodeur rotatif, false sinon.
+has_encoder: false
+
+
+# ── IDENTIFIANTS USB VIAL ─────────────────────────────────────────────────────
+# Ces IDs permettent à l'application Vial de reconnaître votre clavier.
+# Gardez les valeurs par défaut si vous n'avez pas d'IDs personnalisés.
+# (Vial génère des IDs uniques — vous pouvez en demander sur vial.rocks)
+vial_vid: "0xFEED"
+vial_pid: "0x0001"
+
+
+# ── CAPACITÉS ─────────────────────────────────────────────────────────────────
+# Indique quelles fonctionnalités hardware votre clavier supporte.
+# Cela contrôle quels onglets sont affichés dans l'application.
+capabilities:
+  oled: false   # true si le clavier a un/des écran(s) OLED
+  rgb: false    # true si le clavier a des LED RGB par touche (RGB Matrix)
+
+
+# ── MATRICE ───────────────────────────────────────────────────────────────────
+# Dimensions de la matrice électronique (pas forcément = nombre de touches).
+# La matrice est une grille de fils : rows × cols = nombre de positions max.
+# Certaines positions peuvent être vides (pas de touche câblée à cet endroit).
+matrix:
+  rows: 4    # Nombre de lignes de la matrice
+  cols: 12   # Nombre de colonnes de la matrice
+
+
+# ── ÉCRAN OLED (optionnel, uniquement si capabilities.oled: true) ─────────────
+# Supprimez ce bloc si oled: false.
+# oled:
+#   driver: "ssd1306"    # Contrôleur OLED : "ssd1306" (le plus courant)
+#   rotation: 270        # Rotation en degrés : 0, 90, 180, ou 270
+#   display: "128X32"    # Résolution : "128X32" (standard Sofle/Corne) ou "128X64"
+
+
+# ── RGB (optionnel, uniquement si capabilities.rgb: true) ─────────────────────
+# Supprimez ce bloc si rgb: false.
+# rgb:
+#   max_brightness: 200  # Luminosité max (0-255). 200 = bon équilibre chaleur/luminosité
+
+
+# ── VARIANTES DE LAYOUT ───────────────────────────────────────────────────────
+#
+# Utilisez ce champ si votre clavier peut être assemblé de plusieurs façons
+# avec un nombre de touches différent selon la configuration choisie.
+#
+# Exemples de cas d'usage :
+#   - Spacebar 7U vs 3×2.25U (split spacebar)
+#   - Rangée du bas avec ou sans flèches
+#   - Layout ANSI vs ISO (nombre de touches différent)
+#
+# Si votre clavier n'a qu'une seule configuration possible, utilisez plutôt
+# le champ "layout:" (voir en bas de ce fichier) — plus simple.
+#
+# Chaque variante est proposée dans un menu déroulant de l'onglet Matériel.
+# Si une seule variante est définie, le menu est masqué automatiquement.
+
+layout_variants:
+
+  # ── Variante 1 : Configuration standard ───────────────────────────────────
+  - slug: standard      # Identifiant interne (sans espaces, sans accents).
+                        # Utilisé dans les sauvegardes — ne pas changer après utilisation.
+    label: "Standard"   # Texte affiché dans le menu déroulant de l'application.
+
+    keys:
+      # Liste de toutes les touches physiques de cette variante.
+      #
+      # Chaque touche est définie par :
+      #   row : numéro de LIGNE dans la matrice (commence à 0)
+      #   col : numéro de COLONNE dans la matrice (commence à 0)
+      #   x   : position horizontale en unités clavier (commence à 0, va vers la droite)
+      #   y   : position verticale en unités clavier (commence à 0, va vers le bas)
+      #   w   : largeur de la touche en unités (optionnel, défaut = 1.0 = 1U standard)
+      #
+      # Comment trouver row/col ?
+      #   → Dans le schéma électronique du PCB, chaque interrupteur est connecté
+      #     à un fil ROW et un fil COL. row=0 = premier fil ROW, col=0 = premier fil COL.
+      #
+      # Comment trouver x/y ?
+      #   → C'est la position visuelle sur le clavier. La touche en haut à gauche
+      #     est à x=0, y=0. Chaque touche standard = +1 vers la droite ou vers le bas.
+      #     Les touches larges décalent la suivante de leur largeur (ex: touche 1.25U
+      #     place la suivante à x+1.25).
+
+      # Rangée du haut (y=0)
+      - {row: 0, col: 0, x: 0, y: 0}       # touche 1U à x=0
+      - {row: 0, col: 1, x: 1, y: 0}       # touche 1U à x=1
+      - {row: 0, col: 2, x: 2, y: 0}       # etc.
+      # ... ajoutez toutes les touches de la rangée ...
+
+      # Rangée du bas avec touches larges (y=3)
+      - {row: 3, col: 1, x: 1,    y: 3, w: 1.25}  # Ctrl gauche 1.25U
+      - {row: 3, col: 2, x: 2.25, y: 3}            # Alt gauche 1U (décalé de 1.25)
+      - {row: 3, col: 4, x: 3.25, y: 3, w: 2}      # Touche 2U (ex: barre espace courte)
+      - {row: 3, col: 9, x: 9.25, y: 3, w: 1.25}   # Ctrl droit 1.25U
+
+  # ── Variante 2 : Barre espace 7U ──────────────────────────────────────────
+  - slug: 7u
+    label: "7U Spacebar"
+    keys:
+      # Rangées 0-2 : identiques à la variante standard (copiez-les)
+      - {row: 0, col: 0, x: 0, y: 0}
+      # ...
+
+      # Rangée du bas : une seule touche 7U centrée
+      # x = (largeur totale - 7) / 2 pour centrer (ex: clavier 12U : x = 2.5)
+      - {row: 3, col: 4, x: 2.5, y: 3, w: 7}
+
+
+# ── LAYOUT SIMPLE (alternative à layout_variants) ────────────────────────────
+#
+# Si votre clavier n'a qu'une seule configuration physique possible,
+# utilisez ce champ au lieu de layout_variants — la syntaxe est identique
+# mais sans le slug/label.
+#
+# Supprimez ce bloc si vous utilisez layout_variants ci-dessus.
+#
+# layout:
+#   keys:
+#     - {row: 0, col: 0, x: 0, y: 0}
+#     - {row: 0, col: 1, x: 1, y: 0}
+#     # ... etc.
+#
+# Pour les claviers SPLIT, utilisez "left" et "right" à la place de "keys" :
+#
+# layout:
+#   left:
+#     - {row: 0, col: 0, x: 0, y: 0}
+#     # ... touches de la moitié gauche ...
+#   right:
+#     - {row: 0, col: 0, x: 0, y: 0}
+#     # ... touches de la moitié droite (coordonnées relatives à 0) ...

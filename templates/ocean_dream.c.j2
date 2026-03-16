@@ -11,6 +11,7 @@
 #define ENABLE_SHOOTING_STARS
 #define ENABLE_ISLAND
 #define ENABLE_STARS
+#define ENABLE_MOON
 
 /* ── Global Settings ─────────────────────────────────────────────────────── */
 #define STARRY_NIGHT_ANIM_FRAME_DURATION 30
@@ -124,6 +125,27 @@ static void od_animate_waves(void) {
         oled_write_raw_byte(pgm_read_byte(od_ocean_top[frame] + byte_index), offset);
         oled_write_raw_byte(pgm_read_byte(od_ocean_bottom[frame] + byte_index), offset + OD_WIDTH);
     }
+}
+#endif
+
+/* ── Moon data ───────────────────────────────────────────────────────────── */
+#ifdef ENABLE_MOON
+#define MOON_LINE   2
+#define MOON_COLUMN 3
+
+/* Full-circle moon, 10 px wide × 16 px tall (2 OLED pages).
+ * Positioned in the upper-right sky area of the 32×128 rotated OLED.
+ * Each byte = 8 vertical pixels; bit 0 = topmost pixel of that page. */
+static const char PROGMEM od_moon[2][10] = {
+    { 0x00, 0xC0, 0xF0, 0xF8, 0xFC, 0xFC, 0xF8, 0xF0, 0xC0, 0x00 },
+    { 0x00, 0x03, 0x0F, 0x1F, 0x3F, 0x3F, 0x1F, 0x0F, 0x03, 0x00 },
+};
+
+static void od_draw_moon(void) {
+    oled_set_cursor(MOON_COLUMN, MOON_LINE);
+    oled_write_raw_P(od_moon[0], 10);
+    oled_set_cursor(MOON_COLUMN, MOON_LINE + 1);
+    oled_write_raw_P(od_moon[1], 10);
 }
 #endif
 
@@ -290,6 +312,9 @@ void render_ocean_dream(void) {
         od_anim_timer = timer_read32();
         od_current_wpm = get_current_wpm();
 
+#ifdef ENABLE_MOON
+        od_draw_moon();
+#endif
 #ifdef ENABLE_ISLAND
         od_animate_island();
 #endif

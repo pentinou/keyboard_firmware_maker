@@ -444,6 +444,31 @@ void housekeeping_task_user(void) {
 }
 {% endif %}
 
+{% if per_key_colors %}
+/* Per-key color overlay — applies on top of the active RGB effect.
+ * Colors are set via the keyboard_firmware_maker UI. */
+bool rgb_matrix_indicators_user(void) {
+{% for key_id, hex_color in per_key_colors.items() %}
+{% set side = key_id[0] %}
+{% set rc = key_id[2:].split('_') %}
+{% set row_num = rc[0][1:] | int %}
+{% set col_num = rc[1][1:] | int %}
+{% if split %}
+{% if side == 'R' %}
+{% set actual_row = row_num + matrix_rows %}
+{% else %}
+{% set actual_row = row_num %}
+{% endif %}
+{% else %}
+{% set actual_row = row_num %}
+{% endif %}
+    { uint8_t led = g_led_config.matrix_co[{{ actual_row }}][{{ col_num }}];
+      if (led != NO_LED) rgb_matrix_set_color(led, 0x{{ hex_color[1:3] }}, 0x{{ hex_color[3:5] }}, 0x{{ hex_color[5:7] }}); }
+{% endfor %}
+    return false;
+}
+{% endif %}
+
 {% if has_reactive_effects %}
 uint8_t  _ripple_last_x = 128;
 uint8_t  _ripple_last_y = 32;

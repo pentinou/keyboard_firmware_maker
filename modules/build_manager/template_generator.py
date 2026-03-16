@@ -21,7 +21,7 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
 
-from models.project_model import OledSideConfig, ProjectModel
+from models.project_model import CustomEffect, OledSideConfig, ProjectModel
 from modules.oled_editor.processor import frame_to_qmk_bytes
 from modules.hardware.keyboard_loader import KeyboardDefinition, McuPins, load_keyboard
 
@@ -97,7 +97,8 @@ class TemplateGenerator:
             template_files.append(("animation-utils.c.j2", "keymaps/default/animation-utils.c"))
             template_files.append(("animation-utils.h.j2", "keymaps/default/animation-utils.h"))
         custom_effects = [e for e in model.rgb.effects if e.type in _CUSTOM_EFFECT_TYPES]
-        if custom_effects:
+        has_any_custom = custom_effects or model.rgb.custom_effects
+        if has_any_custom:
             template_files.append(("rgb_matrix_user.inc.j2", "keymaps/default/rgb_matrix_user.inc"))
 
         # Check for static vial.json (official layout from keyboard vendor)
@@ -124,6 +125,34 @@ class TemplateGenerator:
 
         logger.info("Génération templates terminée dans %s", output_dir)
         return result
+
+    @staticmethod
+    def _get_rgb_default(model: ProjectModel) -> dict[str, Any]:
+        """Extrait les paramètres RGB par défaut depuis le premier effet configuré."""
+        from colorsys import rgb_to_hsv
+        from modules.rgb_editor.effects import EFFECT_QMK_MODE
+
+        if not model.rgb.effects:
+            return {
+                "mode": "RGB_MATRIX_SOLID_COLOR",
+                "hue": 0, "sat": 255, "val": 128, "speed": 128,
+            }
+
+        effect = model.rgb.effects[0]
+        qmk_mode = EFFECT_QMK_MODE.get(effect.type, "RGB_MATRIX_SOLID_COLOR")
+
+        # Convertir la couleur primaire hex → HSV QMK (H: 0-255, S: 0-255, V: 0-255)
+        h_str = effect.color_primary.lstrip("#")
+        r, g, b = int(h_str[0:2], 16), int(h_str[2:4], 16), int(h_str[4:6], 16)
+        h_f, s_f, v_f = rgb_to_hsv(r / 255, g / 255, b / 255)
+
+        return {
+            "mode": qmk_mode,
+            "hue": int(h_f * 255),
+            "sat": int(s_f * 255),
+            "val": min(effect.brightness, 255),
+            "speed": min(effect.speed, 255),
+        }
 
     def _build_context(self, model: ProjectModel) -> dict[str, Any]:
         """Construit le contexte Jinja2 depuis ProjectModel."""
@@ -379,6 +408,19 @@ class TemplateGenerator:
                     "fade_ms": e.fade_ms,
                 })
 
+        # Build timeline effects context from CustomEffect list
+        timeline_effects_ctx = _build_timeline_effects(
+            model.rgb.custom_effects, matrix_rows, kb_def.split,
+        )
+
+        # Build list of enabled QMK effect constants for config.h
+        from modules.rgb_editor.effects import ALL_BUILTIN_IDS, EFFECT_QMK_MODE
+        if model.rgb.enabled_effects:
+            enabled_ids = [eid for eid in model.rgb.enabled_effects if eid in EFFECT_QMK_MODE]
+        else:
+            enabled_ids = ALL_BUILTIN_IDS
+        enabled_rgb_effects = [EFFECT_QMK_MODE[eid] for eid in enabled_ids if eid in EFFECT_QMK_MODE]
+
         uid_seed = (model.keyboard.model or "keyboard").encode()
         uid_bytes = hashlib.md5(uid_seed).digest()[:8]
         vial_uid = ", ".join(f"0x{b:02X}" for b in uid_bytes)
@@ -476,10 +518,14 @@ class TemplateGenerator:
             "right_crab_line": right.crab_line,
             # RGB
             "rgb_effects": [e.to_dict() for e in model.rgb.effects],
+            "rgb_default_effect": self._get_rgb_default(model),
+            "enabled_rgb_effects": enabled_rgb_effects,
             "per_key_colors": model.rgb.per_key,
             "custom_effects": custom_effects_ctx,
             "has_custom_effects": bool(custom_effects_ctx),
             "has_reactive_effects": any(e["type"] == "ripple" for e in custom_effects_ctx),
+            "timeline_effects": timeline_effects_ctx,
+            "has_timeline_effects": bool(timeline_effects_ctx),
             "matrix_rows": matrix_rows,
             "matrix_cols": matrix_cols,
             "vial_keys": vial_keys,
@@ -639,3 +685,92 @@ def _encode_oled_frames(frames: list[bytes]) -> list[str]:
             chunks.append(", ".join(f"0x{b:02X}" for b in row))
         result.append(",\n    ".join(chunks))
     return result
+
+
+def _build_timeline_effects(
+    custom_effects: list[CustomEffect],
+    matrix_rows: int,
+    is_split: bool,
+) -> list[dict]:
+    """Convertit les CustomEffect en contexte pour la génération C."""
+    import re
+
+    def _hex_to_rgb(h: str) -> tuple[int, int, int]:
+        h = h.lstrip("#")
+        return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+    def _sanitize_name(name: str, idx: int) -> str:
+        """Crée un nom C valide à partir du nom de l'effet."""
+        clean = re.sub(r"[^a-zA-Z0-9]", "_", name).strip("_").upper()
+        return f"CUSTOM_{idx}_{clean}" if clean else f"CUSTOM_{idx}"
+
+    def _key_id_to_matrix(key_id: str) -> tuple[int, int] | None:
+        """Convertit key_id (ex: L_r0_c3) en position matrice QMK."""
+        try:
+            parts = key_id.split("_")
+            side = parts[0]
+            row = int(parts[1][1:])
+            col = int(parts[2][1:])
+            if is_split and side == "R":
+                row += matrix_rows
+            return (row, col)
+        except (IndexError, ValueError):
+            return None
+
+    results = []
+    for ci, ce in enumerate(custom_effects):
+        c_name = _sanitize_name(ce.name, ci)
+
+        # Compute total duration across all tracks
+        total_duration = 0
+        for track in ce.tracks:
+            if track.steps:
+                last = track.steps[-1]
+                total_duration = max(total_duration, last.time_ms + last.fade_ms)
+        total_duration = max(total_duration, 100)
+
+        tracks_ctx = []
+        for track in ce.tracks:
+            # Convert key_ids to matrix positions
+            matrix_positions = []
+            if track.target_mode == "fixed":
+                for kid in track.keys_fixed:
+                    pos = _key_id_to_matrix(kid)
+                    if pos:
+                        matrix_positions.append({"row": pos[0], "col": pos[1]})
+
+            # Build steps with start/end colors for interpolation.
+            # step.color  = couleur de départ (visible immédiatement).
+            # step.color_to = couleur d'arrivée du fondu (si fade_ms > 0).
+            # Le template utilise prev_r/g/b → r/g/b pour l'interpolation.
+            steps_ctx = []
+            for si, step in enumerate(track.steps):
+                start_r, start_g, start_b = _hex_to_rgb(step.color)
+                if step.fade_ms > 0 and step.color_to:
+                    end_r, end_g, end_b = _hex_to_rgb(step.color_to)
+                else:
+                    end_r, end_g, end_b = start_r, start_g, start_b
+                steps_ctx.append({
+                    "time_ms": step.time_ms,
+                    "fade_ms": step.fade_ms,
+                    "end_ms": step.time_ms + step.fade_ms,
+                    "r": end_r, "g": end_g, "b": end_b,
+                    "prev_r": start_r, "prev_g": start_g, "prev_b": start_b,
+                })
+
+            tracks_ctx.append({
+                "name": track.name,
+                "target_mode": track.target_mode,
+                "matrix_positions": matrix_positions,
+                "steps": steps_ctx,
+            })
+
+        results.append({
+            "name": c_name,
+            "effect_type": ce.effect_type,
+            "total_duration": total_duration,
+            "loop_ms": total_duration + 500,
+            "tracks": tracks_ctx,
+        })
+
+    return results

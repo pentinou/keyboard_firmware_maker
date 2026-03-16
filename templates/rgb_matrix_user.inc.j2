@@ -2,6 +2,9 @@
 {% for e in custom_effects %}{% if e.type == "ripple" %}
 RGB_MATRIX_EFFECT({{ e.name }})
 {% endif %}{% endfor %}
+{% for te in timeline_effects %}
+RGB_MATRIX_EFFECT({{ te.name }})
+{% endfor %}
 
 #ifdef RGB_MATRIX_CUSTOM_EFFECT_IMPLS
 
@@ -48,5 +51,84 @@ bool {{ e.name }}(effect_params_t* params) {
     return rgb_matrix_check_finished_leds(led_max);
 }
 {% endif %}{% endfor %}
+
+{# ── Timeline-based custom effects ── #}
+{% for te in timeline_effects %}
+bool {{ te.name }}(effect_params_t* params) {
+    RGB_MATRIX_USE_LIMITS(led_min, led_max);
+{% if te.effect_type == "ambient" %}
+    // Ambient: timer statique qui boucle
+    static uint16_t _te{{ loop.index0 }}_timer = 0;
+    if (params->init) _te{{ loop.index0 }}_timer = timer_read();
+    uint16_t _raw_elapsed = timer_elapsed(_te{{ loop.index0 }}_timer);
+    uint16_t _elapsed = _raw_elapsed % {{ te.loop_ms }}U;
+    if (_elapsed > {{ te.total_duration }}U) _elapsed = {{ te.total_duration }}U;
+{% endif %}
+
+    for (uint8_t i = led_min; i < led_max; i++) {
+        RGB_MATRIX_TEST_LED_FLAGS();
+        uint8_t _r = 0, _g = 0, _b = 0;
+{% for track in te.tracks %}
+
+        // — {{ track.name }} ({{ track.target_mode }}) —
+{% if track.target_mode == "fixed" and track.matrix_positions %}
+        if ({% for pos in track.matrix_positions %}i == g_led_config.matrix_co[{{ pos.row }}][{{ pos.col }}]{% if not loop.last %} || {% endif %}{% endfor %}) {
+{% if te.effect_type == "ambient" %}
+            uint16_t t = _elapsed;
+{% else %}{# reactive fixed: use most recent hit #}
+            uint16_t t = {{ te.total_duration }}U;
+            if (g_last_hit.count > 0) {
+                t = timer_elapsed(g_last_hit.tick[g_last_hit.count - 1]);
+                if (t > {{ te.total_duration }}U) t = {{ te.total_duration }}U;
+            }
+{% endif %}
+{% for step in track.steps %}
+{% if loop.first %}
+            if (t < {{ step.end_ms }}U) {
+{% else %}
+            } else if (t < {{ step.end_ms }}U) {
+{% endif %}
+{% if step.fade_ms > 0 %}
+                uint8_t p = (t >= {{ step.time_ms }}U) ? (uint8_t)((uint32_t)(t - {{ step.time_ms }}U) * 255U / {{ step.fade_ms }}U) : 0;
+                _r = {{ step.prev_r }} + (int16_t)({{ step.r }} - {{ step.prev_r }}) * p / 255;
+                _g = {{ step.prev_g }} + (int16_t)({{ step.g }} - {{ step.prev_g }}) * p / 255;
+                _b = {{ step.prev_b }} + (int16_t)({{ step.b }} - {{ step.prev_b }}) * p / 255;
+{% else %}
+                _r = {{ step.r }}; _g = {{ step.g }}; _b = {{ step.b }};
+{% endif %}
+{% endfor %}
+            }
+        }
+{% elif track.target_mode == "default" and te.effect_type == "reactive" %}
+        // Reactive default: animate on the pressed key
+        for (uint8_t _h = 0; _h < g_last_hit.count; _h++) {
+            uint16_t t = timer_elapsed(g_last_hit.tick[_h]);
+            if (t > {{ te.total_duration }}U) continue;
+            if (i != g_last_hit.index[_h]) continue;
+{% for step in track.steps %}
+{% if loop.first %}
+            if (t < {{ step.end_ms }}U) {
+{% else %}
+            } else if (t < {{ step.end_ms }}U) {
+{% endif %}
+{% if step.fade_ms > 0 %}
+                uint8_t p = (t >= {{ step.time_ms }}U) ? (uint8_t)((uint32_t)(t - {{ step.time_ms }}U) * 255U / {{ step.fade_ms }}U) : 0;
+                _r = {{ step.prev_r }} + (int16_t)({{ step.r }} - {{ step.prev_r }}) * p / 255;
+                _g = {{ step.prev_g }} + (int16_t)({{ step.g }} - {{ step.prev_g }}) * p / 255;
+                _b = {{ step.prev_b }} + (int16_t)({{ step.b }} - {{ step.prev_b }}) * p / 255;
+{% else %}
+                _r = {{ step.r }}; _g = {{ step.g }}; _b = {{ step.b }};
+{% endif %}
+{% endfor %}
+            }
+        }
+{% endif %}
+{% endfor %}
+
+        rgb_matrix_set_color(i, _r, _g, _b);
+    }
+    return rgb_matrix_check_finished_leds(led_max);
+}
+{% endfor %}
 
 #endif /* RGB_MATRIX_CUSTOM_EFFECT_IMPLS */

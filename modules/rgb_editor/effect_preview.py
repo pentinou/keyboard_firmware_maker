@@ -15,7 +15,7 @@ import random
 
 from PySide6.QtCore import QTimer
 
-from models.project_model import RgbEffect
+from models.project_model import CustomEffect, EffectStep, RgbEffect
 from modules.rgb_editor.effects import EFFECT_TYPES
 
 logger = logging.getLogger(__name__)
@@ -67,6 +67,7 @@ class EffectPreview:
         self._timer = QTimer()
         self._timer.timeout.connect(self._tick)
         self._effect: RgbEffect | None = None
+        self._custom_effect: CustomEffect | None = None
         self._step = 0
         self._phase = 0.0          # pour animations smooth
         self._center: tuple[str, int, int] | None = None
@@ -113,6 +114,17 @@ class EffectPreview:
     def stop(self) -> None:
         """Arrête le timer et réinitialise les couleurs des touches."""
         self._timer.stop()
+        # S'assurer que le slot normal est connecté
+        try:
+            self._timer.timeout.disconnect(self._tick_custom)
+        except RuntimeError:
+            pass
+        try:
+            self._timer.timeout.disconnect(self._tick)
+        except RuntimeError:
+            pass
+        self._timer.timeout.connect(self._tick)
+        self._custom_effect = None
         self._reset_keys()
 
     def update(self, effect: RgbEffect) -> None:
@@ -413,3 +425,155 @@ class EffectPreview:
     def _tick_reactive(self) -> None:
         """Réutilise la logique ripple pour les effets réactifs natifs."""
         self._tick_ripple()
+
+    # ─────────────────────────────────────── Custom timeline preview ──
+
+    def start_custom(self, custom_effect: CustomEffect) -> None:
+        """Démarre l'animation d'un effet custom timeline."""
+        self._timer.stop()
+        self._effect = None
+        self._custom_effect = custom_effect
+        self._custom_elapsed = 0
+        self._custom_total = self._compute_total_duration(custom_effect)
+        # Pour les effets réactifs, simuler un keypress sur une touche aléatoire
+        self._custom_origin: str | None = None
+        if custom_effect.effect_type == "reactive" and self._key_buttons:
+            self._custom_origin = random.choice(list(self._key_buttons.keys()))
+        self._reset_keys()
+        self._render_custom_frame()
+        self._timer.setInterval(SMOOTH_INTERVAL_MS)
+        self._timer.timeout.disconnect(self._tick)
+        self._timer.timeout.connect(self._tick_custom)
+        self._timer.start()
+
+    def stop_custom(self) -> None:
+        """Arrête le preview custom et restaure le tick normal."""
+        self._timer.stop()
+        try:
+            self._timer.timeout.disconnect(self._tick_custom)
+        except RuntimeError:
+            pass
+        if not any(self._timer.receivers(self._timer.timeout)):
+            self._timer.timeout.connect(self._tick)
+        self._custom_effect = None
+        self._reset_keys()
+
+    @staticmethod
+    def _compute_total_duration(ce: CustomEffect) -> int:
+        """Durée totale de l'animation (ms) = max(dernier step time + fade)."""
+        total = 0
+        for track in ce.tracks:
+            if track.steps:
+                last = track.steps[-1]
+                total = max(total, last.time_ms + last.fade_ms)
+        return max(total, 100)  # minimum 100ms
+
+    def _tick_custom(self) -> None:
+        """Tick du timer pour l'animation custom."""
+        if not getattr(self, "_custom_effect", None):
+            return
+        self._custom_elapsed += SMOOTH_INTERVAL_MS
+        if self._custom_elapsed > self._custom_total + 500:
+            # Pause de 500ms après la fin, puis boucle
+            self._custom_elapsed = 0
+            # Nouveau keypress simulé pour les effets réactifs
+            if self._custom_effect.effect_type == "reactive" and self._key_buttons:
+                self._custom_origin = random.choice(list(self._key_buttons.keys()))
+        self._render_custom_frame()
+
+    def _render_custom_frame(self) -> None:
+        """Colore les touches selon l'état courant de la timeline."""
+        ce = getattr(self, "_custom_effect", None)
+        if not ce:
+            return
+        t = self._custom_elapsed
+        # Reset au fond sombre
+        for btn in self._key_buttons.values():
+            btn.set_color("#111111")
+
+        for track in ce.tracks:
+            # Déterminer les key_ids ciblés
+            target_keys = self._resolve_track_targets(track)
+            if not target_keys:
+                continue
+            # Trouver la couleur au temps t
+            color = self._compute_track_color(track.steps, t)
+            if color:
+                for key_id in target_keys:
+                    btn = self._key_buttons.get(key_id)
+                    if btn:
+                        btn.set_color(color)
+
+    def _resolve_track_targets(self, track) -> list[str]:
+        """Résout les key_ids ciblés par une piste."""
+        if track.target_mode == "fixed":
+            return track.keys_fixed
+        if track.target_mode == "default":
+            # Pour les réactifs, utiliser l'origine simulée
+            origin = getattr(self, "_custom_origin", None)
+            return [origin] if origin else []
+        if track.target_mode == "relative":
+            origin = getattr(self, "_custom_origin", None)
+            if not origin:
+                return []
+            meta = self._key_meta.get(origin)
+            if not meta:
+                return []
+            base_r, base_c, side_idx = meta
+            side = "L" if side_idx == 0 else "R"
+            keys = []
+            # La touche d'origine elle-même
+            keys.append(origin)
+            for offset in track.keys_offset:
+                kid = f"{side}_r{base_r + offset.dr}_c{base_c + offset.dc}"
+                if kid in self._key_buttons:
+                    keys.append(kid)
+            return keys
+        return []
+
+    @staticmethod
+    def _compute_track_color(steps: list[EffectStep], t: int) -> str | None:
+        """Calcule la couleur interpolée à l'instant t pour une liste de steps."""
+        if not steps:
+            return None
+        # Avant le premier step
+        if t < steps[0].time_ms:
+            return None
+        # Trouver le step actif
+        active_idx = 0
+        for i, step in enumerate(steps):
+            if step.time_ms <= t:
+                active_idx = i
+            else:
+                break
+        step = steps[active_idx]
+        elapsed_in_step = t - step.time_ms
+        if step.fade_ms <= 0 or elapsed_in_step <= 0:
+            return step.color
+        if elapsed_in_step >= step.fade_ms:
+            # Après le fade, la couleur reste (ou on passe au prochain)
+            if active_idx + 1 < len(steps):
+                return step.color
+            # Dernier step — fade vers noir
+            ratio = min(elapsed_in_step / step.fade_ms, 1.0)
+            return _lerp_color(step.color, "#000000", ratio)
+        # Pendant le fade du step actif
+        # Fade-in depuis noir (ou depuis la couleur précédente)
+        if active_idx > 0:
+            prev_color = steps[active_idx - 1].color
+        else:
+            prev_color = "#000000"
+        ratio = elapsed_in_step / step.fade_ms
+        return _lerp_color(prev_color, step.color, ratio)
+
+
+def _lerp_color(c1: str, c2: str, t: float) -> str:
+    """Interpolation linéaire entre deux couleurs hex."""
+    h1 = c1.lstrip("#")
+    h2 = c2.lstrip("#")
+    r1, g1, b1 = int(h1[0:2], 16), int(h1[2:4], 16), int(h1[4:6], 16)
+    r2, g2, b2 = int(h2[0:2], 16), int(h2[2:4], 16), int(h2[4:6], 16)
+    r = int(r1 + (r2 - r1) * t)
+    g = int(g1 + (g2 - g1) * t)
+    b = int(b1 + (b2 - b1) * t)
+    return f"#{r:02X}{g:02X}{b:02X}"
