@@ -1056,31 +1056,42 @@ class RgbWidget(QWidget):
                 ref_item = self._key_buttons.get(self._relative_ref_key)
                 if ref_item:
                     ref_item.setPen(QPen(QColor("#FF8800"), 3))
-                ref_rc = self._parse_key_rc(self._relative_ref_key)
-                if ref_rc:
+                ref_qmk = self._key_to_qmk_rc(self._relative_ref_key)
+                if ref_qmk:
                     for offset in track.keys_offset:
-                        target_key = self._rc_to_key_id(
-                            ref_rc[0] + offset.dr, ref_rc[1] + offset.dc,
-                            self._relative_ref_key.split("_")[0]
+                        target_key = self._qmk_rc_to_key_id(
+                            ref_qmk[0] + offset.dr, ref_qmk[1] + offset.dc,
                         )
-                        item = self._key_buttons.get(target_key)
-                        if item:
-                            item.setPen(QPen(QColor("#77AAFF"), 2))
+                        if target_key:
+                            item = self._key_buttons.get(target_key)
+                            if item:
+                                item.setPen(QPen(QColor("#77AAFF"), 2))
         # Pour "default", pas de highlight spécifique (la touche d'origine)
 
-    @staticmethod
-    def _parse_key_rc(key_id: str) -> tuple[int, int] | None:
-        """Extrait (row, col) d'un key_id comme 'L_r2_c3'."""
+    def _key_to_qmk_rc(self, key_id: str) -> tuple[int, int] | None:
+        """Convertit key_id en coordonnées matricielles QMK (row offset pour R en split)."""
         try:
             parts = key_id.split("_")
-            return int(parts[1][1:]), int(parts[2][1:])
+            side = parts[0]
+            row = int(parts[1][1:])
+            col = int(parts[2][1:])
+            kb = self._current_kb
+            if kb and kb.split and side == "R":
+                row += kb.matrix.get("rows", 5)
+            return row, col
         except (IndexError, ValueError):
             return None
 
-    @staticmethod
-    def _rc_to_key_id(row: int, col: int, side: str) -> str:
-        """Reconstruit un key_id à partir de (row, col, side)."""
-        return f"{side}_r{row}_c{col}"
+    def _qmk_rc_to_key_id(self, qmk_row: int, col: int) -> str | None:
+        """Convertit des coordonnées QMK en key_id, en déterminant le bon côté."""
+        kb = self._current_kb
+        rows_per_side = kb.matrix.get("rows", 5) if kb else 5
+        is_split = kb.split if kb else False
+        if is_split and qmk_row >= rows_per_side:
+            key_id = f"R_r{qmk_row - rows_per_side}_c{col}"
+        else:
+            key_id = f"L_r{qmk_row}_c{col}"
+        return key_id if key_id in self._key_buttons else None
 
     def _on_select_track(self, track_idx: int) -> None:
         """Sélectionne une piste dans les onglets."""
@@ -1415,9 +1426,9 @@ class RgbWidget(QWidget):
                     self._refresh_tracks_ui()
                     self._refresh_key_highlights()
                     return
-                # Clic gauche = ajouter l'offset (si pas déjà présent)
-                ref_rc = self._parse_key_rc(self._relative_ref_key)
-                click_rc = self._parse_key_rc(key_id)
+                # Clic gauche = ajouter l'offset (coordonnées QMK)
+                ref_rc = self._key_to_qmk_rc(self._relative_ref_key)
+                click_rc = self._key_to_qmk_rc(key_id)
                 if ref_rc and click_rc:
                     dr = click_rc[0] - ref_rc[0]
                     dc = click_rc[1] - ref_rc[1]
@@ -1459,8 +1470,8 @@ class RgbWidget(QWidget):
                 self._restart_custom_preview()
                 self._refresh_code_preview()
                 return
-            ref_rc = self._parse_key_rc(self._relative_ref_key)
-            click_rc = self._parse_key_rc(key_id)
+            ref_rc = self._key_to_qmk_rc(self._relative_ref_key)
+            click_rc = self._key_to_qmk_rc(key_id)
             if ref_rc and click_rc:
                 dr = click_rc[0] - ref_rc[0]
                 dc = click_rc[1] - ref_rc[1]

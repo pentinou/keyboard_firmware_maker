@@ -520,12 +520,18 @@ class EffectPreview:
             if not meta:
                 return []
             base_r, base_c, side_idx = meta
-            side = "L" if side_idx == 0 else "R"
-            keys = []
-            # La touche d'origine elle-même
-            keys.append(origin)
+            # Convertir en coordonnées QMK (R side row += rows_per_side)
+            rows_per_side = self._max_row + 1
+            qmk_row = base_r + (rows_per_side if side_idx == 1 else 0)
+            keys = [origin]
             for offset in track.keys_offset:
-                kid = f"{side}_r{base_r + offset.dr}_c{base_c + offset.dc}"
+                target_qmk_r = qmk_row + offset.dr
+                target_c = base_c + offset.dc
+                # Résoudre en key_id (déterminer le bon côté)
+                if target_qmk_r >= rows_per_side:
+                    kid = f"R_r{target_qmk_r - rows_per_side}_c{target_c}"
+                else:
+                    kid = f"L_r{target_qmk_r}_c{target_c}"
                 if kid in self._key_buttons:
                     keys.append(kid)
             return keys
