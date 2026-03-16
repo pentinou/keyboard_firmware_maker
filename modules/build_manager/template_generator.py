@@ -733,11 +733,15 @@ def _build_timeline_effects(
         for track in ce.tracks:
             # Convert key_ids to matrix positions
             matrix_positions = []
+            key_offsets = []
             if track.target_mode == "fixed":
                 for kid in track.keys_fixed:
                     pos = _key_id_to_matrix(kid)
                     if pos:
                         matrix_positions.append({"row": pos[0], "col": pos[1]})
+            elif track.target_mode == "relative":
+                for ko in track.keys_offset:
+                    key_offsets.append({"dr": ko.dr, "dc": ko.dc})
 
             # Build steps with start/end colors for interpolation.
             # step.color  = couleur de départ (visible immédiatement).
@@ -762,6 +766,7 @@ def _build_timeline_effects(
                 "name": track.name,
                 "target_mode": track.target_mode,
                 "matrix_positions": matrix_positions,
+                "key_offsets": key_offsets,
                 "steps": steps_ctx,
             })
 

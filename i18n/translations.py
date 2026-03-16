@@ -273,6 +273,8 @@ STRINGS: dict[str, dict[str, str]] = {
             "6. Ajoutez des événements avec le bouton [+ Événement] ou des pistes avec [+ Ajouter une piste].\n"
             "7. Le code C généré est visible dans le panneau de droite."
         ),
+        "rgb.custom_effects.relative_ref": "Référence : {key} — cliquez les touches voisines pour définir les offsets",
+        "rgb.custom_effects.relative_hint": "Cliquez d'abord une touche de référence (centre du motif), puis les touches autour pour définir le motif relatif.",
         "rgb.custom_effects.hint_select_step": "Sélectionnez un événement sur la frise, puis cliquez les touches du clavier pour définir les cibles.",
         "rgb.custom_effects.hint_click_keys": "Cliquez les touches du clavier pour ajouter/retirer des cibles pour cet événement.",
         "rgb.custom_effects.remove_track": "Supprimer piste",
@@ -575,6 +577,8 @@ STRINGS: dict[str, dict[str, str]] = {
             "6. Add events with [+ Event] or tracks with [+ Add track].\n"
             "7. The generated C code is visible in the right panel."
         ),
+        "rgb.custom_effects.relative_ref": "Reference: {key} — click surrounding keys to define offsets",
+        "rgb.custom_effects.relative_hint": "Click a reference key first (pattern center), then surrounding keys to define the relative pattern.",
         "rgb.custom_effects.hint_select_step": "Select an event on the timeline, then click keys on the keyboard to set targets.",
         "rgb.custom_effects.hint_click_keys": "Click keys on the keyboard to add/remove targets for this event.",
         "rgb.custom_effects.remove_track": "Remove track",
@@ -877,6 +881,8 @@ STRINGS: dict[str, dict[str, str]] = {
             "6. Aggiungi eventi con [+ Evento] o piste con [+ Aggiungi pista].\n"
             "7. Il codice C generato è visibile nel pannello di destra."
         ),
+        "rgb.custom_effects.relative_ref": "Riferimento: {key} — clicca i tasti vicini per definire gli offset",
+        "rgb.custom_effects.relative_hint": "Clicca prima un tasto di riferimento (centro del motivo), poi i tasti circostanti per definire il motivo relativo.",
         "rgb.custom_effects.hint_select_step": "Seleziona un evento sulla timeline, poi clicca i tasti sulla tastiera per definire gli obiettivi.",
         "rgb.custom_effects.hint_click_keys": "Clicca i tasti sulla tastiera per aggiungere/rimuovere obiettivi per questo evento.",
         "rgb.custom_effects.remove_track": "Rimuovi pista",

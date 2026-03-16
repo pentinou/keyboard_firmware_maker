@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QColorDialog,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFrame,
@@ -41,7 +42,7 @@ from PySide6.QtWidgets import (
 )
 
 from i18n import tr
-from models.project_model import CustomEffect, EffectStep, EffectTrack, ProjectModel, RgbEffect
+from models.project_model import CustomEffect, EffectStep, EffectTrack, KeyOffset, ProjectModel, RgbEffect
 from modules.hardware.keyboard_loader import KeyboardDefinition, KeyLayout, load_all_keyboards
 from modules.rgb_editor.effect_preview import EffectPreview
 from modules.rgb_editor.effects import EFFECT_TYPES, EffectDef
@@ -277,25 +278,30 @@ class KeyColorItem(QGraphicsRectItem):
         h_u: float,
         r_deg: float,
         on_click,
+        on_right_click=None,
     ) -> None:
         w_px = w_u * KEY_SIZE - 2
         h_px = h_u * KEY_SIZE - 2
         super().__init__(0, 0, w_px, h_px)
         self.key_id = key_id
         self._on_click = on_click
+        self._on_right_click = on_right_click
         self.setTransformOriginPoint(w_px / 2, h_px / 2)
         if r_deg:
             self.setRotation(r_deg)
         self.setBrush(QBrush(QColor("#333333")))
         self.setPen(QPen(QColor("#555555"), 1))
-        self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
+        self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton | Qt.MouseButton.RightButton)
 
     def set_color(self, hex_color: str) -> None:
         self.setBrush(QBrush(QColor(hex_color)))
         self.update()
 
     def mousePressEvent(self, event) -> None:
-        self._on_click(self.key_id)
+        if event.button() == Qt.MouseButton.RightButton and self._on_right_click:
+            self._on_right_click(self.key_id)
+        else:
+            self._on_click(self.key_id)
         super().mousePressEvent(event)
 
 class _NewCustomEffectDialog(QDialog):
@@ -369,6 +375,7 @@ class RgbWidget(QWidget):
         self._editing_custom_idx: int | None = None
         self._editing_track_idx: int = 0
         self._editing_step_idx: int = 0
+        self._relative_ref_key: str | None = None  # clé de référence pour mode relative
         self._setup_ui()
         self._build_layout()
         self._preview = EffectPreview(self._key_buttons)
@@ -936,6 +943,33 @@ class RgbWidget(QWidget):
                 name_row.addWidget(btn_rm)
             frame_layout.addLayout(name_row)
 
+            # Ligne 1b : sélecteur de mode cible (visible quand la piste est sélectionnée)
+            if is_selected:
+                mode_row = QHBoxLayout()
+                mode_row.addWidget(QLabel(tr("rgb.custom_effects.target_mode")))
+                combo = QComboBox()
+                combo.setObjectName(f"combo_target_mode_{ti}")
+                combo.addItem(tr("rgb.custom_effects.mode_default"), "default")
+                combo.addItem(tr("rgb.custom_effects.mode_relative"), "relative")
+                combo.addItem(tr("rgb.custom_effects.mode_fixed"), "fixed")
+                # Sélectionner le mode actuel
+                for ci_m in range(combo.count()):
+                    if combo.itemData(ci_m) == track.target_mode:
+                        combo.setCurrentIndex(ci_m)
+                        break
+                combo.currentIndexChanged.connect(
+                    lambda idx, c=combo: self._on_target_mode_changed(c.itemData(idx))
+                )
+                mode_row.addWidget(combo)
+                # Hint spécifique au mode relative
+                if track.target_mode == "relative":
+                    ref_text = self._relative_ref_key or "—"
+                    lbl_ref = QLabel(tr("rgb.custom_effects.relative_ref").format(key=ref_text))
+                    lbl_ref.setStyleSheet("color: #AAAAAA; font-size: 10px; margin-left: 12px;")
+                    mode_row.addWidget(lbl_ref)
+                mode_row.addStretch()
+                frame_layout.addLayout(mode_row)
+
             # Ligne 2 : frise temporelle avec cartouches d'événements
             scene = TrackTimelineScene()
             for si, step in enumerate(track.steps):
@@ -1016,12 +1050,43 @@ class RgbWidget(QWidget):
                 item = self._key_buttons.get(key_id)
                 if item:
                     item.setPen(QPen(QColor("#77AAFF"), 2))
+        elif track.target_mode == "relative":
+            # Highlight la touche de référence (orange) et les offsets (bleu)
+            if self._relative_ref_key:
+                ref_item = self._key_buttons.get(self._relative_ref_key)
+                if ref_item:
+                    ref_item.setPen(QPen(QColor("#FF8800"), 3))
+                ref_rc = self._parse_key_rc(self._relative_ref_key)
+                if ref_rc:
+                    for offset in track.keys_offset:
+                        target_key = self._rc_to_key_id(
+                            ref_rc[0] + offset.dr, ref_rc[1] + offset.dc,
+                            self._relative_ref_key.split("_")[0]
+                        )
+                        item = self._key_buttons.get(target_key)
+                        if item:
+                            item.setPen(QPen(QColor("#77AAFF"), 2))
         # Pour "default", pas de highlight spécifique (la touche d'origine)
+
+    @staticmethod
+    def _parse_key_rc(key_id: str) -> tuple[int, int] | None:
+        """Extrait (row, col) d'un key_id comme 'L_r2_c3'."""
+        try:
+            parts = key_id.split("_")
+            return int(parts[1][1:]), int(parts[2][1:])
+        except (IndexError, ValueError):
+            return None
+
+    @staticmethod
+    def _rc_to_key_id(row: int, col: int, side: str) -> str:
+        """Reconstruit un key_id à partir de (row, col, side)."""
+        return f"{side}_r{row}_c{col}"
 
     def _on_select_track(self, track_idx: int) -> None:
         """Sélectionne une piste dans les onglets."""
         self._editing_track_idx = track_idx
         self._editing_step_idx = 0
+        self._relative_ref_key = None  # reset la référence relative
         self._refresh_tracks_ui()
         self._refresh_step_params()
         self._refresh_key_highlights()
@@ -1072,6 +1137,19 @@ class RgbWidget(QWidget):
         self._refresh_step_params()
         self._refresh_key_highlights()
         self._restart_custom_preview()
+
+    def _on_target_mode_changed(self, mode: str) -> None:
+        """Change le mode cible de la piste courante."""
+        track = self._current_track()
+        if not track or track.target_mode == mode:
+            return
+        track.target_mode = mode
+        # Reset la référence relative quand on change de mode
+        self._relative_ref_key = None
+        self._refresh_tracks_ui()
+        self._refresh_key_highlights()
+        self._restart_custom_preview()
+        self._refresh_code_preview()
 
     def _on_add_step(self) -> None:
         """Ajoute un step à la piste courante."""
@@ -1248,7 +1326,7 @@ class RgbWidget(QWidget):
             for r in range(rows):
                 for c in range(cols):
                     key_id = f"{side_code}_r{r}_c{c}"
-                    item = KeyColorItem(key_id, 1.0, 1.0, 0.0, self._on_key_clicked)
+                    item = KeyColorItem(key_id, 1.0, 1.0, 0.0, self._on_key_clicked, self._on_key_right_clicked)
                     item.setPos(padding + c * KEY_SIZE, padding + r * KEY_SIZE)
                     scene.addItem(item)
                     self._key_buttons[key_id] = item
@@ -1290,7 +1368,8 @@ class RgbWidget(QWidget):
             for k in non_enc:
                 key_id = f"{side_code}_r{k.row}_c{k.col}"
                 item = KeyColorItem(
-                    key_id, k.w, k.h, getattr(k, "r", 0.0), self._on_key_clicked
+                    key_id, k.w, k.h, getattr(k, "r", 0.0),
+                    self._on_key_clicked, self._on_key_right_clicked,
                 )
                 item.setPos(padding + (k.x - min_x) * KEY_SIZE, padding + (k.y - min_y) * KEY_SIZE)
                 scene.addItem(item)
@@ -1316,7 +1395,7 @@ class RgbWidget(QWidget):
             self._trigger_mode = False
             self._btn_trigger.setText(tr("rgb.ripple.trigger_btn"))
             return
-        # Mode édition custom : toggle la touche dans keys_fixed
+        # Mode édition custom : toggle la touche dans keys_fixed ou relative
         if self._editing_custom_idx is not None and self._effect_stack.currentIndex() == 3:
             track = self._current_track()
             if track and track.target_mode == "fixed":
@@ -1327,12 +1406,71 @@ class RgbWidget(QWidget):
                 self._refresh_tracks_ui()
                 self._refresh_key_highlights()
                 self._restart_custom_preview()
+                self._refresh_code_preview()
+                return
+            if track and track.target_mode == "relative":
+                if self._relative_ref_key is None:
+                    # Premier clic = touche de référence (centre du motif)
+                    self._relative_ref_key = key_id
+                    self._refresh_tracks_ui()
+                    self._refresh_key_highlights()
+                    return
+                # Clic gauche = ajouter l'offset (si pas déjà présent)
+                ref_rc = self._parse_key_rc(self._relative_ref_key)
+                click_rc = self._parse_key_rc(key_id)
+                if ref_rc and click_rc:
+                    dr = click_rc[0] - ref_rc[0]
+                    dc = click_rc[1] - ref_rc[1]
+                    already = any(o.dr == dr and o.dc == dc for o in track.keys_offset)
+                    if not already:
+                        track.keys_offset.append(KeyOffset(dr=dr, dc=dc))
+                    self._refresh_tracks_ui()
+                    self._refresh_key_highlights()
+                    self._restart_custom_preview()
+                    self._refresh_code_preview()
                 return
         current = QColor(self._model.rgb.per_key.get(key_id, "#FFFFFF"))
         color = QColorDialog.getColor(current, self, tr("rgb.key_color_fmt").format(key_id=key_id))
         if color.isValid():
             hex_color = color.name().upper()
             self._apply_color(key_id, hex_color)
+
+    def _on_key_right_clicked(self, key_id: str) -> None:
+        """Clic droit : retirer une touche de la sélection (fixed ou relative)."""
+        if self._editing_custom_idx is None or self._effect_stack.currentIndex() != 3:
+            return
+        track = self._current_track()
+        if not track:
+            return
+        if track.target_mode == "fixed":
+            if key_id in track.keys_fixed:
+                track.keys_fixed.remove(key_id)
+                self._refresh_tracks_ui()
+                self._refresh_key_highlights()
+                self._restart_custom_preview()
+                self._refresh_code_preview()
+        elif track.target_mode == "relative" and self._relative_ref_key:
+            # Clic droit sur la référence = reset la référence
+            if key_id == self._relative_ref_key:
+                self._relative_ref_key = None
+                track.keys_offset.clear()
+                self._refresh_tracks_ui()
+                self._refresh_key_highlights()
+                self._restart_custom_preview()
+                self._refresh_code_preview()
+                return
+            ref_rc = self._parse_key_rc(self._relative_ref_key)
+            click_rc = self._parse_key_rc(key_id)
+            if ref_rc and click_rc:
+                dr = click_rc[0] - ref_rc[0]
+                dc = click_rc[1] - ref_rc[1]
+                before = len(track.keys_offset)
+                track.keys_offset = [o for o in track.keys_offset if not (o.dr == dr and o.dc == dc)]
+                if len(track.keys_offset) < before:
+                    self._refresh_tracks_ui()
+                    self._refresh_key_highlights()
+                    self._restart_custom_preview()
+                    self._refresh_code_preview()
 
     def _apply_color(self, key_id: str, hex_color: str) -> None:
         item = self._key_buttons.get(key_id)
