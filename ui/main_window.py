@@ -44,6 +44,7 @@ class MainWindow(QMainWindow):
     def __init__(self, model: ProjectModel, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._model = model
+        self._project_path: Path | None = None
         self._setup_ui()
         self._setup_menu()
         self._check_vial_qmk()
@@ -74,6 +75,9 @@ class MainWindow(QMainWindow):
         # Désactivés par défaut — activés selon les capacités du clavier (FR3, FR4)
         self._tabs.setTabEnabled(1, False)
         self._tabs.setTabEnabled(2, False)
+
+        # Signal de sauvegarde rapide depuis l'onglet RGB
+        self._tab_rgb.save_requested.connect(self._save_project)
 
         # Connexion après addTab() pour que setTabEnabled() soit valide
         self._tab_hardware.capabilities_changed.connect(self._on_capabilities_changed)
@@ -109,6 +113,8 @@ class MainWindow(QMainWindow):
         file_menu = menu_bar.addMenu(tr("menu.file"))
         save_action = file_menu.addAction(tr("menu.file.save"))
         save_action.triggered.connect(self._save_project)
+        save_as_action = file_menu.addAction(tr("menu.file.save_as"))
+        save_as_action.triggered.connect(self._save_project_as)
         open_action = file_menu.addAction(tr("menu.file.open"))
         open_action.triggered.connect(self._open_project)
         file_menu.addSeparator()
@@ -137,15 +143,29 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, tr("dlg.lang_change_title"), tr("dlg.lang_change_msg"))
 
     def _save_project(self) -> None:
+        if self._project_path and self._project_path.exists():
+            # Quick save au même emplacement
+            try:
+                save_project(self._model, self._project_path)
+                logger.info("Projet sauvegardé : %s", self._project_path)
+            except OSError as e:
+                QMessageBox.critical(self, tr("dlg.error"), tr("dlg.save_error").format(e=e))
+            return
+        self._save_project_as()
+
+    def _save_project_as(self) -> None:
+        default_dir = str(self._project_path.parent) if self._project_path else str(Path.home())
         path, _ = QFileDialog.getSaveFileName(
-            self, tr("dlg.save_title"), str(Path.home()), tr("dlg.file_filter")
+            self, tr("dlg.save_title"), default_dir, tr("dlg.file_filter")
         )
         if not path:
             return
         if not path.endswith(".kfm.json"):
             path += ".kfm.json"
+        self._project_path = Path(path)
         try:
-            save_project(self._model, Path(path))
+            save_project(self._model, self._project_path)
+            logger.info("Projet sauvegardé : %s", self._project_path)
         except OSError as e:
             QMessageBox.critical(self, tr("dlg.error"), tr("dlg.save_error").format(e=e))
 
@@ -161,6 +181,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, tr("dlg.error"), tr("dlg.load_error").format(e=e))
             return
 
+        self._project_path = Path(path)
         # Mettre à jour les champs (conserver la référence existante)
         self._model.keyboard = loaded.keyboard
         self._model.oled = loaded.oled

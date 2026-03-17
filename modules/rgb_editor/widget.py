@@ -388,6 +388,9 @@ class RgbWidget(QWidget):
     - Une section effets RGB (QListWidget + description + paramètres dynamiques)
     """
 
+    from PySide6.QtCore import Signal
+    save_requested = Signal()
+
     def __init__(self, model: ProjectModel, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._model = model
@@ -663,6 +666,11 @@ class RgbWidget(QWidget):
         self._lbl_custom_type.setStyleSheet("color: #888888;")
         header.addWidget(self._lbl_custom_type)
         header.addStretch()
+        self._btn_save_effect = QPushButton(tr("rgb.custom_effects.save"))
+        self._btn_save_effect.setObjectName("btn_save_effect")
+        self._btn_save_effect.setStyleSheet("font-weight: bold;")
+        self._btn_save_effect.clicked.connect(self.save_requested.emit)
+        header.addWidget(self._btn_save_effect)
         self._btn_delete_custom = QPushButton(tr("rgb.custom_effects.delete"))
         self._btn_delete_custom.setObjectName("btn_delete_custom")
         self._btn_delete_custom.clicked.connect(self._on_delete_custom_effect)
