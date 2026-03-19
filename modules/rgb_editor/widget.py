@@ -402,6 +402,7 @@ class RgbWidget(QWidget):
         self._editing_track_idx: int = 0
         self._editing_step_idx: int = 0
         self._relative_ref_key: str | None = None  # clé de référence pour mode relative
+        self._custom_trigger_mode: bool = False  # mode assignation trigger key custom
         self._setup_ui()
         self._build_layout()
         self._preview = EffectPreview(self._key_buttons)
@@ -432,13 +433,31 @@ class RgbWidget(QWidget):
         key_label.setObjectName("rgb_instructions")
         outer.addWidget(key_label)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setObjectName("rgb_scroll")
-        container = QWidget()
-        self._keys_hbox = QHBoxLayout(container)
-        self._keys_hbox.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        scroll.setWidget(container)
+        # Option underglow
+        underglow_row = QHBoxLayout()
+        underglow_label = QLabel(tr("rgb.underglow_label"))
+        self._spn_underglow = QSpinBox()
+        self._spn_underglow.setObjectName("spn_underglow")
+        self._spn_underglow.setMinimum(-1)
+        self._spn_underglow.setMaximum(20)
+        self._spn_underglow.setSpecialValueText(tr("rgb.underglow_auto"))
+        self._spn_underglow.setValue(self._model.keyboard.rgb_underglow_per_side)
+        self._spn_underglow.valueChanged.connect(self._on_underglow_changed)
+        underglow_row.addWidget(underglow_label)
+        underglow_row.addWidget(self._spn_underglow)
+        underglow_row.addStretch()
+        outer.addLayout(underglow_row)
+        underglow_help = QLabel(tr("rgb.underglow_help"))
+        underglow_help.setWordWrap(True)
+        underglow_help.setStyleSheet("color: #888; font-size: 11px; margin-bottom: 6px;")
+        outer.addWidget(underglow_help)
+
+        keys_container = QWidget()
+        keys_container.setObjectName("rgb_keys_container")
+        self._keys_hbox = QHBoxLayout(keys_container)
+        self._keys_hbox.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._keys_hbox.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(keys_container)
 
         # Section effets — QListWidget à gauche, description + stack à droite
         effects_group = QGroupBox(tr("rgb.effects_group"))
@@ -554,13 +573,12 @@ class RgbWidget(QWidget):
 
         effects_hbox.addLayout(right_vbox, 1)
 
-        # Splitter vertical : scroll (clavier) | effects_group
-        splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.addWidget(scroll)
-        splitter.addWidget(effects_group)
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 1)
-        outer.addWidget(splitter)
+        # Section effets dans un scroll pour occuper l'espace restant
+        effects_scroll = QScrollArea()
+        effects_scroll.setWidgetResizable(True)
+        effects_scroll.setObjectName("rgb_effects_scroll")
+        effects_scroll.setWidget(effects_group)
+        outer.addWidget(effects_scroll, 1)  # stretch=1 pour prendre l'espace restant
 
     def _build_static_panel(self) -> QWidget:
         panel = QWidget()
@@ -775,10 +793,20 @@ class RgbWidget(QWidget):
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(4, 4, 4, 4)
-        # Titre + bouton copier
+        # Titre + boutons
         code_header = QHBoxLayout()
+        self._lbl_code_status = QLabel(tr("rgb.custom_effects.code_auto"))
+        self._lbl_code_status.setObjectName("lbl_code_status")
+        self._lbl_code_status.setStyleSheet("font-size: 10px; color: #888888;")
         code_header.addWidget(QLabel(tr("rgb.custom_effects.code_preview")))
+        code_header.addWidget(self._lbl_code_status)
         code_header.addStretch()
+        self._btn_reset_code = QPushButton(tr("rgb.custom_effects.reset_code"))
+        self._btn_reset_code.setObjectName("btn_reset_code")
+        self._btn_reset_code.setFixedHeight(24)
+        self._btn_reset_code.setVisible(False)
+        self._btn_reset_code.clicked.connect(self._on_reset_code)
+        code_header.addWidget(self._btn_reset_code)
         self._btn_copy_code = QPushButton(tr("rgb.custom_effects.copy_code"))
         self._btn_copy_code.setObjectName("btn_copy_code")
         self._btn_copy_code.setFixedHeight(24)
@@ -792,6 +820,8 @@ class RgbWidget(QWidget):
             "QPlainTextEdit { background-color: #1E1E1E; color: #D4D4D4;"
             " font-family: 'Consolas', 'Monaco', monospace; font-size: 11px; }"
         )
+        self._code_user_editing = False  # flag pour ignorer textChanged pendant setPlainText
+        self._code_preview.textChanged.connect(self._on_code_edited)
         right_layout.addWidget(self._code_preview)
 
         splitter.addWidget(left_panel)
@@ -891,6 +921,7 @@ class RgbWidget(QWidget):
         self._editing_custom_idx = custom_idx
         self._editing_track_idx = 0
         self._editing_step_idx = 0
+        self._custom_trigger_mode = False
         ce = self._model.rgb.custom_effects[custom_idx]
         self._lbl_custom_name.setText(ce.name)
         type_label = tr("rgb.custom_effects.type_reactive") if ce.effect_type == "reactive" else tr("rgb.custom_effects.type_ambient")
@@ -940,17 +971,25 @@ class RgbWidget(QWidget):
             frame = QFrame()
             frame.setObjectName(f"track_frame_{ti}")
             frame.setFrameShape(QFrame.Shape.StyledPanel)
-            frame.setStyleSheet(
-                "QFrame#track_frame_%d { border: 2px solid #77AAFF; border-radius: 6px; }" % ti
-                if is_selected else
-                "QFrame#track_frame_%d { border: 1px solid #333333; border-radius: 6px; }" % ti
-            )
+            if not track.enabled:
+                frame_style = "QFrame#track_frame_%d { border: 1px dashed #555555; border-radius: 6px; opacity: 0.5; }" % ti
+            elif is_selected:
+                frame_style = "QFrame#track_frame_%d { border: 2px solid #77AAFF; border-radius: 6px; }" % ti
+            else:
+                frame_style = "QFrame#track_frame_%d { border: 1px solid #333333; border-radius: 6px; }" % ti
+            frame.setStyleSheet(frame_style)
             frame_layout = QVBoxLayout(frame)
             frame_layout.setContentsMargins(8, 6, 8, 6)
             frame_layout.setSpacing(4)
 
-            # Ligne 1 : nom de la piste + info cibles + boutons +/- événement
+            # Ligne 1 : case activer + nom de la piste + info cibles + boutons +/- événement
             name_row = QHBoxLayout()
+            chk_enabled = QCheckBox()
+            chk_enabled.setObjectName(f"track_enabled_{ti}")
+            chk_enabled.setChecked(track.enabled)
+            chk_enabled.setToolTip(tr("rgb.custom_effects.track_enabled_tooltip"))
+            chk_enabled.toggled.connect(lambda checked, idx=ti: self._on_track_enabled_toggled(idx, checked))
+            name_row.addWidget(chk_enabled)
             name_btn = QPushButton(track.name)
             name_btn.setObjectName(f"track_name_{ti}")
             name_btn.setFlat(True)
@@ -1017,6 +1056,29 @@ class RgbWidget(QWidget):
                     lbl_ref = QLabel(tr("rgb.custom_effects.relative_ref").format(key=ref_text))
                     lbl_ref.setStyleSheet("color: #AAAAAA; font-size: 10px; margin-left: 12px;")
                     mode_row.addWidget(lbl_ref)
+                # Bouton trigger keys (réactif seulement)
+                if ce.effect_type == "reactive":
+                    mode_row.addSpacing(16)
+                    btn_trigger = QPushButton(
+                        tr("rgb.custom_effects.trigger_click") if self._custom_trigger_mode
+                        else tr("rgb.custom_effects.trigger_btn")
+                    )
+                    btn_trigger.setObjectName(f"btn_track_trigger_{ti}")
+                    btn_trigger.setFixedHeight(24)
+                    btn_trigger.setStyleSheet("font-size: 11px; padding: 2px 8px;")
+                    btn_trigger.clicked.connect(self._on_custom_trigger_clicked)
+                    mode_row.addWidget(btn_trigger)
+                    if track.trigger_keys:
+                        keys_text = ", ".join(track.trigger_keys[:5])
+                        if len(track.trigger_keys) > 5:
+                            keys_text += "…"
+                        lbl_trig = QLabel(
+                            tr("rgb.custom_effects.trigger_set").format(key=keys_text)
+                        )
+                    else:
+                        lbl_trig = QLabel(tr("rgb.custom_effects.trigger_none"))
+                    lbl_trig.setStyleSheet("color: #00FF88; font-size: 10px;")
+                    mode_row.addWidget(lbl_trig)
                 mode_row.addStretch()
                 frame_layout.addLayout(mode_row)
 
@@ -1122,6 +1184,12 @@ class RgbWidget(QWidget):
                             if item:
                                 item.setPen(QPen(QColor("#77AAFF"), 2))
         # Pour "default", pas de highlight spécifique (la touche d'origine)
+        # Highlight des trigger keys (vert) si définies sur la piste
+        if track and track.trigger_keys:
+            for tk in track.trigger_keys:
+                trigger_item = self._key_buttons.get(tk)
+                if trigger_item:
+                    trigger_item.setPen(QPen(QColor("#00FF88"), 3))
 
     def _key_to_qmk_rc(self, key_id: str) -> tuple[int, int] | None:
         """Convertit key_id en coordonnées matricielles QMK (row offset pour R en split)."""
@@ -1153,6 +1221,7 @@ class RgbWidget(QWidget):
         self._editing_track_idx = track_idx
         self._editing_step_idx = 0
         self._relative_ref_key = None  # reset la référence relative
+        self._custom_trigger_mode = False  # reset le mode trigger
         self._refresh_tracks_ui()
         self._refresh_step_params()
         self._refresh_key_highlights()
@@ -1324,37 +1393,82 @@ class RgbWidget(QWidget):
         if clipboard:
             clipboard.setText(self._code_preview.toPlainText())
 
-    def _refresh_code_preview(self) -> None:
-        """Rend le template rgb_matrix_user.inc.j2 avec l'effet custom courant."""
+    def _on_code_edited(self) -> None:
+        """Appelé quand l'utilisateur modifie le code manuellement."""
+        if self._code_user_editing:
+            return  # Ignorer les modifications programmatiques
         ce = self._current_custom_effect()
         if not ce:
-            self._code_preview.setPlainText("")
+            return
+        ce.custom_code = self._code_preview.toPlainText()
+        self._btn_reset_code.setVisible(True)
+        self._lbl_code_status.setText(tr("rgb.custom_effects.code_edited"))
+        self._lbl_code_status.setStyleSheet("font-size: 10px; color: #FFAA00;")
+
+    def _on_reset_code(self) -> None:
+        """Réinitialise le code C depuis l'éditeur visuel (supprime custom_code)."""
+        ce = self._current_custom_effect()
+        if ce:
+            ce.custom_code = None
+        self._btn_reset_code.setVisible(False)
+        self._lbl_code_status.setText(tr("rgb.custom_effects.code_auto"))
+        self._lbl_code_status.setStyleSheet("font-size: 10px; color: #888888;")
+        self._refresh_code_preview()
+
+    def _generate_code(self) -> str:
+        """Génère le code C depuis le template Jinja2 pour l'effet custom courant."""
+        ce = self._current_custom_effect()
+        if not ce:
+            return ""
+        from jinja2 import Environment, FileSystemLoader
+        from modules.build_manager.template_generator import TEMPLATES_DIR, _build_timeline_effects
+
+        kb = self._find_current_keyboard()
+        matrix_rows = kb.matrix.get("rows", 5) if kb else 5
+        is_split = kb.split if kb else True
+
+        timeline_ctx = _build_timeline_effects([ce], matrix_rows, is_split)
+        env = Environment(
+            loader=FileSystemLoader(str(TEMPLATES_DIR)),
+            autoescape=False,
+            keep_trailing_newline=True,
+        )
+        tmpl = env.get_template("rgb_matrix_user.inc.j2")
+        return tmpl.render(
+            custom_effects=[],
+            timeline_effects=timeline_ctx,
+            has_custom_effects=False,
+            has_reactive_effects=False,
+            has_timeline_effects=bool(timeline_ctx),
+        )
+
+    def _refresh_code_preview(self) -> None:
+        """Met à jour le panneau code C. Si custom_code est défini, l'affiche tel quel."""
+        ce = self._current_custom_effect()
+        if not ce:
+            self._set_code_text("")
+            return
+        if ce.custom_code is not None:
+            # Afficher le code custom édité
+            self._set_code_text(ce.custom_code)
+            self._btn_reset_code.setVisible(True)
+            self._lbl_code_status.setText(tr("rgb.custom_effects.code_edited"))
+            self._lbl_code_status.setStyleSheet("font-size: 10px; color: #FFAA00;")
             return
         try:
-            from jinja2 import Environment, FileSystemLoader
-            from modules.build_manager.template_generator import TEMPLATES_DIR, _build_timeline_effects
-
-            kb = self._find_current_keyboard()
-            matrix_rows = kb.matrix.get("rows", 5) if kb else 5
-            is_split = kb.split if kb else True
-
-            timeline_ctx = _build_timeline_effects([ce], matrix_rows, is_split)
-            env = Environment(
-                loader=FileSystemLoader(str(TEMPLATES_DIR)),
-                autoescape=False,
-                keep_trailing_newline=True,
-            )
-            tmpl = env.get_template("rgb_matrix_user.inc.j2")
-            code = tmpl.render(
-                custom_effects=[],
-                timeline_effects=timeline_ctx,
-                has_custom_effects=False,
-                has_reactive_effects=False,
-                has_timeline_effects=bool(timeline_ctx),
-            )
-            self._code_preview.setPlainText(code)
+            code = self._generate_code()
+            self._set_code_text(code)
+            self._btn_reset_code.setVisible(False)
+            self._lbl_code_status.setText(tr("rgb.custom_effects.code_auto"))
+            self._lbl_code_status.setStyleSheet("font-size: 10px; color: #888888;")
         except Exception:
             logger.exception("Erreur lors du rendu du code preview")
+
+    def _set_code_text(self, text: str) -> None:
+        """Met à jour le QPlainTextEdit sans déclencher _on_code_edited."""
+        self._code_user_editing = True
+        self._code_preview.setPlainText(text)
+        self._code_user_editing = False
 
     def _restart_custom_preview(self) -> None:
         """Relance le preview custom après une modification de l'effet."""
@@ -1460,7 +1574,30 @@ class RgbWidget(QWidget):
 
     # ────────────────────────────────────────────────── Key click handlers ──
 
+    def _on_custom_trigger_clicked(self) -> None:
+        """Active/désactive le mode assignation des touches déclencheur (par piste)."""
+        track = self._current_track()
+        if not track:
+            return
+        if self._custom_trigger_mode:
+            # Annuler le mode
+            self._custom_trigger_mode = False
+            self._refresh_tracks_ui()
+        else:
+            self._custom_trigger_mode = True
+            self._refresh_tracks_ui()
+
     def _on_key_clicked(self, key_id: str) -> None:
+        if self._custom_trigger_mode:
+            track = self._current_track()
+            if track:
+                if key_id not in track.trigger_keys:
+                    track.trigger_keys.append(key_id)
+                    logger.info("Touche déclencheur ajoutée à la piste : %s", key_id)
+                self._refresh_tracks_ui()
+                self._refresh_key_highlights()
+                self._refresh_code_preview()
+            return
         if self._trigger_mode:
             if self._model.rgb.effects:
                 self._model.rgb.effects[0].trigger_key = key_id
@@ -1510,11 +1647,19 @@ class RgbWidget(QWidget):
             self._apply_color(key_id, hex_color)
 
     def _on_key_right_clicked(self, key_id: str) -> None:
-        """Clic droit : retirer une touche de la sélection (fixed ou relative)."""
+        """Clic droit : retirer une touche de la sélection (fixed, relative ou trigger)."""
         if self._editing_custom_idx is None or self._effect_stack.currentIndex() != 3:
             return
         track = self._current_track()
         if not track:
+            return
+        # En mode trigger ou hors mode : retirer une trigger key par clic droit
+        if key_id in track.trigger_keys:
+            track.trigger_keys.remove(key_id)
+            logger.info("Touche déclencheur retirée de la piste : %s", key_id)
+            self._refresh_tracks_ui()
+            self._refresh_key_highlights()
+            self._refresh_code_preview()
             return
         if track.target_mode == "fixed":
             if key_id in track.keys_fixed:
@@ -1634,6 +1779,17 @@ class RgbWidget(QWidget):
         if self._model.rgb.effects:
             self._model.rgb.effects[0].fade_ms = value
 
+    def _on_underglow_changed(self, value: int) -> None:
+        self._model.keyboard.rgb_underglow_per_side = value
+
+    def _on_track_enabled_toggled(self, track_idx: int, checked: bool) -> None:
+        ce = self._current_custom_effect()
+        if ce and 0 <= track_idx < len(ce.tracks):
+            ce.tracks[track_idx].enabled = checked
+            self._refresh_tracks_ui()
+            self._refresh_code_preview()
+            self._restart_custom_preview()
+
     def _on_speed_changed(self, value: int) -> None:
         self._speed_label.setText(str(value))
         edef = self._current_effect_def()
@@ -1689,8 +1845,13 @@ class RgbWidget(QWidget):
 
     def _sync_from_model(self) -> None:
         """Restaure les couleurs touches et l'état effets depuis le modèle."""
+        self._spn_underglow.blockSignals(True)
+        self._spn_underglow.setValue(self._model.keyboard.rgb_underglow_per_side)
+        self._spn_underglow.blockSignals(False)
         for key_id, hex_color in self._model.rgb.per_key.items():
             self._apply_color(key_id, hex_color)
+        # Reconstruire la section custom effects
+        self._rebuild_custom_section(self._custom_section_start)
         if self._model.rgb.effects:
             effect = self._model.rgb.effects[0]
             # Trouver le row de la liste correspondant au type d'effet

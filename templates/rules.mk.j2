@@ -20,7 +20,7 @@ RGB_MATRIX_DRIVER = ws2812
 {% if pins.ws2812_driver %}
 WS2812_DRIVER = {{ pins.ws2812_driver }}
 {% endif %}
-{% if has_custom_effects %}
+{% if has_custom_effects or has_timeline_effects %}
 RGB_MATRIX_CUSTOM_USER = yes
 {% endif %}
 {% endif %}

@@ -25,24 +25,39 @@ class KeyboardConfig:
     # slug de la variante sélectionnée, "" = première variante (ou pas de variante)
     rgb_enabled: bool = False
     # override de la capability RGB YAML — choix de build de l'utilisateur
+    rgb_underglow_per_side: int = -1
+    # -1 = auto (toutes les LEDs underglow de la config native)
+    #  0 = aucune LED underglow/accent sur le PCB
+    #  N = exactement N LEDs underglow/accent par moitié (split) ou total (non-split)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "model": self.model,
             "mcu": self.mcu,
             "oled_sides": list(self.oled_sides),
             "layout_variant": self.layout_variant,
             "rgb_enabled": self.rgb_enabled,
         }
+        if self.rgb_underglow_per_side != -1:
+            d["rgb_underglow_per_side"] = self.rgb_underglow_per_side
+        return d
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "KeyboardConfig":
+        # Migration: old bool rgb_underglow → new int rgb_underglow_per_side
+        if "rgb_underglow_per_side" in data:
+            underglow = int(data["rgb_underglow_per_side"])
+        elif "rgb_underglow" in data:
+            underglow = -1 if data["rgb_underglow"] else 0
+        else:
+            underglow = -1
         return cls(
             model=data.get("model", ""),
             mcu=data.get("mcu", ""),
             oled_sides=list(data.get("oled_sides", [])),
             layout_variant=data.get("layout_variant", ""),
             rgb_enabled=bool(data.get("rgb_enabled", False)),
+            rgb_underglow_per_side=underglow,
         )
 
 
@@ -305,7 +320,9 @@ class EffectTrack:
     """
 
     name: str = "Piste 1"
+    enabled: bool = True
     target_mode: str = "default"  # "default" | "relative" | "fixed"
+    trigger_keys: list[str] = field(default_factory=list)  # key_ids déclencheurs (vide = toutes)
     keys_offset: list[KeyOffset] = field(default_factory=list)
     keys_fixed: list[str] = field(default_factory=list)  # ex: ["L_r2_c3", "R_r0_c5"]
     steps: list[EffectStep] = field(default_factory=list)
@@ -316,6 +333,10 @@ class EffectTrack:
             "target_mode": self.target_mode,
             "steps": [s.to_dict() for s in self.steps],
         }
+        if not self.enabled:
+            d["enabled"] = False
+        if self.trigger_keys:
+            d["trigger_keys"] = list(self.trigger_keys)
         if self.target_mode == "relative" and self.keys_offset:
             d["keys_offset"] = [k.to_dict() for k in self.keys_offset]
         if self.target_mode == "fixed" and self.keys_fixed:
@@ -326,7 +347,9 @@ class EffectTrack:
     def from_dict(cls, data: dict[str, Any]) -> "EffectTrack":
         return cls(
             name=data.get("name", "Piste 1"),
+            enabled=bool(data.get("enabled", True)),
             target_mode=data.get("target_mode", "default"),
+            trigger_keys=list(data.get("trigger_keys") or []),
             keys_offset=[KeyOffset.from_dict(k) for k in (data.get("keys_offset") or [])],
             keys_fixed=list(data.get("keys_fixed") or []),
             steps=[EffectStep.from_dict(s) for s in (data.get("steps") or [])],
@@ -346,13 +369,17 @@ class CustomEffect:
     name: str = "Mon effet"
     effect_type: str = "reactive"  # "reactive" | "ambient"
     tracks: list[EffectTrack] = field(default_factory=list)
+    custom_code: str | None = None  # code C édité manuellement (bypass Jinja2)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "name": self.name,
             "effect_type": self.effect_type,
             "tracks": [t.to_dict() for t in self.tracks],
         }
+        if self.custom_code is not None:
+            d["custom_code"] = self.custom_code
+        return d
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CustomEffect":
@@ -360,6 +387,7 @@ class CustomEffect:
             name=data.get("name", "Mon effet"),
             effect_type=data.get("effect_type", "reactive"),
             tracks=[EffectTrack.from_dict(t) for t in (data.get("tracks") or [])],
+            custom_code=data.get("custom_code"),
         )
 
 

@@ -463,6 +463,8 @@ class EffectPreview:
         """Durée totale de l'animation (ms) = max(dernier step time + fade)."""
         total = 0
         for track in ce.tracks:
+            if not track.enabled:
+                continue
             if track.steps:
                 last = track.steps[-1]
                 total = max(total, last.time_ms + last.fade_ms)
@@ -492,6 +494,8 @@ class EffectPreview:
             btn.set_color("#111111")
 
         for track in ce.tracks:
+            if not track.enabled:
+                continue
             # Déterminer les key_ids ciblés
             target_keys = self._resolve_track_targets(track)
             if not target_keys:

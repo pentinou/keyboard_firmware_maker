@@ -215,6 +215,14 @@ STRINGS: dict[str, dict[str, str]] = {
         "keyboard_editor.preview_label": "Aperçu du layout",
         # RGB widget
         "rgb.instructions": "Couleurs par touche \u2014 cliquez une touche pour assigner une couleur",
+        "rgb.underglow_label": "LEDs underglow / accent :",
+        "rgb.underglow_auto": "Auto (toutes)",
+        "rgb.underglow_help": "Certains PCB ont des LEDs sous la carte (underglow) qui ne sont pas liées à une touche. "
+            "Elles sont en début de chaîne WS2812, avant les LEDs des touches. "
+            "Si elles ne sont pas soudées sur votre PCB, les touches s'allument avec un décalage. "
+            "Réglez le nombre de LEDs underglow présentes sur votre PCB "
+            "(par moitié pour un clavier split, au total pour un clavier classique). "
+            "« Auto » = toutes celles prévues par le fabricant. 0 = aucune.",
         "rgb.effects_group": "Effets RGB",
         "rgb.speed": "Vitesse",
         "rgb.brightness": "Luminosité",
@@ -249,6 +257,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "rgb.custom_effects.delete_title": "Supprimer l'effet",
         "rgb.custom_effects.delete_confirm": "Supprimer définitivement l'effet « {name} » ?\n\nCette action est irréversible.",
         "rgb.custom_effects.save": "💾 Sauvegarder",
+        "rgb.custom_effects.trigger_btn": "🎯 Touche déclencheur",
+        "rgb.custom_effects.trigger_none": "Toutes les touches",
+        "rgb.custom_effects.trigger_click": "Cliquez une touche…",
+        "rgb.custom_effects.trigger_set": "Déclencheur : {key}",
         "rgb.custom_effects.add_track": "+ Ajouter une piste",
         "rgb.custom_effects.default_track": "Touche par défaut",
         "rgb.custom_effects.target_mode": "Cible :",
@@ -283,11 +295,15 @@ STRINGS: dict[str, dict[str, str]] = {
         "rgb.custom_effects.hint_select_step": "Sélectionnez un événement sur la frise, puis cliquez les touches du clavier pour définir les cibles.",
         "rgb.custom_effects.hint_click_keys": "Cliquez les touches du clavier pour ajouter/retirer des cibles pour cet événement.",
         "rgb.custom_effects.remove_track": "Supprimer piste",
+        "rgb.custom_effects.track_enabled_tooltip": "Activer / désactiver cette piste (la piste est conservée mais ignorée à la compilation)",
         "rgb.custom_effects.add_step": "+ Événement",
         "rgb.custom_effects.remove_step": "- Événement",
         "rgb.custom_effects.step_prefix": "T",
         "rgb.custom_effects.code_preview": "Code C",
         "rgb.custom_effects.copy_code": "Copier",
+        "rgb.custom_effects.reset_code": "↺ Régénérer",
+        "rgb.custom_effects.code_edited": "✏️ Code modifié manuellement",
+        "rgb.custom_effects.code_auto": "Code auto-généré",
         # Custom effects (legacy)
         "rgb.custom.pattern": "Pattern :",
         "rgb.custom.pattern.wave": "Vague",
@@ -524,6 +540,14 @@ STRINGS: dict[str, dict[str, str]] = {
         "keyboard_editor.preview_label": "Layout preview",
         # RGB widget
         "rgb.instructions": "Per-key colors \u2014 click a key to assign a color",
+        "rgb.underglow_label": "Underglow / accent LEDs:",
+        "rgb.underglow_auto": "Auto (all)",
+        "rgb.underglow_help": "Some PCBs have LEDs under the board (underglow) that are not linked to any key. "
+            "They sit at the start of the WS2812 chain, before the per-key LEDs. "
+            "If they are not soldered on your PCB, keys will light up with an offset. "
+            "Set the number of underglow LEDs actually present on your PCB "
+            "(per half for split keyboards, total for single-piece boards). "
+            "\"Auto\" = all LEDs from the manufacturer's config. 0 = none.",
         "rgb.effects_group": "RGB Effects",
         "rgb.speed": "Speed",
         "rgb.brightness": "Brightness",
@@ -558,6 +582,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "rgb.custom_effects.delete_title": "Delete effect",
         "rgb.custom_effects.delete_confirm": "Permanently delete effect \"{name}\"?\n\nThis action cannot be undone.",
         "rgb.custom_effects.save": "💾 Save",
+        "rgb.custom_effects.trigger_btn": "🎯 Trigger key",
+        "rgb.custom_effects.trigger_none": "All keys",
+        "rgb.custom_effects.trigger_click": "Click a key…",
+        "rgb.custom_effects.trigger_set": "Trigger: {key}",
         "rgb.custom_effects.add_track": "+ Add track",
         "rgb.custom_effects.default_track": "Default key",
         "rgb.custom_effects.target_mode": "Target:",
@@ -592,11 +620,15 @@ STRINGS: dict[str, dict[str, str]] = {
         "rgb.custom_effects.hint_select_step": "Select an event on the timeline, then click keys on the keyboard to set targets.",
         "rgb.custom_effects.hint_click_keys": "Click keys on the keyboard to add/remove targets for this event.",
         "rgb.custom_effects.remove_track": "Remove track",
+        "rgb.custom_effects.track_enabled_tooltip": "Enable / disable this track (the track is kept but ignored during compilation)",
         "rgb.custom_effects.add_step": "+ Event",
         "rgb.custom_effects.remove_step": "- Event",
         "rgb.custom_effects.step_prefix": "T",
         "rgb.custom_effects.code_preview": "C Code",
         "rgb.custom_effects.copy_code": "Copy",
+        "rgb.custom_effects.reset_code": "↺ Regenerate",
+        "rgb.custom_effects.code_edited": "✏️ Manually edited code",
+        "rgb.custom_effects.code_auto": "Auto-generated code",
         # Custom effects (legacy)
         "rgb.custom.pattern": "Pattern:",
         "rgb.custom.pattern.wave": "Wave",
@@ -833,6 +865,14 @@ STRINGS: dict[str, dict[str, str]] = {
         "keyboard_editor.preview_label": "Anteprima layout",
         # Widget RGB
         "rgb.instructions": "Colori per tasto \u2014 clicca un tasto per assegnare un colore",
+        "rgb.underglow_label": "LED underglow / accent:",
+        "rgb.underglow_auto": "Auto (tutti)",
+        "rgb.underglow_help": "Alcuni PCB hanno LED sotto la scheda (underglow) non collegati a nessun tasto. "
+            "Si trovano all'inizio della catena WS2812, prima dei LED dei tasti. "
+            "Se non sono saldati sul vostro PCB, i tasti si illuminano con uno sfasamento. "
+            "Impostare il numero di LED underglow presenti sul PCB "
+            "(per metà per tastiere split, totale per tastiere classiche). "
+            "« Auto » = tutti quelli previsti dal produttore. 0 = nessuno.",
         "rgb.effects_group": "Effetti RGB",
         "rgb.speed": "Velocità",
         "rgb.brightness": "Luminosità",
@@ -867,6 +907,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "rgb.custom_effects.delete_title": "Eliminare l'effetto",
         "rgb.custom_effects.delete_confirm": "Eliminare definitivamente l'effetto \"{name}\"?\n\nQuesta azione è irreversibile.",
         "rgb.custom_effects.save": "💾 Salva",
+        "rgb.custom_effects.trigger_btn": "🎯 Tasto trigger",
+        "rgb.custom_effects.trigger_none": "Tutti i tasti",
+        "rgb.custom_effects.trigger_click": "Clicca un tasto…",
+        "rgb.custom_effects.trigger_set": "Trigger: {key}",
         "rgb.custom_effects.add_track": "+ Aggiungi pista",
         "rgb.custom_effects.default_track": "Tasto predefinito",
         "rgb.custom_effects.target_mode": "Obiettivo:",
@@ -901,11 +945,15 @@ STRINGS: dict[str, dict[str, str]] = {
         "rgb.custom_effects.hint_select_step": "Seleziona un evento sulla timeline, poi clicca i tasti sulla tastiera per definire gli obiettivi.",
         "rgb.custom_effects.hint_click_keys": "Clicca i tasti sulla tastiera per aggiungere/rimuovere obiettivi per questo evento.",
         "rgb.custom_effects.remove_track": "Rimuovi pista",
+        "rgb.custom_effects.track_enabled_tooltip": "Attiva / disattiva questa pista (la pista viene conservata ma ignorata durante la compilazione)",
         "rgb.custom_effects.add_step": "+ Evento",
         "rgb.custom_effects.remove_step": "- Evento",
         "rgb.custom_effects.step_prefix": "T",
         "rgb.custom_effects.code_preview": "Codice C",
         "rgb.custom_effects.copy_code": "Copia",
+        "rgb.custom_effects.reset_code": "↺ Rigenera",
+        "rgb.custom_effects.code_edited": "✏️ Codice modificato manualmente",
+        "rgb.custom_effects.code_auto": "Codice auto-generato",
         # Custom effects (legacy)
         "rgb.custom.pattern": "Pattern:",
         "rgb.custom.pattern.wave": "Onda",

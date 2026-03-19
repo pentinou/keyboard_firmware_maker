@@ -80,8 +80,21 @@ bool {{ e.name }}(effect_params_t* params) {
 {{ indent }}}
 {% endmacro %}
 
+{# ── Macro: trigger key filter for a track ── #}
+{# Emits a bool expression that checks if hit LED matches any trigger key #}
+{% macro trigger_check(trigger_positions, var_prefix) %}
+{% if trigger_positions | length == 1 %}
+g_last_hit_tracker.index[{{ var_prefix }}] != g_led_config.matrix_co[{{ trigger_positions[0].row }}][{{ trigger_positions[0].col }}]
+{%- elif trigger_positions | length > 1 %}
+({% for tp in trigger_positions %}g_last_hit_tracker.index[{{ var_prefix }}] != g_led_config.matrix_co[{{ tp.row }}][{{ tp.col }}]{% if not loop.last %} && {% endif %}{% endfor %})
+{%- endif %}
+{% endmacro %}
+
 {# ── Timeline-based custom effects ── #}
 {% for te in timeline_effects %}
+{% if te.custom_code %}
+{{ te.custom_code }}
+{% else %}
 bool {{ te.name }}(effect_params_t* params) {
     RGB_MATRIX_USE_LIMITS(led_min, led_max);
 {% if te.effect_type == "ambient" %}
@@ -105,20 +118,32 @@ bool {{ te.name }}(effect_params_t* params) {
             uint16_t t = _elapsed;
 {% else %}{# reactive fixed: use most recent hit #}
             uint16_t t = {{ te.total_duration }}U;
-            if (g_last_hit.count > 0) {
-                t = timer_elapsed(g_last_hit.tick[g_last_hit.count - 1]);
+{% if track.trigger_positions %}
+            // Find most recent hit on trigger key(s) only
+            for (uint8_t _h = 0; _h < g_last_hit_tracker.count; _h++) {
+                if ({{ trigger_check(track.trigger_positions, "_h") | trim }}) continue;
+                uint16_t _ht = g_last_hit_tracker.tick[_h];
+                if (_ht < t) t = _ht;
+            }
+{% else %}
+            if (g_last_hit_tracker.count > 0) {
+                t = g_last_hit_tracker.tick[g_last_hit_tracker.count - 1];
                 if (t > {{ te.total_duration }}U) t = {{ te.total_duration }}U;
             }
+{% endif %}
 {% endif %}
 {{ render_steps(track.steps, "            ") }}
         }
 {% elif track.target_mode == "relative" and track.key_offsets and te.effect_type == "reactive" %}
         // Reactive relative: animate offset keys around the pressed key
-        for (uint8_t _h = 0; _h < g_last_hit.count; _h++) {
-            uint16_t t = timer_elapsed(g_last_hit.tick[_h]);
+        for (uint8_t _h = 0; _h < g_last_hit_tracker.count; _h++) {
+{% if track.trigger_positions %}
+            if ({{ trigger_check(track.trigger_positions, "_h") | trim }}) continue;
+{% endif %}
+            uint16_t t = g_last_hit_tracker.tick[_h];
             if (t > {{ te.total_duration }}U) continue;
             // Find (row, col) of the hit LED
-            uint8_t _hit_led = g_last_hit.index[_h];
+            uint8_t _hit_led = g_last_hit_tracker.index[_h];
             int8_t _hit_row = -1, _hit_col = -1;
             for (uint8_t _mr = 0; _mr < MATRIX_ROWS; _mr++) {
                 for (uint8_t _mc = 0; _mc < MATRIX_COLS; _mc++) {
@@ -142,10 +167,13 @@ bool {{ te.name }}(effect_params_t* params) {
         }
 {% elif track.target_mode == "default" and te.effect_type == "reactive" %}
         // Reactive default: animate on the pressed key
-        for (uint8_t _h = 0; _h < g_last_hit.count; _h++) {
-            uint16_t t = timer_elapsed(g_last_hit.tick[_h]);
+        for (uint8_t _h = 0; _h < g_last_hit_tracker.count; _h++) {
+{% if track.trigger_positions %}
+            if ({{ trigger_check(track.trigger_positions, "_h") | trim }}) continue;
+{% endif %}
+            uint16_t t = g_last_hit_tracker.tick[_h];
             if (t > {{ te.total_duration }}U) continue;
-            if (i != g_last_hit.index[_h]) continue;
+            if (i != g_last_hit_tracker.index[_h]) continue;
 {{ render_steps(track.steps, "            ") }}
         }
 {% endif %}
@@ -155,6 +183,7 @@ bool {{ te.name }}(effect_params_t* params) {
     }
     return rgb_matrix_check_finished_leds(led_max);
 }
+{% endif %}
 {% endfor %}
 
 #endif /* RGB_MATRIX_CUSTOM_EFFECT_IMPLS */

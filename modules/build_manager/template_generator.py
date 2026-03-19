@@ -250,6 +250,14 @@ class TemplateGenerator:
         # RGB enabled if the keyboard hardware supports it (capability from YAML)
         rgb_enabled = bool(capabilities.get("rgb", False))
 
+        # Load native LED config from vial-qmk when available
+        native_led_config: dict[str, Any] | None = None
+        if kb_def.vial_qmk_keyboard and rgb_enabled:
+            native_led_config = _load_native_led_config(
+                kb_def.vial_qmk_keyboard, matrix_rows, matrix_cols,
+                underglow_per_side=model.keyboard.rgb_underglow_per_side,
+            )
+
         # Build flat key list for vial.json with physical positions
         vial_keys: list[dict] = []
 
@@ -414,12 +422,31 @@ class TemplateGenerator:
         )
 
         # Build list of enabled QMK effect constants for config.h
-        from modules.rgb_editor.effects import ALL_BUILTIN_IDS, EFFECT_QMK_MODE
+        from modules.rgb_editor.effects import (
+            ALL_BUILTIN_IDS, EFFECT_QMK_MODE, QMK_ENUM_ORDER,
+            EFFECT_OLED_NAME, NEEDS_FRAMEBUFFER,
+        )
         if model.rgb.enabled_effects:
             enabled_ids = [eid for eid in model.rgb.enabled_effects if eid in EFFECT_QMK_MODE]
         else:
             enabled_ids = ALL_BUILTIN_IDS
-        enabled_rgb_effects = [EFFECT_QMK_MODE[eid] for eid in enabled_ids if eid in EFFECT_QMK_MODE]
+        # Exclude effects that can't compile without FRAMEBUFFER_EFFECTS
+        compilable_ids = [eid for eid in enabled_ids if eid not in NEEDS_FRAMEBUFFER]
+        enabled_rgb_effects = [EFFECT_QMK_MODE[eid] for eid in compilable_ids if eid in EFFECT_QMK_MODE]
+
+        # Build OLED name table in exact QMK enum order
+        compilable_set = set(compilable_ids) | {"static"}
+        rgb_oled_names: list[str] = []
+        for eid in QMK_ENUM_ORDER:
+            if eid not in compilable_set:
+                continue
+            rgb_oled_names.append(EFFECT_OLED_NAME[eid])
+        # Append custom ripple effects
+        for e in custom_effects_ctx:
+            rgb_oled_names.append(e["name"][:10].ljust(10))
+        # Append custom timeline effects
+        for te in timeline_effects_ctx:
+            rgb_oled_names.append(te["user_name"][:10].ljust(10))
 
         uid_seed = (model.keyboard.model or "keyboard").encode()
         uid_bytes = hashlib.md5(uid_seed).digest()[:8]
@@ -517,6 +544,7 @@ class TemplateGenerator:
             "right_crab_enabled": right_crab,
             "right_crab_line": right.crab_line,
             # RGB
+            "native_led_config": native_led_config,
             "rgb_effects": [e.to_dict() for e in model.rgb.effects],
             "rgb_default_effect": self._get_rgb_default(model),
             "enabled_rgb_effects": enabled_rgb_effects,
@@ -526,6 +554,10 @@ class TemplateGenerator:
             "has_reactive_effects": any(e["type"] == "ripple" for e in custom_effects_ctx),
             "timeline_effects": timeline_effects_ctx,
             "has_timeline_effects": bool(timeline_effects_ctx),
+            "has_reactive_timeline": any(
+                te["effect_type"] == "reactive" for te in timeline_effects_ctx
+            ),
+            "rgb_oled_names": rgb_oled_names,
             "matrix_rows": matrix_rows,
             "matrix_cols": matrix_cols,
             "vial_keys": vial_keys,
@@ -602,6 +634,117 @@ def _load_native_layouts(
         "Layouts natifs introuvables pour '%s' dans %s", keyboard_path, vial_qmk_dir,
     )
     return None, layout_macro
+
+
+def _keep_n_underglow(leds: list[dict], n: int) -> list[dict]:
+    """Garde les N premières LEDs underglow (sans ``matrix``) et toutes les LEDs per-key."""
+    result: list[dict] = []
+    underglow_kept = 0
+    for led in leds:
+        if led.get("matrix"):
+            result.append(led)
+        elif underglow_kept < n:
+            result.append(led)
+            underglow_kept += 1
+        # else: LED underglow au-delà du quota → supprimée
+    return result
+
+
+def _load_native_led_config(
+    keyboard_path: str,
+    matrix_rows: int,
+    matrix_cols: int,
+    underglow_per_side: int = -1,
+    vial_qmk_dir: Path = _VIAL_QMK_DIR,
+) -> dict[str, Any] | None:
+    """Charge la config LED native depuis info.json / keyboard.json du clavier vial-qmk.
+
+    Cherche ``rgb_matrix.layout`` en remontant l'arborescence du clavier.
+
+    Args:
+        underglow_per_side: Nombre de LEDs underglow/accent à conserver par moitié
+            (split) ou au total (non-split).
+            -1 = auto (toutes, config native inchangée).
+             0 = aucune underglow → supprime toutes les LEDs sans ``matrix``.
+             N = garde les N premières underglow par moitié, supprime le reste.
+
+    Returns:
+        Dict avec led_count, split_count, matrix_co, positions, flags,
+        ou None si pas de config LED trouvée.
+    """
+    keyboards_root = vial_qmk_dir / "keyboards"
+    search_dir = keyboards_root / keyboard_path
+
+    rgb_layout: list[dict] | None = None
+    split_count: list[int] | None = None
+
+    while search_dir != keyboards_root and search_dir.is_relative_to(keyboards_root):
+        for name in ("keyboard.json", "info.json"):
+            json_path = search_dir / name
+            if not json_path.is_file():
+                continue
+            try:
+                data = json.loads(json_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            rgb_matrix = data.get("rgb_matrix", {})
+            if "layout" in rgb_matrix:
+                rgb_layout = rgb_matrix["layout"]
+                split_count = rgb_matrix.get("split_count")
+                break
+        if rgb_layout:
+            break
+        search_dir = search_dir.parent
+
+    if not rgb_layout:
+        return None
+
+    # ── Adjust underglow/accent LED count per PCB reality ──
+    if underglow_per_side >= 0:
+        if split_count:
+            left_half = rgb_layout[: split_count[0]]
+            right_half = rgb_layout[split_count[0] :]
+            left_filtered = _keep_n_underglow(left_half, underglow_per_side)
+            right_filtered = _keep_n_underglow(right_half, underglow_per_side)
+            rgb_layout = left_filtered + right_filtered
+            split_count = [len(left_filtered), len(right_filtered)]
+        else:
+            rgb_layout = _keep_n_underglow(rgb_layout, underglow_per_side)
+
+    led_count = len(rgb_layout)
+
+    # Build matrix_co: MATRIX_ROWS × MATRIX_COLS → LED index (NO_LED = 255)
+    total_rows = matrix_rows * 2 if split_count else matrix_rows
+    matrix_co = [[255] * matrix_cols for _ in range(total_rows)]
+    for idx, led in enumerate(rgb_layout):
+        mat = led.get("matrix")
+        if mat:
+            row, col = mat
+            if 0 <= row < total_rows and 0 <= col < matrix_cols:
+                matrix_co[row][col] = idx
+
+    positions = [{"x": led["x"], "y": led["y"]} for led in rgb_layout]
+    flags = [led.get("flags", 4) for led in rgb_layout]
+
+    result: dict[str, Any] = {
+        "led_count": led_count,
+        "matrix_co": matrix_co,
+        "positions": positions,
+        "flags": flags,
+    }
+    if split_count:
+        result["split_count"] = split_count
+
+    suffix = ""
+    if underglow_per_side == 0:
+        suffix = ", sans underglow"
+    elif underglow_per_side > 0:
+        suffix = f", {underglow_per_side} underglow/moitié"
+    logger.info(
+        "Config LED native chargée : %d LEDs (%s%s)",
+        led_count, keyboard_path, suffix,
+    )
+    return result
 
 
 def _native_layout_to_vial_keys(layout_keys: list[dict]) -> list[dict]:
@@ -721,16 +864,19 @@ def _build_timeline_effects(
     for ci, ce in enumerate(custom_effects):
         c_name = _sanitize_name(ce.name, ci)
 
+        # Filter out disabled tracks
+        active_tracks = [t for t in ce.tracks if t.enabled]
+
         # Compute total duration across all tracks
         total_duration = 0
-        for track in ce.tracks:
+        for track in active_tracks:
             if track.steps:
                 last = track.steps[-1]
                 total_duration = max(total_duration, last.time_ms + last.hold_ms + last.fade_ms)
         total_duration = max(total_duration, 100)
 
         tracks_ctx = []
-        for track in ce.tracks:
+        for track in active_tracks:
             # Convert key_ids to matrix positions
             matrix_positions = []
             key_offsets = []
@@ -764,20 +910,31 @@ def _build_timeline_effects(
                     "prev_r": start_r, "prev_g": start_g, "prev_b": start_b,
                 })
 
+            # Trigger keys per track: convert key_ids to matrix positions
+            trigger_positions = []
+            if ce.effect_type == "reactive" and track.trigger_keys:
+                for tk in track.trigger_keys:
+                    pos = _key_id_to_matrix(tk)
+                    if pos:
+                        trigger_positions.append({"row": pos[0], "col": pos[1]})
+
             tracks_ctx.append({
                 "name": track.name,
                 "target_mode": track.target_mode,
                 "matrix_positions": matrix_positions,
                 "key_offsets": key_offsets,
+                "trigger_positions": trigger_positions,
                 "steps": steps_ctx,
             })
 
         results.append({
             "name": c_name,
+            "user_name": ce.name,
             "effect_type": ce.effect_type,
             "total_duration": total_duration,
             "loop_ms": total_duration + 500,
             "tracks": tracks_ctx,
+            "custom_code": ce.custom_code,
         })
 
     return results

@@ -5,13 +5,27 @@
 #include QMK_KEYBOARD_H
 
 {% if rgb_enabled %}
-/* ─── RGB Matrix LED layout ─────────────────────────────────────────────────
- * Split keyboard : {{ matrix_rows - 1 }} main rows + 1 thumb row per half.
- * Left  : rows 0-{{ matrix_rows - 2 }} (main) + row {{ matrix_rows - 1 }} thumbs col 1-{{ matrix_cols - 1 }}.
- * Right : rows {{ matrix_rows }}-{{ matrix_rows * 2 - 2 }} (main) + row {{ matrix_rows * 2 - 1 }} thumbs col 0-{{ matrix_cols - 2 }}.
- * NOTE  : Matrix row pins (GP29/GP28/…) are defaults for Sea Picro Sofle v2.
- *         Adjust in info.json if your PCB uses different pins.
- */
+{% if native_led_config %}
+/* ─── RGB Matrix LED layout (native from vial-qmk) ──────────────────────── */
+led_config_t g_led_config = {
+    { /* Key matrix → LED index (MATRIX_ROWS × MATRIX_COLS) */
+{% for row in native_led_config.matrix_co %}
+        { {% for val in row %}{% if val == 255 %}NO_LED{% else %}{{ val }}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %} },
+{% endfor %}
+    },
+    { /* LED index → physical position */
+{% for pos in native_led_config.positions %}
+        { {{ pos.x }}, {{ pos.y }} }{% if not loop.last %},{% endif %}
+{% endfor %}
+    },
+    { /* LED flags */
+{% for flag in native_led_config.flags %}
+        {{ flag }}{% if not loop.last %},{% endif %}
+{% endfor %}
+    },
+};
+{% else %}
+/* ─── RGB Matrix LED layout (synthetic) ──────────────────────────────────── */
 {% set half_rows = matrix_rows - 1 %}
 {% set leds_per_half = half_rows * matrix_cols + (matrix_cols - 1) %}
 {% set total_leds = leds_per_half * 2 %}
@@ -54,4 +68,5 @@ led_config_t g_led_config = {
 {% endfor %}
     },
 };
+{% endif %}
 {% endif %}

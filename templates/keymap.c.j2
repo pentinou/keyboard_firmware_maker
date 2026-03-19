@@ -76,59 +76,11 @@ oled_rotation_t oled_init_user(oled_rotation_t rotation) {
 }
 
 {% if left_rgb_mode.enabled or right_rgb_mode.enabled %}
-/* RGB mode abbreviated names — 2 lines × 5 chars */
+/* RGB mode abbreviated names — 2 lines × 5 chars, generated in QMK enum order */
 static const char PROGMEM rgb_name[][11] = {
 /*  0 */ "          ",  /* None */
-/*  1 */ "SolidColor",
-/*  2 */ "AlphaMods ",
-/*  3 */ "Grad UpDwn",
-/*  4 */ "Grad LfRgt",
-/*  5 */ "Breathhing",
-/*  6 */ "Band Sat  ",
-/*  7 */ "Band Val  ",
-/*  8 */ "BdPinSat  ",
-/*  9 */ "BdPinVal  ",
-/* 10 */ "BdSpiSat  ",
-/* 11 */ "BdSpiVal  ",
-/* 12 */ "CycleAll  ",
-/* 13 */ "CycleLfRgt",
-/* 14 */ "CycleUpDwn",
-/* 15 */ "CycleOutIn",
-/* 16 */ "CycleOIDul",
-/* 17 */ "RnbMvChvrn",
-/* 18 */ "CyclePinwl",
-/* 19 */ "CycleSpirl",
-/* 20 */ "Dual Beacn",
-/* 21 */ "RainbBeacn",
-/* 22 */ "RainbPinwl",
-/* 23 */ "FlowrBloom",
-/* 24 */ "Rain drops",
-/* 25 */ "JellyDrops",
-/* 26 */ "Hue  Breth",
-/* 27 */ "Hue  Pendl",
-/* 28 */ "Hue  Wave ",
-/* 29 */ "PixelFrctl",
-/* 30 */ "PixelFlow ",
-/* 31 */ "PixelRain ",
-/* 32 */ "TypngHtmap",
-/* 33 */ "DigtlRain ",
-/* 34 */ "SldReSimpl",
-/* 35 */ "SolidReact",
-/* 36 */ "SldReWide ",
-/* 37 */ "SldReMulWd",
-/* 38 */ "SldReCross",
-/* 39 */ "SldReMulCr",
-/* 40 */ "SldReNexus",
-/* 41 */ "SldReMulNx",
-/* 42 */ "SplasH    ",
-/* 43 */ "MultiSplsh",
-/* 44 */ "SolidSplsh",
-/* 45 */ "SldMuSplsh",
-/* 46 */ "Star light",
-/* 47 */ "Star Smoth",
-/* 48 */ "StarDulHue",
-/* 49 */ "StarDulSat",
-/* 50 */ "Riverflow ",
+{% for name in rgb_oled_names %}
+/* {{ "%2d"|format(loop.index) }} */ "{{ name }}",{% endfor %}
 };
 #define RGB_NAME_COUNT (sizeof(rgb_name) / sizeof(rgb_name[0]))
 

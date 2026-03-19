@@ -96,12 +96,13 @@ class BuildWorker(QThread):
             self.log_line.emit(f"Sources copiées dans {kb_dest}")
             self.progress.emit(15)
 
-            # 2b. Purger le cache Vial pour forcer la régénération du header
+            # 2b. Purger le build cache pour forcer la recompilation
+            #     QMK ne détecte pas toujours les changements de config.h
             build_obj = self._vial_qmk_dir / ".build" / f"obj_{_QMK_KEYBOARD_NAME}_{_QMK_KEYMAP_NAME}"
-            vial_header = build_obj / "src" / "vial_generated_keyboard_definition.h"
-            if vial_header.is_file():
-                vial_header.unlink()
-                logger.debug("Cache Vial purgé : %s", vial_header)
+            if build_obj.is_dir():
+                import shutil
+                shutil.rmtree(build_obj)
+                logger.debug("Build cache purgé : %s", build_obj)
 
             # 3. Compilation
             self.log_line.emit("Lancement de la compilation…")

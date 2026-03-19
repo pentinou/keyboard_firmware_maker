@@ -10,9 +10,16 @@
 
 {% if rgb_enabled %}
 /* RGB Matrix */
+{% if native_led_config %}
+#define RGB_MATRIX_LED_COUNT {{ native_led_config.led_count }}
+{% if native_led_config.split_count %}
+#define RGB_MATRIX_SPLIT     { {{ native_led_config.split_count[0] }}, {{ native_led_config.split_count[1] }} }
+{% endif %}
+{% else %}
 {% set leds_per_half = (matrix_rows - 1) * matrix_cols + (matrix_cols - 1) %}
 #define RGB_MATRIX_LED_COUNT {{ leds_per_half * 2 }}
 #define RGB_MATRIX_SPLIT     { {{ leds_per_half }}, {{ leds_per_half }} }
+{% endif %}
 {% if pins.ws2812 %}
 #define WS2812_DI_PIN {{ pins.ws2812 }}
 {% endif %}
@@ -25,6 +32,9 @@
 #define RGB_MATRIX_DEFAULT_SAT        {{ rgb_default_effect.sat }}
 #define RGB_MATRIX_DEFAULT_VAL        {{ rgb_default_effect.val }}
 #define RGB_MATRIX_DEFAULT_SPD        {{ rgb_default_effect.speed }}
+{% if has_reactive_effects or has_reactive_timeline %}
+#define RGB_MATRIX_KEYPRESSES
+{% endif %}
 /* Built-in effects enabled for mode cycling (RGB_MOD) */
 {% for effect_qmk in enabled_rgb_effects %}
 #define ENABLE_{{ effect_qmk }}
