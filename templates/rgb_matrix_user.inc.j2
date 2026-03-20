@@ -55,7 +55,11 @@ bool {{ e.name }}(effect_params_t* params) {
 {# ── Macro: animate steps with hold + fade ── #}
 {% macro render_steps(steps, indent) %}
 {% for step in steps %}
-{% if loop.first %}
+{% if loop.first and step.time_ms > 0 %}
+{{ indent }}if (t < {{ step.time_ms }}U) {
+{{ indent }}    // inactive
+{{ indent }}} else if (t < {{ step.end_ms }}U) {
+{% elif loop.first %}
 {{ indent }}if (t < {{ step.end_ms }}U) {
 {% else %}
 {{ indent }}} else if (t < {{ step.end_ms }}U) {

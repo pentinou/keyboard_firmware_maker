@@ -6,9 +6,10 @@ pour assigner des couleurs par touche (FR11), et une section effets RGB (FR12-FR
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QHideEvent, QLinearGradient, QPainter, QPen, QShowEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -24,6 +25,7 @@ from PySide6.QtWidgets import (
     QGraphicsSimpleTextItem,
     QGraphicsView,
     QGroupBox,
+    QInputDialog,
     QMessageBox,
     QHBoxLayout,
     QLabel,
@@ -403,6 +405,7 @@ class RgbWidget(QWidget):
         self._editing_step_idx: int = 0
         self._relative_ref_key: str | None = None  # clé de référence pour mode relative
         self._custom_trigger_mode: bool = False  # mode assignation trigger key custom
+        self._custom_fixed_edit_mode: bool = False  # mode édition touches cibles fixed
         self._setup_ui()
         self._build_layout()
         self._preview = EffectPreview(self._key_buttons)
@@ -422,6 +425,32 @@ class RgbWidget(QWidget):
         # M2: restaurer les couleurs per-key après arrêt du preview
         for key_id, hex_color in self._model.rgb.per_key.items():
             self._apply_color(key_id, hex_color)
+
+    def eventFilter(self, obj, event) -> bool:
+        if event.type() == QEvent.Type.MouseButtonDblClick:
+            idx = obj.property("track_idx")
+            if idx is not None:
+                self._on_rename_track(idx)
+                return True
+        if event.type() == QEvent.Type.MouseButtonPress:
+            idx = obj.property("frame_track_idx")
+            if idx is not None and idx != self._editing_track_idx:
+                self._on_select_track(idx)
+        return super().eventFilter(obj, event)
+
+    def _on_rename_track(self, track_idx: int) -> None:
+        ce = self._current_custom_effect()
+        if not ce or track_idx >= len(ce.tracks):
+            return
+        track = ce.tracks[track_idx]
+        new_name, ok = QInputDialog.getText(
+            self, tr("rgb.custom_effects.rename_title"),
+            tr("rgb.custom_effects.rename_label"),
+            text=track.name,
+        )
+        if ok and new_name.strip():
+            track.name = new_name.strip()
+            self._refresh_tracks_ui()
 
     # ─────────────────────────────────────────────────────────── UI setup ──
 
@@ -965,18 +994,61 @@ class RgbWidget(QWidget):
         if not ce:
             return
 
+        # ── Identifier les groupes de pistes par trigger_keys ──
+        _GROUP_COLORS = ["#4477AA", "#55AA77", "#AA7744", "#7744AA", "#44AAAA", "#AA4477"]
+        trigger_groups: list[tuple[int, int, str]] = []  # (start, end_excl, color)
+        gi = 0
+        while gi < len(ce.tracks):
+            tkeys = tuple(sorted(ce.tracks[gi].trigger_keys))
+            if tkeys:
+                gj = gi + 1
+                while gj < len(ce.tracks) and tuple(sorted(ce.tracks[gj].trigger_keys)) == tkeys:
+                    gj += 1
+                if gj - gi > 1:
+                    color = _GROUP_COLORS[len(trigger_groups) % len(_GROUP_COLORS)]
+                    trigger_groups.append((gi, gj, color))
+                    gi = gj
+                    continue
+            gi += 1
+        # Map track index → group color (or None)
+        track_group_color: dict[int, str] = {}
+        for g_start, g_end, g_color in trigger_groups:
+            for idx in range(g_start, g_end):
+                track_group_color[idx] = g_color
+
         for ti, track in enumerate(ce.tracks):
             is_selected = (ti == self._editing_track_idx)
-            # Cadre de la piste
+            group_color = track_group_color.get(ti)
+
+            # Début d'un groupe trigger : ouvrir un cadre englobant
+            if group_color and (ti == 0 or track_group_color.get(ti - 1) != group_color):
+                group_frame = QFrame()
+                group_frame.setObjectName(f"trigger_group_{ti}")
+                group_frame.setFrameShape(QFrame.Shape.StyledPanel)
+                group_frame.setStyleSheet(
+                    "QFrame#trigger_group_%d { border: 2px solid %s; border-radius: 8px; }" % (ti, group_color)
+                )
+                group_layout = QVBoxLayout(group_frame)
+                group_layout.setContentsMargins(6, 6, 6, 6)
+                group_layout.setSpacing(4)
+                # Label du groupe
+                tkeys_str = ", ".join(sorted(track.trigger_keys)[:5])
+                group_label = QLabel(tr("rgb.custom_effects.trigger_group").format(keys=tkeys_str))
+                group_label.setStyleSheet("color: #AAAAAA; font-size: 10px; font-style: italic;")
+                group_layout.addWidget(group_label)
+
+            # Cadre de la piste (clic n'importe où pour sélectionner)
             frame = QFrame()
             frame.setObjectName(f"track_frame_{ti}")
             frame.setFrameShape(QFrame.Shape.StyledPanel)
+            frame.setProperty("frame_track_idx", ti)
+            frame.installEventFilter(self)
             if not track.enabled:
-                frame_style = "QFrame#track_frame_%d { border: 1px dashed #555555; border-radius: 6px; opacity: 0.5; }" % ti
+                frame_style = "QFrame#track_frame_%d { border: 1px dashed #555555; border-radius: 6px; }" % ti
             elif is_selected:
                 frame_style = "QFrame#track_frame_%d { border: 2px solid #77AAFF; border-radius: 6px; }" % ti
             else:
-                frame_style = "QFrame#track_frame_%d { border: 1px solid #333333; border-radius: 6px; }" % ti
+                frame_style = "QFrame#track_frame_%d { border: 1px solid #444444; border-radius: 6px; }" % ti
             frame.setStyleSheet(frame_style)
             frame_layout = QVBoxLayout(frame)
             frame_layout.setContentsMargins(8, 6, 8, 6)
@@ -1001,19 +1073,73 @@ class RgbWidget(QWidget):
                 if is_selected else
                 "color: #AAAAAA; text-align: left; padding: 2px 4px;"
             )
+            name_btn.setToolTip(tr("rgb.custom_effects.track_rename_tooltip"))
             name_btn.clicked.connect(lambda checked, idx=ti: self._on_select_track(idx))
+            # Double-clic pour renommer
+            name_btn.setAutoDefault(False)
+            name_btn.installEventFilter(self)
+            name_btn.setProperty("track_idx", ti)
             name_row.addWidget(name_btn)
-            # Info cibles
+            # Info cibles + bouton édition touches fixes
             mode_str = tr(f"rgb.custom_effects.mode_{track.target_mode}")
-            if track.target_mode == "fixed" and track.keys_fixed:
-                keys_info = f" [{', '.join(track.keys_fixed[:4])}{'...' if len(track.keys_fixed) > 4 else ''}]"
+            lbl_mode = QLabel(mode_str)
+            lbl_mode.setStyleSheet("color: #666666; font-size: 10px;")
+            name_row.addWidget(lbl_mode)
+            if track.target_mode == "fixed":
+                is_editing_fixed = is_selected and self._custom_fixed_edit_mode
+                btn_fixed = QPushButton(
+                    tr("rgb.custom_effects.fixed_click") if is_editing_fixed
+                    else tr("rgb.custom_effects.fixed_btn")
+                )
+                btn_fixed.setObjectName(f"btn_track_fixed_{ti}")
+                btn_fixed.setFixedHeight(22)
+                btn_fixed.setStyleSheet(
+                    "font-size: 11px; padding: 2px 6px; background-color: #333355;"
+                    if is_editing_fixed else
+                    "font-size: 11px; padding: 2px 6px;"
+                )
+                btn_fixed.clicked.connect(lambda checked, idx=ti: self._on_fixed_edit_for_track(idx))
+                name_row.addWidget(btn_fixed)
+                if track.keys_fixed:
+                    fixed_text = ", ".join(track.keys_fixed[:5])
+                    if len(track.keys_fixed) > 5:
+                        fixed_text += f"… ({len(track.keys_fixed)})"
+                    lbl_fixed = QLabel(fixed_text)
+                else:
+                    lbl_fixed = QLabel(tr("rgb.custom_effects.fixed_none"))
+                lbl_fixed.setStyleSheet("color: #77AAFF; font-size: 10px;")
+                name_row.addWidget(lbl_fixed)
             elif track.target_mode == "relative" and track.keys_offset:
-                keys_info = f" [{', '.join(f'({k.dr:+d},{k.dc:+d})' for k in track.keys_offset[:3])}]"
-            else:
-                keys_info = ""
-            lbl_info = QLabel(f"{mode_str}{keys_info}")
-            lbl_info.setStyleSheet("color: #666666; font-size: 10px;")
-            name_row.addWidget(lbl_info)
+                keys_info = f"[{', '.join(f'({k.dr:+d},{k.dc:+d})' for k in track.keys_offset[:3])}]"
+                lbl_rel = QLabel(keys_info)
+                lbl_rel.setStyleSheet("color: #666666; font-size: 10px;")
+                name_row.addWidget(lbl_rel)
+            # Trigger keys — visible sur toutes les pistes (réactif)
+            if ce.effect_type == "reactive":
+                is_triggering_this = is_selected and self._custom_trigger_mode
+                btn_trigger = QPushButton(
+                    tr("rgb.custom_effects.trigger_click") if is_triggering_this
+                    else tr("rgb.custom_effects.trigger_btn")
+                )
+                btn_trigger.setObjectName(f"btn_track_trigger_{ti}")
+                btn_trigger.setFixedHeight(22)
+                btn_trigger.setStyleSheet(
+                    "font-size: 11px; padding: 2px 6px; background-color: #335533;"
+                    if is_triggering_this else
+                    "font-size: 11px; padding: 2px 6px;"
+                )
+                btn_trigger.setToolTip(tr("rgb.custom_effects.trigger_btn"))
+                btn_trigger.clicked.connect(lambda checked, idx=ti: self._on_trigger_for_track(idx))
+                name_row.addWidget(btn_trigger)
+                if track.trigger_keys:
+                    keys_text = ", ".join(track.trigger_keys[:5])
+                    if len(track.trigger_keys) > 5:
+                        keys_text += "…"
+                    lbl_trig = QLabel(keys_text)
+                else:
+                    lbl_trig = QLabel(tr("rgb.custom_effects.trigger_none"))
+                lbl_trig.setStyleSheet("color: #00FF88; font-size: 10px;")
+                name_row.addWidget(lbl_trig)
             name_row.addStretch()
             # Boutons +/- événement
             if is_selected:
@@ -1056,29 +1182,6 @@ class RgbWidget(QWidget):
                     lbl_ref = QLabel(tr("rgb.custom_effects.relative_ref").format(key=ref_text))
                     lbl_ref.setStyleSheet("color: #AAAAAA; font-size: 10px; margin-left: 12px;")
                     mode_row.addWidget(lbl_ref)
-                # Bouton trigger keys (réactif seulement)
-                if ce.effect_type == "reactive":
-                    mode_row.addSpacing(16)
-                    btn_trigger = QPushButton(
-                        tr("rgb.custom_effects.trigger_click") if self._custom_trigger_mode
-                        else tr("rgb.custom_effects.trigger_btn")
-                    )
-                    btn_trigger.setObjectName(f"btn_track_trigger_{ti}")
-                    btn_trigger.setFixedHeight(24)
-                    btn_trigger.setStyleSheet("font-size: 11px; padding: 2px 8px;")
-                    btn_trigger.clicked.connect(self._on_custom_trigger_clicked)
-                    mode_row.addWidget(btn_trigger)
-                    if track.trigger_keys:
-                        keys_text = ", ".join(track.trigger_keys[:5])
-                        if len(track.trigger_keys) > 5:
-                            keys_text += "…"
-                        lbl_trig = QLabel(
-                            tr("rgb.custom_effects.trigger_set").format(key=keys_text)
-                        )
-                    else:
-                        lbl_trig = QLabel(tr("rgb.custom_effects.trigger_none"))
-                    lbl_trig.setStyleSheet("color: #00FF88; font-size: 10px;")
-                    mode_row.addWidget(lbl_trig)
                 mode_row.addStretch()
                 frame_layout.addLayout(mode_row)
 
@@ -1096,9 +1199,18 @@ class RgbWidget(QWidget):
             timeline_view = TrackTimelineView(scene)
             timeline_view.setObjectName(f"timeline_{ti}")
             scene.setParent(timeline_view)  # prevent garbage collection
+            timeline_view.horizontalScrollBar().setValue(0)
             frame_layout.addWidget(timeline_view)
 
-            self._tracks_container.addWidget(frame)
+            # Ajouter la piste dans le groupe ou directement dans le conteneur
+            if group_color:
+                group_layout.addWidget(frame)
+                # Fin du groupe : fermer le cadre englobant
+                next_group = track_group_color.get(ti + 1)
+                if next_group != group_color:
+                    self._tracks_container.addWidget(group_frame)
+            else:
+                self._tracks_container.addWidget(frame)
         # Masquer le bouton supprimer piste si 1 seule
         self._btn_remove_track.setEnabled(len(ce.tracks) > 1)
         # Rafraîchir le code preview
@@ -1222,6 +1334,7 @@ class RgbWidget(QWidget):
         self._editing_step_idx = 0
         self._relative_ref_key = None  # reset la référence relative
         self._custom_trigger_mode = False  # reset le mode trigger
+        self._custom_fixed_edit_mode = False  # reset le mode édition fixed
         self._refresh_tracks_ui()
         self._refresh_step_params()
         self._refresh_key_highlights()
@@ -1246,7 +1359,15 @@ class RgbWidget(QWidget):
         ce = self._current_custom_effect()
         if not ce:
             return
-        track_num = len(ce.tracks) + 1
+        # Trouver le prochain numéro libre
+        existing_nums = set()
+        for t in ce.tracks:
+            m = re.search(r"(\d+)$", t.name)
+            if m:
+                existing_nums.add(int(m.group(1)))
+        track_num = 1
+        while track_num in existing_nums:
+            track_num += 1
         new_track = EffectTrack(
             name=f"Piste {track_num}",
             target_mode="fixed",
@@ -1574,6 +1695,32 @@ class RgbWidget(QWidget):
 
     # ────────────────────────────────────────────────── Key click handlers ──
 
+    def _on_trigger_for_track(self, track_idx: int) -> None:
+        """Sélectionne une piste et active/désactive le mode trigger."""
+        self._custom_fixed_edit_mode = False  # mutuellement exclusif
+        if self._editing_track_idx == track_idx and self._custom_trigger_mode:
+            self._custom_trigger_mode = False
+        else:
+            self._editing_track_idx = track_idx
+            self._editing_step_idx = 0
+            self._custom_trigger_mode = True
+        self._refresh_tracks_ui()
+        self._refresh_step_params()
+        self._refresh_key_highlights()
+
+    def _on_fixed_edit_for_track(self, track_idx: int) -> None:
+        """Sélectionne une piste et active/désactive le mode édition touches fixes."""
+        self._custom_trigger_mode = False  # mutuellement exclusif
+        if self._editing_track_idx == track_idx and self._custom_fixed_edit_mode:
+            self._custom_fixed_edit_mode = False
+        else:
+            self._editing_track_idx = track_idx
+            self._editing_step_idx = 0
+            self._custom_fixed_edit_mode = True
+        self._refresh_tracks_ui()
+        self._refresh_step_params()
+        self._refresh_key_highlights()
+
     def _on_custom_trigger_clicked(self) -> None:
         """Active/désactive le mode assignation des touches déclencheur (par piste)."""
         track = self._current_track()
@@ -1596,6 +1743,18 @@ class RgbWidget(QWidget):
                     logger.info("Touche déclencheur ajoutée à la piste : %s", key_id)
                 self._refresh_tracks_ui()
                 self._refresh_key_highlights()
+                self._refresh_code_preview()
+            return
+        if self._custom_fixed_edit_mode:
+            track = self._current_track()
+            if track and track.target_mode == "fixed":
+                if key_id in track.keys_fixed:
+                    track.keys_fixed.remove(key_id)
+                else:
+                    track.keys_fixed.append(key_id)
+                self._refresh_tracks_ui()
+                self._refresh_key_highlights()
+                self._restart_custom_preview()
                 self._refresh_code_preview()
             return
         if self._trigger_mode:

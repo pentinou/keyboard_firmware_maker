@@ -893,19 +893,32 @@ def _build_timeline_effects(
             # step.color  = couleur de départ (visible immédiatement).
             # step.color_to = couleur d'arrivée du fondu (si fade_ms > 0).
             # Le template utilise prev_r/g/b → r/g/b pour l'interpolation.
+            # Si un step a hold_ms=0 et fade_ms=0, sa durée est implicite :
+            # il dure jusqu'au time_ms du step suivant (ou total_duration).
             steps_ctx = []
-            for si, step in enumerate(track.steps):
+            sorted_steps = sorted(track.steps, key=lambda s: s.time_ms)
+            for si, step in enumerate(sorted_steps):
                 start_r, start_g, start_b = _hex_to_rgb(step.color)
                 if step.fade_ms > 0 and step.color_to:
                     end_r, end_g, end_b = _hex_to_rgb(step.color_to)
                 else:
                     end_r, end_g, end_b = start_r, start_g, start_b
+                explicit_end = step.time_ms + step.hold_ms + step.fade_ms
+                if explicit_end <= step.time_ms:
+                    # Durée nulle → étendre jusqu'au step suivant ou total_duration
+                    if si + 1 < len(sorted_steps):
+                        implicit_end = sorted_steps[si + 1].time_ms
+                    else:
+                        implicit_end = total_duration
+                    end_ms = max(implicit_end, step.time_ms + 1)
+                else:
+                    end_ms = explicit_end
                 steps_ctx.append({
                     "time_ms": step.time_ms,
                     "hold_ms": step.hold_ms,
                     "fade_ms": step.fade_ms,
                     "hold_end_ms": step.time_ms + step.hold_ms,
-                    "end_ms": step.time_ms + step.hold_ms + step.fade_ms,
+                    "end_ms": end_ms,
                     "r": end_r, "g": end_g, "b": end_b,
                     "prev_r": start_r, "prev_g": start_g, "prev_b": start_b,
                 })
