@@ -37,7 +37,7 @@ capabilities:
   oled: true
   rgb: false
 matrix:
-  rows: 4
+  rows: 5
   cols: 6
 oled:
   width: 64

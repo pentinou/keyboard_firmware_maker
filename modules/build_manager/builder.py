@@ -100,7 +100,6 @@ class BuildWorker(QThread):
             #     QMK ne détecte pas toujours les changements de config.h
             build_obj = self._vial_qmk_dir / ".build" / f"obj_{_QMK_KEYBOARD_NAME}_{_QMK_KEYMAP_NAME}"
             if build_obj.is_dir():
-                import shutil
                 shutil.rmtree(build_obj)
                 logger.debug("Build cache purgé : %s", build_obj)
 

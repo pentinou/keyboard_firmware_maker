@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).parent.parent.parent))
 
-_CUSTOM_EFFECT_TYPES: frozenset[str] = frozenset({"ripple"})
+_CUSTOM_EFFECT_TYPES: frozenset[str] = frozenset()
 
 # Bootloader QMK par MCU (M1)
 _BOOTLOADER_MAP: dict[str, str] = {
@@ -441,7 +441,7 @@ class TemplateGenerator:
             if eid not in compilable_set:
                 continue
             rgb_oled_names.append(EFFECT_OLED_NAME[eid])
-        # Append custom ripple effects
+        # Append custom effects
         for e in custom_effects_ctx:
             rgb_oled_names.append(e["name"][:10].ljust(10))
         # Append custom timeline effects
@@ -551,7 +551,6 @@ class TemplateGenerator:
             "per_key_colors": model.rgb.per_key,
             "custom_effects": custom_effects_ctx,
             "has_custom_effects": bool(custom_effects_ctx),
-            "has_reactive_effects": any(e["type"] == "ripple" for e in custom_effects_ctx),
             "timeline_effects": timeline_effects_ctx,
             "has_timeline_effects": bool(timeline_effects_ctx),
             "has_reactive_timeline": any(

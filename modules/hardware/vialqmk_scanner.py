@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 
 from modules.hardware.keyboard_loader import (

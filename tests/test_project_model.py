@@ -458,7 +458,7 @@ def test_project_model_deserialization():
         "rgb": {
             "effects": [
                 {
-                    "type": "ripple",
+                    "type": "static",
                     "color_primary": "#FF0000",
                     "color_secondary": "#FF8800",
                     "fade_ms": 500,
@@ -476,7 +476,7 @@ def test_project_model_deserialization():
     assert model.oled.left.images[0].image_path == "/tmp/test.gif"
     assert model.oled.left.layer.enabled is True
     assert len(model.rgb.effects) == 1
-    assert model.rgb.effects[0].type == "ripple"
+    assert model.rgb.effects[0].type == "static"
     assert model.rgb.effects[0].color_primary == "#FF0000"
     assert model.rgb.per_key == {"KEY_A": "#FF0000"}
     assert model.build.vial_qmk_version == "0.7.1"
@@ -510,7 +510,7 @@ def test_project_model_partial_deserialization():
 def test_rgb_effect_serialization():
     """RgbEffect doit se sérialiser avec les clés snake_case attendues."""
     effect = RgbEffect(
-        type="ripple",
+        type="static",
         color_primary="#FF0000",
         color_secondary="#FF8800",
         fade_ms=750,
@@ -520,7 +520,7 @@ def test_rgb_effect_serialization():
     model.rgb.effects = [effect]
     data = model.to_dict()
     effect_data = data["rgb"]["effects"][0]
-    assert effect_data["type"] == "ripple"
+    assert effect_data["type"] == "static"
     assert effect_data["color_primary"] == "#FF0000"
     assert effect_data["color_secondary"] == "#FF8800"
     assert effect_data["fade_ms"] == 750

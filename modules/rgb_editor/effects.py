@@ -122,15 +122,13 @@ EFFECT_TYPES: tuple[EffectDef, ...] = (
     EffectDef("multisplash",               "Multisplash",                "Multiples éclaboussures arc-en-ciel simultanées.",                                     "reactive",    "reactive"),
     EffectDef("solid_splash",              "Solid Splash",               "Éclaboussure couleur solide depuis la touche pressée.",                                "reactive",    "reactive"),
     EffectDef("solid_multisplash",         "Solid Multisplash",          "Multiples éclaboussures couleur solide simultanées.",                                  "reactive",    "reactive"),
-    # ─── Effet custom (code C généré) ───
-    EffectDef("ripple",                    "Ripple (custom)",            "Ondulation circulaire précise au keystroke — code custom généré dans le firmware.",    "ripple",      "reactive", custom=True),
 )
 
 # IDs de tous les effets QMK natifs (pour le sélecteur enabled/disabled)
 ALL_BUILTIN_IDS: list[str] = [e.id for e in EFFECT_TYPES if not e.custom and e.id != "static"]
 
 # Ordre exact de l'enum QMK — doit correspondre à rgb_matrix_effects.inc dans vial-qmk.
-# Les effets custom (ripple / timeline) sont ajoutés APRÈS cette liste par le template_generator.
+# Les effets custom (timeline) sont ajoutés APRÈS cette liste par le template_generator.
 QMK_ENUM_ORDER: list[str] = [
     "static",
     "alphas_mods",

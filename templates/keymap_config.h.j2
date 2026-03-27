@@ -5,5 +5,9 @@
 
 /* Vial */
 #define VIAL_KEYBOARD_UID { {{ vial_uid }} }
+{% if split %}
 #define VIAL_UNLOCK_COMBO_ROWS { 0, {{ matrix_rows }}, {{ matrix_rows - 1 }}, {{ matrix_rows * 2 - 1 }} }
+{% else %}
+#define VIAL_UNLOCK_COMBO_ROWS { 0, 0, {{ matrix_rows - 1 }}, {{ matrix_rows - 1 }} }
+{% endif %}
 #define VIAL_UNLOCK_COMBO_COLS { 0, 0, 0, 0 }

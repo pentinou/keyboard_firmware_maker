@@ -161,7 +161,7 @@ class EventCartouche(QGraphicsRectItem):
             info_label.setBrush(QBrush(QColor("#AAAAAA")))
             info_label.setPos(4, 38)
         else:
-            instant_label = QGraphicsSimpleTextItem("instantan\u00e9", self)
+            instant_label = QGraphicsSimpleTextItem(tr("rgb.custom_effects.instant"), self)
             instant_label.setFont(QFont("sans-serif", 7))
             instant_label.setBrush(QBrush(QColor("#777777")))
             instant_label.setPos(4, 38)
@@ -377,8 +377,6 @@ def _stack_page_for(effect_id: str) -> int:
     """Retourne l'index de page du stack pour un effet donné."""
     if effect_id == "static":
         return 0
-    if effect_id == "ripple":
-        return 2
     return 1
 
 
@@ -436,6 +434,7 @@ class RgbWidget(QWidget):
             idx = obj.property("frame_track_idx")
             if idx is not None and idx != self._editing_track_idx:
                 self._on_select_track(idx)
+                return True
         return super().eventFilter(obj, event)
 
     def _on_rename_track(self, track_idx: int) -> None:
@@ -556,8 +555,7 @@ class RgbWidget(QWidget):
         self._effect_stack.setObjectName("effect_stack")
         self._effect_stack.addWidget(self._build_static_panel())    # index 0 : static
         self._effect_stack.addWidget(self._build_native_panel())    # index 1 : effets QMK natifs
-        self._effect_stack.addWidget(self._build_ripple_panel())    # index 2 : ripple custom
-        self._effect_stack.addWidget(self._build_custom_editor())   # index 3 : éditeur timeline
+        self._effect_stack.addWidget(self._build_custom_editor())   # index 2 : éditeur timeline
         right_vbox.addWidget(self._effect_stack)
 
         # Sliders globaux speed + brightness (s'appliquent à tous les effets)
@@ -626,32 +624,16 @@ class RgbWidget(QWidget):
     def _build_native_panel(self) -> QWidget:
         panel = QWidget()
         panel.setObjectName("native_panel")
-        layout = QHBoxLayout(panel)
+        layout = QVBoxLayout(panel)
+
         lbl = QLabel(tr("rgb.native.info"))
         lbl.setWordWrap(True)
         lbl.setObjectName("native_info_label")
         layout.addWidget(lbl)
-        return panel
-
-    def _build_ripple_panel(self) -> QWidget:
-        panel = QWidget()
-        panel.setObjectName("ripple_panel")
-        layout = QVBoxLayout(panel)
-
-        # Couleur primaire
-        row1 = QHBoxLayout()
-        row1.addWidget(QLabel(tr("rgb.ripple.primary")))
-        self._btn_ripple_primary = QPushButton()
-        self._btn_ripple_primary.setObjectName("btn_ripple_primary")
-        self._btn_ripple_primary.setFixedSize(32, 24)
-        self._btn_ripple_primary.clicked.connect(self._on_color_primary_clicked)
-        row1.addWidget(self._btn_ripple_primary)
-        row1.addStretch()
-        layout.addLayout(row1)
 
         # Couleur secondaire
         row2 = QHBoxLayout()
-        row2.addWidget(QLabel(tr("rgb.ripple.secondary")))
+        row2.addWidget(QLabel(tr("rgb.native.secondary")))
         self._btn_color_secondary = QPushButton()
         self._btn_color_secondary.setObjectName("btn_color_secondary")
         self._btn_color_secondary.setFixedSize(32, 24)
@@ -662,7 +644,7 @@ class RgbWidget(QWidget):
 
         # Fade ms
         row3 = QHBoxLayout()
-        row3.addWidget(QLabel(tr("rgb.ripple.fade")))
+        row3.addWidget(QLabel(tr("rgb.native.fade")))
         self._fade_ms_spin = QSpinBox()
         self._fade_ms_spin.setObjectName("fade_ms_spin")
         self._fade_ms_spin.setRange(50, 5000)
@@ -675,10 +657,10 @@ class RgbWidget(QWidget):
 
         # Touche déclencheur
         row4 = QHBoxLayout()
-        self._btn_trigger = QPushButton(tr("rgb.ripple.trigger_btn"))
+        self._btn_trigger = QPushButton(tr("rgb.native.trigger_btn"))
         self._btn_trigger.setObjectName("btn_trigger")
         self._btn_trigger.clicked.connect(self._on_trigger_clicked)
-        self._lbl_trigger = QLabel(tr("rgb.ripple.trigger_none"))
+        self._lbl_trigger = QLabel(tr("rgb.native.trigger_none"))
         self._lbl_trigger.setObjectName("lbl_trigger")
         row4.addWidget(self._btn_trigger)
         row4.addWidget(self._lbl_trigger)
@@ -1339,13 +1321,6 @@ class RgbWidget(QWidget):
         self._refresh_step_params()
         self._refresh_key_highlights()
 
-    def _on_select_step(self, step_idx: int) -> None:
-        """Sélectionne un step dans la timeline."""
-        self._editing_step_idx = step_idx
-        self._refresh_tracks_ui()
-        self._refresh_step_params()
-        self._refresh_key_highlights()
-
     def _on_select_track_step(self, track_idx: int, step_idx: int) -> None:
         """Sélectionne une piste et un step en un clic sur un bouton timeline."""
         self._editing_track_idx = track_idx
@@ -1369,7 +1344,7 @@ class RgbWidget(QWidget):
         while track_num in existing_nums:
             track_num += 1
         new_track = EffectTrack(
-            name=f"Piste {track_num}",
+            name=tr("rgb.custom_effects.track_default").format(n=track_num),
             target_mode="fixed",
             steps=[EffectStep(time_ms=0, color="#FFFFFF", fade_ms=0)],
         )
@@ -1721,19 +1696,6 @@ class RgbWidget(QWidget):
         self._refresh_step_params()
         self._refresh_key_highlights()
 
-    def _on_custom_trigger_clicked(self) -> None:
-        """Active/désactive le mode assignation des touches déclencheur (par piste)."""
-        track = self._current_track()
-        if not track:
-            return
-        if self._custom_trigger_mode:
-            # Annuler le mode
-            self._custom_trigger_mode = False
-            self._refresh_tracks_ui()
-        else:
-            self._custom_trigger_mode = True
-            self._refresh_tracks_ui()
-
     def _on_key_clicked(self, key_id: str) -> None:
         if self._custom_trigger_mode:
             track = self._current_track()
@@ -1763,10 +1725,10 @@ class RgbWidget(QWidget):
                 self._lbl_trigger.setText(key_id)
                 logger.info("Touche déclencheur définie : %s", key_id)
             self._trigger_mode = False
-            self._btn_trigger.setText(tr("rgb.ripple.trigger_btn"))
+            self._btn_trigger.setText(tr("rgb.native.trigger_btn"))
             return
         # Mode édition custom : toggle la touche dans keys_fixed ou relative
-        if self._editing_custom_idx is not None and self._effect_stack.currentIndex() == 3:
+        if self._editing_custom_idx is not None and self._effect_stack.currentIndex() == 2:
             track = self._current_track()
             if track and track.target_mode == "fixed":
                 if key_id in track.keys_fixed:
@@ -1878,7 +1840,7 @@ class RgbWidget(QWidget):
         ci = self._row_to_custom.get(row)
         if ci is not None:
             self._lbl_effect_desc.setText(tr("rgb.custom_effects.editor_desc"))
-            self._effect_stack.setCurrentIndex(3)  # page éditeur timeline
+            self._effect_stack.setCurrentIndex(2)  # page éditeur timeline
             self._load_custom_into_editor(ci)
             # Lancer le preview custom
             ce = self._model.rgb.custom_effects[ci]
@@ -1889,6 +1851,8 @@ class RgbWidget(QWidget):
         idx = self._row_to_effect.get(row)
         if idx is None:
             return  # séparateur cliqué — ignorer
+        if idx < 0 or idx >= len(EFFECT_TYPES):
+            return
         self._editing_custom_idx = None  # quitter le mode édition custom
         if self._preview:
             self._preview.stop_custom()
@@ -1896,7 +1860,7 @@ class RgbWidget(QWidget):
         # M1: quitter le mode trigger si actif lors du changement d'effet
         if self._trigger_mode:
             self._trigger_mode = False
-            self._btn_trigger.setText(tr("rgb.ripple.trigger_btn"))
+            self._btn_trigger.setText(tr("rgb.native.trigger_btn"))
         effect = self._ensure_effect(effect_def.id)
         effect.type = effect_def.id
         self._lbl_effect_desc.setText(effect_def.description)
@@ -1965,7 +1929,7 @@ class RgbWidget(QWidget):
 
     def _on_trigger_clicked(self) -> None:
         self._trigger_mode = True
-        self._btn_trigger.setText(tr("rgb.ripple.trigger_click"))
+        self._btn_trigger.setText(tr("rgb.native.trigger_click"))
 
     # ──────────────────────── Effect enable/disable (checkboxes) ──
 
@@ -1997,7 +1961,6 @@ class RgbWidget(QWidget):
         primary_style = f"background-color: {effect.color_primary};"
         secondary_style = f"background-color: {effect.color_secondary};"
         self._btn_static_color.setStyleSheet(primary_style)
-        self._btn_ripple_primary.setStyleSheet(primary_style)
         self._btn_color_secondary.setStyleSheet(secondary_style)
 
     # ────────────────────────────────────────────────────── Sync / Refresh ──

@@ -503,69 +503,6 @@ class TestBongoCatTemplate:
         assert "PROGMEM" in content
 
 
-class TestRippleCustomEffect:
-    def _ripple_model(self, basic_model):
-        basic_model.rgb.effects = [RgbEffect(type="ripple", color_primary="#FF8000", color_secondary="#002040", fade_ms=600)]
-        return basic_model
-
-    def test_ripple_adds_custom_user_to_rules_mk(self, generator, basic_model, tmp_path):
-        """RGB_MATRIX_CUSTOM_USER = yes doit être présent dans rules.mk pour un effet ripple."""
-        self._ripple_model(basic_model)
-        generator.generate(basic_model, tmp_path)
-        content = (tmp_path / "rules.mk").read_text()
-        assert "RGB_MATRIX_CUSTOM_USER = yes" in content
-
-    def test_ripple_generates_inc_file(self, generator, basic_model, tmp_path):
-        """rgb_matrix_user.inc doit être généré pour un effet ripple."""
-        self._ripple_model(basic_model)
-        result = generator.generate(basic_model, tmp_path)
-        assert (tmp_path / "keymaps" / "default" / "rgb_matrix_user.inc").is_file()
-        assert "rgb_matrix_user.inc.j2" in result
-
-    def test_ripple_effect_declaration(self, generator, basic_model, tmp_path):
-        """rgb_matrix_user.inc doit contenir RGB_MATRIX_EFFECT(RIPPLE_0)."""
-        self._ripple_model(basic_model)
-        generator.generate(basic_model, tmp_path)
-        content = (tmp_path / "keymaps" / "default" / "rgb_matrix_user.inc").read_text()
-        assert "RGB_MATRIX_EFFECT(RIPPLE_0)" in content
-
-    def test_ripple_effect_impl(self, generator, basic_model, tmp_path):
-        """rgb_matrix_user.inc doit contenir la définition de fonction bool RIPPLE_0(effect_params_t*)."""
-        self._ripple_model(basic_model)
-        generator.generate(basic_model, tmp_path)
-        content = (tmp_path / "keymaps" / "default" / "rgb_matrix_user.inc").read_text()
-        assert "bool RIPPLE_0(effect_params_t* params)" in content
-
-    def test_ripple_process_record_user_in_keymap(self, generator, basic_model, tmp_path):
-        """keymap.c doit contenir process_record_user pour un effet ripple."""
-        self._ripple_model(basic_model)
-        generator.generate(basic_model, tmp_path)
-        content = (tmp_path / "keymaps" / "default" / "keymap.c").read_text()
-        assert "process_record_user" in content
-
-    def test_ripple_state_vars_in_keymap(self, generator, basic_model, tmp_path):
-        """keymap.c doit contenir les variables d'état ripple (_ripple_active, etc.)."""
-        self._ripple_model(basic_model)
-        generator.generate(basic_model, tmp_path)
-        content = (tmp_path / "keymaps" / "default" / "keymap.c").read_text()
-        assert "_ripple_active" in content
-
-    def test_static_effect_no_inc_file(self, generator, basic_model, tmp_path):
-        """Un effet 'static' seul ne doit pas générer rgb_matrix_user.inc."""
-        basic_model.rgb.effects = [RgbEffect(type="static")]
-        generator.generate(basic_model, tmp_path)
-        assert not (tmp_path / "keymaps" / "default" / "rgb_matrix_user.inc").exists()
-
-    def test_ripple_colors_substituted(self, generator, basic_model, tmp_path):
-        """Les valeurs RGB hex doivent être converties en entiers dans le .inc."""
-        # #FF8000 → R=255, G=128, B=0
-        # #002040 → R=0, G=32, B=64
-        self._ripple_model(basic_model)
-        generator.generate(basic_model, tmp_path)
-        content = (tmp_path / "keymaps" / "default" / "rgb_matrix_user.inc").read_text()
-        assert "255" in content  # primary_r
-        assert "128" in content  # primary_g
-        assert "64" in content   # secondary_b
 
 
 class TestImageInversion:

@@ -63,37 +63,37 @@ class TestEffectPreviewStatic:
         assert not preview.is_active()
 
 
-# ─────────────────────────────────────────── Tests ripple ──
+# ─────────────────────────────────────────── Tests reactive ──
 
-class TestEffectPreviewRipple:
-    def test_start_ripple_timer_active(self, preview):
-        preview.start(RgbEffect(type="ripple"))
+class TestEffectPreviewReactive:
+    def test_start_reactive_timer_active(self, preview):
+        preview.start(RgbEffect(type="solid_reactive_simple"))
         assert preview.is_active()
         preview.stop()
 
-    def test_stop_ripple_timer_inactive(self, preview):
-        preview.start(RgbEffect(type="ripple"))
+    def test_stop_reactive_timer_inactive(self, preview):
+        preview.start(RgbEffect(type="solid_reactive_simple"))
         preview.stop()
         assert not preview.is_active()
 
-    def test_stop_ripple_clears_colors(self, preview, key_buttons):
-        preview.start(RgbEffect(type="ripple"))
+    def test_stop_reactive_clears_colors(self, preview, key_buttons):
+        preview.start(RgbEffect(type="solid_reactive_simple"))
         preview.stop()
         for btn in key_buttons.values():
             assert btn.styleSheet() == ""
 
-    def test_update_ripple_from_static_starts_timer(self, preview):
+    def test_update_reactive_from_static_starts_timer(self, preview):
         preview.start(RgbEffect(type="static"))
         assert not preview.is_active()
-        preview.update(RgbEffect(type="ripple"))
+        preview.update(RgbEffect(type="solid_reactive_simple"))
         assert preview.is_active()
         preview.stop()
 
-    def test_update_ripple_keeps_timer_active(self, preview):
-        preview.start(RgbEffect(type="ripple"))
+    def test_update_reactive_keeps_timer_active(self, preview):
+        preview.start(RgbEffect(type="solid_reactive_simple"))
         assert preview.is_active()
         # update ne redémarre pas si déjà actif
-        preview.update(RgbEffect(type="ripple", color_primary="#00FF00"))
+        preview.update(RgbEffect(type="solid_reactive_simple", color_primary="#00FF00"))
         assert preview.is_active()
         preview.stop()
 
@@ -103,7 +103,7 @@ class TestEffectPreviewRipple:
 class TestEffectPreviewTick:
     def test_tick_step0_colors_center_key(self, preview, key_buttons):
         """Étape 0 : seule la touche centrale est colorée en primaire."""
-        effect = RgbEffect(type="ripple", color_primary="#FF0000")
+        effect = RgbEffect(type="solid_reactive_simple", color_primary="#FF0000")
         preview._effect = effect
         preview._center = ("L", 1, 1)
         preview._step = 0
@@ -112,7 +112,7 @@ class TestEffectPreviewTick:
 
     def test_tick_step1_colors_center_and_neighbors(self, preview, key_buttons):
         """Étape 1 : centre en primaire, voisins à distance 1 en secondaire."""
-        effect = RgbEffect(type="ripple", color_primary="#FF0000", color_secondary="#0000FF")
+        effect = RgbEffect(type="solid_reactive_simple", color_primary="#FF0000", color_secondary="#0000FF")
         preview._effect = effect
         preview._center = ("L", 1, 1)
         preview._step = 1
@@ -125,7 +125,7 @@ class TestEffectPreviewTick:
 
     def test_tick_step2_colors_only_neighbors(self, preview, key_buttons):
         """Étape 2 : seuls les voisins à distance 1 gardent la couleur secondaire."""
-        effect = RgbEffect(type="ripple", color_secondary="#0000FF")
+        effect = RgbEffect(type="solid_reactive_simple", color_secondary="#0000FF")
         preview._effect = effect
         preview._center = ("L", 1, 1)
         preview._step = 2
@@ -136,7 +136,7 @@ class TestEffectPreviewTick:
 
     def test_tick_increments_step(self, preview, key_buttons):
         """_tick() doit incrémenter _step."""
-        effect = RgbEffect(type="ripple")
+        effect = RgbEffect(type="solid_reactive_simple")
         preview._effect = effect
         preview._center = ("L", 1, 1)
         preview._step = 0
@@ -155,7 +155,7 @@ class TestEffectPreviewTick:
 
     def test_tick_step3_colors_new_center_immediately(self, preview, key_buttons):
         """L3 — step 3 colore le nouveau centre (plus de frame vide de 200ms)."""
-        effect = RgbEffect(type="ripple", color_primary="#FF0000")
+        effect = RgbEffect(type="solid_reactive_simple", color_primary="#FF0000")
         preview._effect = effect
         preview._center = ("L", 1, 1)
         preview._step = 3
@@ -166,7 +166,7 @@ class TestEffectPreviewTick:
 
     def test_tick_step3_next_step_is_one(self, preview, key_buttons):
         """L3 — après step 3, le prochain step est 1 (center + neighbors)."""
-        effect = RgbEffect(type="ripple")
+        effect = RgbEffect(type="solid_reactive_simple")
         preview._effect = effect
         preview._center = ("L", 1, 1)
         preview._step = 3
@@ -193,11 +193,11 @@ class TestEffectPreviewRobustness:
         preview._center = ("L", 1, 1)
         assert preview._distance("bad_key") == 999
 
-    def test_update_ripple_active_new_color_used_in_next_tick(self, preview, key_buttons):
-        """L4 — update() ripple actif : la nouvelle couleur est utilisée au prochain _tick()."""
-        preview.start(RgbEffect(type="ripple", color_primary="#FF0000"))
+    def test_update_reactive_active_new_color_used_in_next_tick(self, preview, key_buttons):
+        """L4 — update() reactive actif : la nouvelle couleur est utilisée au prochain _tick()."""
+        preview.start(RgbEffect(type="solid_reactive_simple", color_primary="#FF0000"))
         assert preview.is_active()
-        preview.update(RgbEffect(type="ripple", color_primary="#00FF00"))
+        preview.update(RgbEffect(type="solid_reactive_simple", color_primary="#00FF00"))
         # Forcer tick step 0 avec centre connu
         preview._step = 0
         preview._center = ("L", 1, 1)

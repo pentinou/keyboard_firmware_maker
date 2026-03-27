@@ -46,7 +46,10 @@ class KeyboardConfig:
     def from_dict(cls, data: dict[str, Any]) -> "KeyboardConfig":
         # Migration: old bool rgb_underglow → new int rgb_underglow_per_side
         if "rgb_underglow_per_side" in data:
-            underglow = int(data["rgb_underglow_per_side"])
+            try:
+                underglow = int(data["rgb_underglow_per_side"])
+            except (ValueError, TypeError):
+                underglow = -1
         elif "rgb_underglow" in data:
             underglow = -1 if data["rgb_underglow"] else 0
         else:
@@ -78,10 +81,18 @@ class OledOverlayItem:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "OledOverlayItem":
+        try:
+            col = int(data.get("col", 0))
+        except (ValueError, TypeError):
+            col = 0
+        try:
+            line = int(data.get("line", 0))
+        except (ValueError, TypeError):
+            line = 0
         return cls(
             enabled=bool(data.get("enabled", False)),
-            col=int(data.get("col", 0)),
-            line=int(data.get("line", 0)),
+            col=col,
+            line=line,
         )
 
 
@@ -115,12 +126,17 @@ class OledImageItem:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "OledImageItem":
+        def _int(key: str, default: int) -> int:
+            try:
+                return int(data.get(key, default))
+            except (ValueError, TypeError):
+                return default
         return cls(
             image_path=data.get("image_path", ""),
-            natural_w=int(data.get("natural_w", 32)),
-            natural_h=int(data.get("natural_h", 128)),
-            col=int(data.get("col", 0)),
-            line=int(data.get("line", 0)),
+            natural_w=_int("natural_w", 32),
+            natural_h=_int("natural_h", 128),
+            col=_int("col", 0),
+            line=_int("line", 0),
             inverted=bool(data.get("inverted", False)),
         )
 
@@ -419,13 +435,18 @@ class RgbEffect:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "RgbEffect":
+        def _int(key: str, default: int) -> int:
+            try:
+                return int(data.get(key, default))
+            except (ValueError, TypeError):
+                return default
         return cls(
-            type=data.get("type", "static"),
-            color_primary=data.get("color_primary", "#FFFFFF"),
-            color_secondary=data.get("color_secondary", "#888888"),
-            fade_ms=data.get("fade_ms", 500),
-            speed=data.get("speed", 128),
-            brightness=data.get("brightness", 128),
+            type=str(data.get("type", "static")),
+            color_primary=str(data.get("color_primary", "#FFFFFF")),
+            color_secondary=str(data.get("color_secondary", "#888888")),
+            fade_ms=_int("fade_ms", 500),
+            speed=max(0, min(255, _int("speed", 128))),
+            brightness=max(0, min(255, _int("brightness", 128))),
             trigger_key=data.get("trigger_key"),
         )
 

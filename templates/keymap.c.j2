@@ -421,25 +421,4 @@ bool rgb_matrix_indicators_user(void) {
 }
 {% endif %}
 
-{% if has_reactive_effects %}
-uint8_t  _ripple_last_x = 128;
-uint8_t  _ripple_last_y = 32;
-uint16_t _ripple_timer  = 0;
-bool     _ripple_active = false;
-
-bool process_record_user(uint16_t keycode, keyrecord_t *record) {
-    if (record->event.pressed) {
-        uint8_t row = record->event.key.row;
-        uint8_t col = record->event.key.col;
-        uint8_t led = g_led_config.matrix_co[row][col];
-        if (led != NO_LED) {
-            _ripple_last_x = g_led_config.point[led].x;
-            _ripple_last_y = g_led_config.point[led].y;
-            _ripple_timer  = timer_read();
-            _ripple_active = true;
-        }
-    }
-    return true;
-}
-{% endif %}
 {% endif %}

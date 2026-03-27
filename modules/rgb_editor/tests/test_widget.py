@@ -11,7 +11,7 @@ from models.project_model import ProjectModel
 from modules.rgb_editor.effects import EFFECT_TYPES
 from modules.rgb_editor.widget import RgbWidget
 
-_RIPPLE_IDX = next(i for i, e in enumerate(EFFECT_TYPES) if e.id == "ripple")
+_REACTIVE_IDX = next(i for i, e in enumerate(EFFECT_TYPES) if e.id == "solid_reactive_simple")
 
 
 @pytest.fixture
@@ -143,25 +143,13 @@ class TestRgbWidgetEffects:
         items = [lst.item(i).text() for i in range(lst.count())]
         assert any("solid" in t.lower() for t in items)
 
-    def test_effect_list_has_ripple(self, widget):
-        from PySide6.QtWidgets import QListWidget
-        lst = widget.findChild(QListWidget, "effect_list")
-        items = [lst.item(i).text() for i in range(lst.count())]
-        assert any("ripple" in t.lower() for t in items)
-
     def test_select_static_creates_effect(self, widget, model):
         from PySide6.QtWidgets import QListWidget
         lst = widget.findChild(QListWidget, "effect_list")
-        lst.setCurrentRow(1)  # passer à ripple d'abord
+        lst.setCurrentRow(1)  # passer à un autre effet d'abord
         lst.setCurrentRow(0)  # revenir à static → signal émis
         assert len(model.rgb.effects) >= 1
         assert model.rgb.effects[0].type == "static"
-
-    def test_select_ripple_creates_effect(self, widget, model):
-        from PySide6.QtWidgets import QListWidget
-        lst = widget.findChild(QListWidget, "effect_list")
-        lst.setCurrentRow(_RIPPLE_IDX)
-        assert model.rgb.effects[0].type == "ripple"
 
     def test_color_primary_button_exists(self, widget):
         btn = widget.findChild(QPushButton, "btn_color_primary")
@@ -181,7 +169,7 @@ class TestRgbWidgetEffects:
 
     def test_color_secondary_updates_model(self, widget, model):
         from PySide6.QtWidgets import QListWidget
-        widget.findChild(QListWidget, "effect_list").setCurrentRow(1)  # ripple
+        widget.findChild(QListWidget, "effect_list").setCurrentRow(1)  # alphas_mods
         mock_color = QColor("#00FF88")
         with patch("modules.rgb_editor.widget.QColorDialog.getColor", return_value=mock_color):
             widget._on_color_secondary_clicked()
@@ -194,7 +182,7 @@ class TestRgbWidgetEffects:
 
     def test_fade_ms_updates_model(self, widget, model):
         from PySide6.QtWidgets import QListWidget, QSpinBox
-        widget.findChild(QListWidget, "effect_list").setCurrentRow(1)
+        widget.findChild(QListWidget, "effect_list").setCurrentRow(_REACTIVE_IDX)
         widget.findChild(QSpinBox, "fade_ms_spin").setValue(750)
         assert model.rgb.effects[0].fade_ms == 750
 
@@ -208,7 +196,7 @@ class TestRgbWidgetEffects:
 
     def test_trigger_key_set_on_key_click_in_trigger_mode(self, widget, model):
         from PySide6.QtWidgets import QListWidget
-        widget.findChild(QListWidget, "effect_list").setCurrentRow(1)  # ripple
+        widget.findChild(QListWidget, "effect_list").setCurrentRow(_REACTIVE_IDX)
         widget._trigger_mode = True
         widget._on_key_clicked("L_r0_c0")
         assert widget._trigger_mode is False
@@ -216,7 +204,7 @@ class TestRgbWidgetEffects:
 
     def test_trigger_mode_exits_after_key_click(self, widget, model):
         from PySide6.QtWidgets import QListWidget
-        widget.findChild(QListWidget, "effect_list").setCurrentRow(1)
+        widget.findChild(QListWidget, "effect_list").setCurrentRow(_REACTIVE_IDX)
         widget._trigger_mode = True
         widget._on_key_clicked("R_r2_c3")
         assert widget._trigger_mode is False
@@ -225,49 +213,35 @@ class TestRgbWidgetEffects:
         model = ProjectModel()
         model.keyboard.model = "sofle-v2"
         from models.project_model import RgbEffect
-        model.rgb.effects = [RgbEffect(type="ripple", fade_ms=300)]
+        model.rgb.effects = [RgbEffect(type="solid_reactive_simple", fade_ms=300)]
         from PySide6.QtWidgets import QListWidget
         w = RgbWidget(model)
         qtbot.addWidget(w)
         lst = w.findChild(QListWidget, "effect_list")
-        assert lst.currentRow() == _RIPPLE_IDX
+        assert lst.currentRow() == _REACTIVE_IDX
 
     def test_sync_restores_fade_ms(self, qtbot):
         model = ProjectModel()
         model.keyboard.model = "sofle-v2"
         from models.project_model import RgbEffect
         from PySide6.QtWidgets import QSpinBox
-        model.rgb.effects = [RgbEffect(type="ripple", fade_ms=800)]
+        model.rgb.effects = [RgbEffect(type="solid_reactive_simple", fade_ms=800)]
         w = RgbWidget(model)
         qtbot.addWidget(w)
         spin = w.findChild(QSpinBox, "fade_ms_spin")
         assert spin.value() == 800
 
-    def test_ac4_full_ripple_state(self, widget, model):
-        """AC4 — vérification complète de l'état ripple (type + les 3 paramètres)."""
-        from PySide6.QtWidgets import QListWidget, QSpinBox
-        widget.findChild(QListWidget, "effect_list").setCurrentRow(_RIPPLE_IDX)
-        with patch("modules.rgb_editor.widget.QColorDialog.getColor", return_value=QColor("#FF0000")):
-            widget._on_color_primary_clicked()
-        with patch("modules.rgb_editor.widget.QColorDialog.getColor", return_value=QColor("#FF8800")):
-            widget._on_color_secondary_clicked()
-        widget.findChild(QSpinBox, "fade_ms_spin").setValue(500)
-        effect = model.rgb.effects[0]
-        assert effect.type == "ripple"
-        assert effect.color_primary == "#FF0000"
-        assert effect.color_secondary == "#FF8800"
-        assert effect.fade_ms == 500
-
     def test_trigger_mode_reset_on_effect_change(self, widget):
         """M1 — changer d'effet réinitialise le mode trigger."""
         from PySide6.QtWidgets import QListWidget
         lst = widget.findChild(QListWidget, "effect_list")
-        lst.setCurrentRow(1)  # ripple
+        lst.setCurrentRow(1)  # alphas_mods
         widget._trigger_mode = True
-        widget._btn_trigger.setText("Cliquez une touche…")
+        widget._btn_trigger.setText("test marker")
         lst.setCurrentRow(0)  # switch to static → must reset trigger
         assert widget._trigger_mode is False
-        assert widget._btn_trigger.text() == "Choisir touche déclencheur"
+        from i18n import tr
+        assert widget._btn_trigger.text() == tr("rgb.native.trigger_btn")
 
     def test_trigger_key_noop_label_when_effects_empty(self, widget, model):
         """M2 / L4 — label non modifié si effects vide lors du clic trigger."""
@@ -285,23 +259,23 @@ class TestRgbWidgetPreview:
         from modules.rgb_editor.effect_preview import EffectPreview
         assert isinstance(widget._preview, EffectPreview)
 
-    def test_select_ripple_starts_preview(self, widget):
+    def test_select_reactive_starts_preview(self, widget):
         from PySide6.QtWidgets import QListWidget
-        widget.findChild(QListWidget, "effect_list").setCurrentRow(_RIPPLE_IDX)
+        widget.findChild(QListWidget, "effect_list").setCurrentRow(_REACTIVE_IDX)
         assert widget._preview.is_active()
         widget._preview.stop()
 
     def test_select_static_stops_timer(self, widget):
         from PySide6.QtWidgets import QListWidget
         lst = widget.findChild(QListWidget, "effect_list")
-        lst.setCurrentRow(1)  # ripple → timer démarre
-        lst.setCurrentRow(0)  # static → timer doit s'arrêter
+        lst.setCurrentRow(_REACTIVE_IDX)  # reactive → timer démarre
+        lst.setCurrentRow(0)              # static → timer doit s'arrêter
         assert not widget._preview.is_active()
 
     def test_hide_event_stops_preview(self, widget):
         from PySide6.QtGui import QHideEvent
         from PySide6.QtWidgets import QListWidget
-        widget.findChild(QListWidget, "effect_list").setCurrentRow(_RIPPLE_IDX)
+        widget.findChild(QListWidget, "effect_list").setCurrentRow(_REACTIVE_IDX)
         assert widget._preview.is_active()
         widget.hideEvent(QHideEvent())
         assert not widget._preview.is_active()
@@ -309,7 +283,7 @@ class TestRgbWidgetPreview:
     def test_show_event_starts_preview_with_effect(self, widget):
         from PySide6.QtGui import QShowEvent
         from PySide6.QtWidgets import QListWidget
-        widget.findChild(QListWidget, "effect_list").setCurrentRow(_RIPPLE_IDX)  # crée l'effet ripple
+        widget.findChild(QListWidget, "effect_list").setCurrentRow(_REACTIVE_IDX)  # crée l'effet reactive
         widget._preview.stop()  # stopper manuellement
         assert not widget._preview.is_active()
         widget.showEvent(QShowEvent())
@@ -329,7 +303,7 @@ class TestRgbWidgetPreview:
     def test_refresh_layout_stops_old_preview_timer(self, qtbot, model):
         """M1 — refresh_layout arrête l'ancien timer avant de le remplacer."""
         from models.project_model import RgbEffect
-        model.rgb.effects = [RgbEffect(type="ripple")]
+        model.rgb.effects = [RgbEffect(type="solid_reactive_simple")]
         w = RgbWidget(model)
         qtbot.addWidget(w)
         w._preview.start(model.rgb.effects[0])

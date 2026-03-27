@@ -18,10 +18,6 @@ def test_effect_types_contains_static():
     assert "static" in ids
 
 
-def test_effect_types_contains_ripple():
-    ids = [et[0] for et in EFFECT_TYPES]
-    assert "ripple" in ids
-
 
 def test_effect_types_ids_are_snake_case():
     for e in EFFECT_TYPES:

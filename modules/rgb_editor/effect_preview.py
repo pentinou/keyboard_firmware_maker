@@ -106,10 +106,6 @@ class EffectPreview:
             self._pick_new_center()
             self._timer.setInterval(RIPPLE_INTERVAL_MS)
             self._timer.start()
-        elif preview == "ripple":
-            self._pick_new_center()
-            self._timer.setInterval(RIPPLE_INTERVAL_MS)
-            self._timer.start()
 
     def stop(self) -> None:
         """Arrête le timer et réinitialise les couleurs des touches."""
@@ -193,8 +189,6 @@ class EffectPreview:
             self._render_frame()
         elif preview == "reactive":
             self._tick_reactive()
-        elif preview == "ripple":
-            self._tick_ripple()
 
     def _render_frame(self) -> None:
         """Applique la couleur courante à chaque touche selon le type de preview."""
@@ -363,7 +357,7 @@ class EffectPreview:
         for btn in self._key_buttons.values():
             btn.set_color("#000000")
 
-    # ─────────────────────────────────────────────── Ripple / Reactive ──
+    # ─────────────────────────────────────────────── Reactive ──
 
     def _pick_new_center(self) -> None:
         if not self._key_buttons:
@@ -393,7 +387,8 @@ class EffectPreview:
             return 999
         return abs(r - cr) + abs(c - cc)
 
-    def _tick_ripple(self) -> None:
+    def _tick_reactive(self) -> None:
+        """Animation preview pour les effets réactifs natifs."""
         if not self._effect or self._center is None:
             return
         self._reset_keys()
@@ -421,10 +416,6 @@ class EffectPreview:
                     self._key_buttons[center_id].set_color(self._effect.color_primary)
             self._step = 0
         self._step += 1
-
-    def _tick_reactive(self) -> None:
-        """Réutilise la logique ripple pour les effets réactifs natifs."""
-        self._tick_ripple()
 
     # ─────────────────────────────────────── Custom timeline preview ──
 
