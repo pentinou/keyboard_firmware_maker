@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from modules.hardware.keyboard_loader import KeyboardDefinition, McuOption, load_all_keyboards, load_keyboard
+from modules.hardware.keyboard_loader import KeyboardDefinition, McuOption, get_firmware_type, load_all_keyboards, load_keyboard
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 _KEYBOARDS_DIR = Path(__file__).parents[3] / "keyboards"
@@ -177,3 +177,56 @@ class TestKeyboardDefinitionMatrix:
         kb = load_keyboard(p)
         assert kb.matrix["rows"] == 5
         assert kb.matrix["cols"] == 6
+
+
+class TestMcuOptionFirmware:
+    def test_default_firmware_is_qmk(self):
+        opt = McuOption(id="test", display_name="Test")
+        assert opt.firmware == "qmk"
+
+    def test_zmk_firmware_parsed_from_yaml(self, tmp_path):
+        p = tmp_path / "zmk-test.yaml"
+        p.write_text(
+            "model: zmk-test\ndisplay_name: ZMK Test\n"
+            "mcu_options:\n"
+            "  - id: nice_nano_v2\n"
+            "    display_name: 'nice!nano v2'\n"
+            "    firmware: zmk\n"
+            "    bootloader: adafruit-nrf52\n"
+            "capabilities: {}\n",
+            encoding="utf-8",
+        )
+        kb = load_keyboard(p)
+        assert len(kb.mcu_options) == 1
+        assert kb.mcu_options[0].firmware == "zmk"
+
+    def test_qmk_firmware_default_when_missing(self, tmp_path):
+        p = tmp_path / "qmk-test.yaml"
+        p.write_text(
+            "model: qmk-test\ndisplay_name: QMK Test\n"
+            "mcu_options:\n"
+            "  - id: rp2040\n"
+            "    display_name: RP2040\n"
+            "capabilities: {}\n",
+            encoding="utf-8",
+        )
+        kb = load_keyboard(p)
+        assert kb.mcu_options[0].firmware == "qmk"
+
+    def test_corne_has_zmk_mcu_options(self):
+        kb = load_keyboard(_KEYBOARDS_DIR / "corne.yaml")
+        zmk_mcus = [m for m in kb.mcu_options if m.firmware == "zmk"]
+        assert len(zmk_mcus) >= 3
+        assert any(m.id == "nice_nano_v2" for m in zmk_mcus)
+
+    def test_get_firmware_type_qmk(self):
+        kb = load_keyboard(_KEYBOARDS_DIR / "corne.yaml")
+        assert get_firmware_type(kb, "pro_micro") == "qmk"
+
+    def test_get_firmware_type_zmk(self):
+        kb = load_keyboard(_KEYBOARDS_DIR / "corne.yaml")
+        assert get_firmware_type(kb, "nice_nano_v2") == "zmk"
+
+    def test_get_firmware_type_unknown_defaults_qmk(self):
+        kb = load_keyboard(_KEYBOARDS_DIR / "corne.yaml")
+        assert get_firmware_type(kb, "nonexistent") == "qmk"

@@ -39,6 +39,7 @@ class McuOption:
     display_name: str
     description: str = ""
     bootloader: str = ""
+    firmware: str = "qmk"  # "qmk" | "zmk"
     pins: McuPins = field(default_factory=McuPins)
 
 
@@ -151,6 +152,7 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
             display_name=mcu["display_name"],
             description=mcu.get("description", ""),
             bootloader=mcu.get("bootloader", ""),
+            firmware=mcu.get("firmware", "qmk"),
             pins=_parse_pins(mcu.get("pins", {})),
         )
         for mcu in (data.get("mcu_options") or [])
@@ -298,3 +300,11 @@ def load_all_keyboards(
 
     # Prédéfinis triés alphabétiquement d'abord, puis customs triés alphabétiquement
     return sorted(predefined, key=lambda kb: kb.display_name) + sorted(customs, key=lambda kb: kb.display_name)
+
+
+def get_firmware_type(kb_def: KeyboardDefinition, mcu_id: str) -> str:
+    """Retourne 'qmk' ou 'zmk' pour le MCU sélectionné."""
+    for opt in kb_def.mcu_options:
+        if opt.id == mcu_id:
+            return opt.firmware
+    return "qmk"

@@ -1,0 +1,25 @@
+{% if split %}
+if SHIELD_{{ shield_name_upper }}_LEFT
+
+config ZMK_KEYBOARD_NAME
+	default "{{ display_name }}"
+
+config ZMK_SPLIT_ROLE_CENTRAL
+	default y
+
+endif
+
+if SHIELD_{{ shield_name_upper }}_LEFT || SHIELD_{{ shield_name_upper }}_RIGHT
+
+config ZMK_SPLIT
+	default y
+
+endif
+{% else %}
+if SHIELD_{{ shield_name_upper }}
+
+config ZMK_KEYBOARD_NAME
+	default "{{ display_name }}"
+
+endif
+{% endif %}

@@ -424,7 +424,11 @@ class HardwareWidget(QWidget):
         self._rgb_checkbox.blockSignals(False)
         self._model.keyboard.rgb_enabled = kb.capabilities.get("rgb", False)
 
-        self.capabilities_changed.emit({**kb.capabilities, "rgb": self._rgb_checkbox.isChecked()})
+        caps = {**kb.capabilities, "rgb": self._rgb_checkbox.isChecked()}
+        fw = kb.mcu_options[0].firmware if kb.mcu_options else "qmk"
+        caps["firmware"] = fw
+        caps["rgb_per_key"] = caps.get("rgb", False) and fw == "qmk"
+        self.capabilities_changed.emit(caps)
         self.oled_sides_changed.emit(list(self._model.keyboard.oled_sides))
 
     # Alias pour compatibilité avec MainWindow._sync_hardware_widget
@@ -455,6 +459,11 @@ class HardwareWidget(QWidget):
             return
         mcu = kb.mcu_options[index]
         self._model.keyboard.mcu = mcu.id
+        # Re-emit capabilities with firmware info
+        caps = {**kb.capabilities, "rgb": self._rgb_checkbox.isChecked()}
+        caps["firmware"] = mcu.firmware
+        caps["rgb_per_key"] = caps.get("rgb", False) and mcu.firmware == "qmk"
+        self.capabilities_changed.emit(caps)
 
     def _on_variant_changed(self, index: int) -> None:
         kb = getattr(self, "_current_kb", None)
@@ -474,7 +483,12 @@ class HardwareWidget(QWidget):
         self._model.keyboard.rgb_enabled = enabled
         kb = getattr(self, "_current_kb", None)
         if kb:
-            self.capabilities_changed.emit({**kb.capabilities, "rgb": enabled})
+            mcu_idx = self._mcu_combo.currentIndex() if hasattr(self, "_mcu_combo") else 0
+            fw = kb.mcu_options[mcu_idx].firmware if 0 <= mcu_idx < len(kb.mcu_options) else "qmk"
+            caps = {**kb.capabilities, "rgb": enabled}
+            caps["firmware"] = fw
+            caps["rgb_per_key"] = enabled and fw == "qmk"
+            self.capabilities_changed.emit(caps)
 
     def _on_custom_keyboard_saved(self, model_id: str) -> None:
         """Après sauvegarde d'un clavier custom, recharger et sélectionner."""
@@ -520,7 +534,12 @@ class HardwareWidget(QWidget):
         if value != current:
             kb = getattr(self, "_current_kb", None)
             if kb:
-                self.capabilities_changed.emit({**kb.capabilities, "rgb": value})
+                mcu_idx = self._mcu_combo.currentIndex() if hasattr(self, "_mcu_combo") else 0
+                fw = kb.mcu_options[mcu_idx].firmware if 0 <= mcu_idx < len(kb.mcu_options) else "qmk"
+                caps = {**kb.capabilities, "rgb": value}
+                caps["firmware"] = fw
+                caps["rgb_per_key"] = value and fw == "qmk"
+                self.capabilities_changed.emit(caps)
 
     def _reload_keyboards(self, select_model: str = "") -> None:
         """Recharge la liste des claviers (prédéfinis + custom) et sélectionne select_model."""

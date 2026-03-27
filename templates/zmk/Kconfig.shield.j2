@@ -1,0 +1,10 @@
+{% if split %}
+config SHIELD_{{ shield_name_upper }}_LEFT
+	def_bool $(shields_list_contains,{{ shield_name }}_left)
+
+config SHIELD_{{ shield_name_upper }}_RIGHT
+	def_bool $(shields_list_contains,{{ shield_name }}_right)
+{% else %}
+config SHIELD_{{ shield_name_upper }}
+	def_bool $(shields_list_contains,{{ shield_name }})
+{% endif %}
