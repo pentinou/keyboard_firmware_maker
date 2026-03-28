@@ -254,17 +254,23 @@ def resolve_make_env(
     if gcc_path:
         unix_paths.append(_win_to_msys2_path(str(gcc_path.parent)))
 
-    # Python Windows + Scripts (pour python, pip, qmk)
-    python_dir = _win_to_msys2_path(str(Path(sys.executable).parent))
-    python_scripts = _win_to_msys2_path(str(Path(sys.executable).parent / "Scripts"))
-    unix_paths.extend([python_dir, python_scripts])
+    # Python Windows : dans un venv, python.exe est dans Scripts/
+    # Hors venv, python.exe est dans le dossier principal et Scripts/ est un sous-dossier
+    python_exe_dir = Path(sys.executable).parent
+    unix_paths.append(_win_to_msys2_path(str(python_exe_dir)))
+    # Ajouter aussi le dossier Scripts si on n'est pas déjà dedans
+    scripts_dir = python_exe_dir / "Scripts"
+    if scripts_dir.is_dir():
+        unix_paths.append(_win_to_msys2_path(str(scripts_dir)))
 
     # Construire le préfixe shell qui configure le PATH dans bash
+    # IMPORTANT : guillemets doubles pour que $PATH soit expansé par bash
     path_str = ":".join(unix_paths)
-    shell_prefix = f"export PATH='{path_str}:$PATH' && "
+    shell_prefix = f'export PATH="{path_str}:$PATH" && '
 
-    # Environnement minimal pour MSYS2
-    env["MSYSTEM"] = "MSYS"
+    # Environnement MSYS2 — MINGW64 requis par le Makefile QMK
+    # (MSYS déclenche un warning "not using MINGW64 terminal" qui casse le build)
+    env["MSYSTEM"] = "MINGW64"
     env["CHERE_INVOKING"] = "1"
 
     # Créer un wrapper python3 → python.exe avec chemin absolu
