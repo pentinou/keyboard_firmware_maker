@@ -130,14 +130,14 @@ class BuildWorker(QThread):
         target = f"{_QMK_KEYBOARD_NAME}:{_QMK_KEYMAP_NAME}"
 
         try:
-            make_base, env = resolve_make_env(gcc_path=self._gcc_path)
+            make_base, env, shell_prefix = resolve_make_env(gcc_path=self._gcc_path)
         except FileNotFoundError as exc:
             self.error.emit(str(exc))
             return None
 
         if is_windows() and len(make_base) == 2 and make_base[1] == "-lc":
-            # MSYS2 bash -lc "make -j4 target"
-            cmd = [make_base[0], make_base[1], f"make -j4 {target}"]
+            # MSYS2 bash -lc "export PATH='...'; make -j4 target"
+            cmd = [make_base[0], make_base[1], f"{shell_prefix}make -j4 {target}"]
         else:
             cmd = [*make_base, "-j4", target]
 

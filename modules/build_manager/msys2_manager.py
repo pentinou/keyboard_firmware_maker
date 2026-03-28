@@ -194,10 +194,21 @@ def _run_msys2_cmd(bash_path: Path, command: str) -> None:
     )
 
 
+def _win_to_msys2_path(win_path: str) -> str:
+    """Convertit un chemin Windows en chemin MSYS2.
+
+    ``C:\\Users\\foo\\bar`` → ``/c/Users/foo/bar``
+    """
+    p = win_path.replace("\\", "/")
+    if len(p) >= 2 and p[1] == ":":
+        return "/" + p[0].lower() + p[2:]
+    return p
+
+
 def resolve_make_env(
     msys2_mgr: Msys2Manager | None = None,
     gcc_path: Path | None = None,
-) -> tuple[list[str], dict[str, str]]:
+) -> tuple[list[str], dict[str, str], str]:
     """Résout la commande make et l'environnement selon la plateforme.
 
     Sur Windows, QMK requiert un shell Unix (bash) pour les pipes et
@@ -208,8 +219,9 @@ def resolve_make_env(
         gcc_path: chemin vers arm-none-eabi-gcc (optionnel).
 
     Returns:
-        (cmd, env) — cmd est la liste d'arguments pour Popen,
-        env est le dictionnaire d'environnement à passer.
+        (cmd, env, shell_prefix) — cmd est la liste d'arguments pour Popen,
+        env est le dictionnaire d'environnement, shell_prefix est un
+        préfixe à ajouter devant la commande make dans bash (vide sur Linux).
 
     Raises:
         FileNotFoundError: si MSYS2 n'est pas installé sur Windows.
@@ -222,7 +234,7 @@ def resolve_make_env(
         # Linux : make direct, ajout gcc au PATH si besoin
         if gcc_path:
             env["PATH"] = str(gcc_path.parent) + os.pathsep + env.get("PATH", "")
-        return ["make"], env
+        return ["make"], env, ""
 
     # Windows : TOUJOURS passer par MSYS2 bash (QMK Makefile requiert un shell Unix)
     mgr = msys2_mgr or Msys2Manager()
@@ -233,43 +245,46 @@ def resolve_make_env(
             "Les outils de compilation (bash, make) sont nécessaires pour compiler QMK sous Windows."
         )
 
-    # Construire le chemin MSYS2
-    msys2_root = bash.parent.parent.parent  # msys2/usr/bin/bash.exe → msys2/
-    msys2_usr_bin = str(msys2_root / "usr" / "bin")
+    # Construire les chemins en format MSYS2 (/c/Users/...)
+    msys2_root = bash.parent.parent.parent
+    msys2_usr_bin = _win_to_msys2_path(str(msys2_root / "usr" / "bin"))
 
-    # Environnement MSYS2
-    env["MSYSTEM"] = "MSYS"
-    env["CHERE_INVOKING"] = "1"  # Ne pas cd vers $HOME
-
-    # Mettre les outils MSYS2 en priorité dans le PATH,
-    # puis le Python Windows + Scripts (pour qmk CLI)
-    extra_paths = [msys2_usr_bin]
+    # Collecter tous les chemins nécessaires en format MSYS2
+    unix_paths = [msys2_usr_bin]
     if gcc_path:
-        extra_paths.append(str(gcc_path.parent))
+        unix_paths.append(_win_to_msys2_path(str(gcc_path.parent)))
 
-    # Ajouter Python Windows au PATH pour que le Makefile QMK trouve python et qmk
-    python_dir = str(Path(sys.executable).parent)
-    python_scripts = str(Path(sys.executable).parent / "Scripts")
-    extra_paths.extend([python_dir, python_scripts])
+    # Python Windows + Scripts (pour python, pip, qmk)
+    python_dir = _win_to_msys2_path(str(Path(sys.executable).parent))
+    python_scripts = _win_to_msys2_path(str(Path(sys.executable).parent / "Scripts"))
+    unix_paths.extend([python_dir, python_scripts])
 
-    env["PATH"] = os.pathsep.join(extra_paths) + os.pathsep + env.get("PATH", "")
+    # Construire le préfixe shell qui configure le PATH dans bash
+    path_str = ":".join(unix_paths)
+    shell_prefix = f"export PATH='{path_str}:$PATH' && "
 
-    # Créer un wrapper python3 → python dans MSYS2 (QMK appelle python3)
-    _ensure_python3_wrapper(msys2_root)
+    # Environnement minimal pour MSYS2
+    env["MSYSTEM"] = "MSYS"
+    env["CHERE_INVOKING"] = "1"
 
-    return [str(bash), "-lc"], env
+    # Créer un wrapper python3 → python.exe avec chemin absolu
+    _ensure_python3_wrapper(msys2_root, python_dir)
+
+    return [str(bash), "-lc"], env, shell_prefix
 
 
-def _ensure_python3_wrapper(msys2_root: Path) -> None:
-    """Crée un wrapper python3 dans MSYS2/usr/bin/ pointant vers python."""
+def _ensure_python3_wrapper(msys2_root: Path, python_msys2_dir: str) -> None:
+    """Crée un wrapper python3 dans MSYS2/usr/bin/ avec chemin absolu vers python."""
     python3_wrapper = msys2_root / "usr" / "bin" / "python3"
-    if python3_wrapper.exists():
-        return
+    # Toujours réécrire pour garder le chemin à jour
     try:
-        python3_wrapper.write_text("#!/bin/sh\nexec python \"$@\"\n", encoding="utf-8")
-        # Rendre exécutable (utile même sur Windows pour MSYS2 bash)
+        # Utiliser le chemin absolu MSYS2 vers python.exe
+        python3_wrapper.write_text(
+            f"#!/bin/sh\nexec \"{python_msys2_dir}/python.exe\" \"$@\"\n",
+            encoding="utf-8",
+        )
         python3_wrapper.chmod(0o755)
-        logger.info("Wrapper python3 créé : %s", python3_wrapper)
+        logger.info("Wrapper python3 créé : %s → %s/python.exe", python3_wrapper, python_msys2_dir)
     except OSError:
         logger.warning("Impossible de créer le wrapper python3 dans %s", python3_wrapper)
 
