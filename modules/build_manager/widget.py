@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+import sys
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -171,6 +172,23 @@ class BuildWidget(QWidget):
         if not toolchain.is_available:
             QMessageBox.warning(self, tr("build.toolchain_missing_title"), INSTALL_GUIDE_MSG)
             return
+
+        # Vérifier que qmk CLI est installé (requis par le Makefile QMK)
+        if not shutil.which("qmk"):
+            self._log.appendPlainText("Installation de qmk CLI (pip install qmk)…")
+            import subprocess
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "qmk"],
+                capture_output=True, text=True,
+            )
+            if result.returncode != 0:
+                QMessageBox.critical(
+                    self,
+                    tr("build.error_title"),
+                    "Impossible d'installer qmk CLI.\n\n" + result.stderr[-500:],
+                )
+                return
+            self._log.appendPlainText("qmk CLI installé.")
 
         if not VialQmkManager().is_ready():
             QMessageBox.warning(

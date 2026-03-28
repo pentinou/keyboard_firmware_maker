@@ -240,13 +240,38 @@ def resolve_make_env(
     # Environnement MSYS2
     env["MSYSTEM"] = "MSYS"
     env["CHERE_INVOKING"] = "1"  # Ne pas cd vers $HOME
-    # Mettre les outils MSYS2 en priorité dans le PATH
+
+    # Mettre les outils MSYS2 en priorité dans le PATH,
+    # puis le Python Windows + Scripts (pour qmk CLI)
     extra_paths = [msys2_usr_bin]
     if gcc_path:
         extra_paths.append(str(gcc_path.parent))
+
+    # Ajouter Python Windows au PATH pour que le Makefile QMK trouve python et qmk
+    python_dir = str(Path(sys.executable).parent)
+    python_scripts = str(Path(sys.executable).parent / "Scripts")
+    extra_paths.extend([python_dir, python_scripts])
+
     env["PATH"] = os.pathsep.join(extra_paths) + os.pathsep + env.get("PATH", "")
 
+    # Créer un wrapper python3 → python dans MSYS2 (QMK appelle python3)
+    _ensure_python3_wrapper(msys2_root)
+
     return [str(bash), "-lc"], env
+
+
+def _ensure_python3_wrapper(msys2_root: Path) -> None:
+    """Crée un wrapper python3 dans MSYS2/usr/bin/ pointant vers python."""
+    python3_wrapper = msys2_root / "usr" / "bin" / "python3"
+    if python3_wrapper.exists():
+        return
+    try:
+        python3_wrapper.write_text("#!/bin/sh\nexec python \"$@\"\n", encoding="utf-8")
+        # Rendre exécutable (utile même sur Windows pour MSYS2 bash)
+        python3_wrapper.chmod(0o755)
+        logger.info("Wrapper python3 créé : %s", python3_wrapper)
+    except OSError:
+        logger.warning("Impossible de créer le wrapper python3 dans %s", python3_wrapper)
 
 
 # ─────────────────────────────────────────────────── Qt components ──
