@@ -26,6 +26,7 @@ from PySide6.QtCore import QThread, Signal
 
 from models.project_model import ProjectModel
 from modules.build_manager.error_classifier import classify_build_error
+from modules.build_manager.msys2_manager import is_windows, resolve_make_env
 from modules.build_manager.template_generator import TemplateGenerator
 from modules.build_manager.uf2_validator import validate_uf2
 
@@ -126,12 +127,19 @@ class BuildWorker(QThread):
 
     def _run_make(self) -> Path | None:
         """Lance `make keyboard_firmware_maker:default` et émet les signaux."""
-        env = os.environ.copy()
-        if self._gcc_path:
-            env["PATH"] = str(self._gcc_path.parent) + os.pathsep + env.get("PATH", "")
-
         target = f"{_QMK_KEYBOARD_NAME}:{_QMK_KEYMAP_NAME}"
-        cmd = ["make", "-j4", target]
+
+        try:
+            make_base, env = resolve_make_env(gcc_path=self._gcc_path)
+        except FileNotFoundError as exc:
+            self.error.emit(str(exc))
+            return None
+
+        if is_windows() and len(make_base) == 2 and make_base[1] == "-lc":
+            # MSYS2 bash -lc "make -j4 target"
+            cmd = [make_base[0], make_base[1], f"make -j4 {target}"]
+        else:
+            cmd = [*make_base, "-j4", target]
 
         try:
             proc = subprocess.Popen(

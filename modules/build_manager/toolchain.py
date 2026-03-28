@@ -46,31 +46,43 @@ class ToolchainInfo:
         return self.gcc_path is not None
 
 
+DOWNLOADED_TOOLCHAIN_DIR = Path.home() / ".keyboard_firmware_maker" / "toolchain" / "windows"
+
+
 def detect_toolchain() -> ToolchainInfo:
-    """Détecte arm-none-eabi-gcc : vendored d'abord, puis PATH système.
+    """Détecte arm-none-eabi-gcc : vendored → downloaded → PATH système.
 
     Returns:
-        ToolchainInfo avec source="vendored" | "system" | "missing"
+        ToolchainInfo avec source="vendored" | "downloaded" | "system" | "missing"
     """
     platform_name = "windows" if sys.platform == "win32" else "linux"
     binary = "arm-none-eabi-gcc.exe" if sys.platform == "win32" else "arm-none-eabi-gcc"
     version = _read_version()
 
-    # 1. Binaire vendoré
+    # 1. Binaire vendoré (dans l'application)
     vendored_path = TOOLCHAIN_DIR / platform_name / "bin" / binary
     if vendored_path.is_file():
         logger.info("Toolchain vendorée détectée : %s", vendored_path)
         return ToolchainInfo(gcc_path=vendored_path, version=version, source="vendored")
 
-    # 2. Fallback PATH système
+    # 2. Binaire téléchargé (dans le cache utilisateur, Windows uniquement)
+    if sys.platform == "win32" and DOWNLOADED_TOOLCHAIN_DIR.is_dir():
+        candidates = list(DOWNLOADED_TOOLCHAIN_DIR.rglob(binary))
+        if candidates:
+            dl_path = candidates[0]
+            logger.info("Toolchain téléchargée détectée : %s", dl_path)
+            dl_version = _get_system_gcc_version(str(dl_path))
+            return ToolchainInfo(gcc_path=dl_path, version=dl_version, source="downloaded")
+
+    # 3. Fallback PATH système
     system_path = shutil.which("arm-none-eabi-gcc")
     if system_path:
         logger.info("Toolchain système détectée : %s", system_path)
         sys_version = _get_system_gcc_version(system_path)
         return ToolchainInfo(gcc_path=Path(system_path), version=sys_version, source="system")
 
-    # 3. Absente
-    logger.warning("arm-none-eabi-gcc introuvable (vendored + PATH)")
+    # 4. Absente
+    logger.warning("arm-none-eabi-gcc introuvable (vendored + downloaded + PATH)")
     return ToolchainInfo(gcc_path=None, version=version, source="missing")
 
 

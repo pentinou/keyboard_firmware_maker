@@ -17,6 +17,7 @@ import shutil
 from pathlib import Path
 
 from PySide6.QtWidgets import (
+    QDialog,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -31,7 +32,9 @@ from PySide6.QtWidgets import (
 from i18n import tr
 from models.project_model import ProjectModel
 from modules.build_manager.builder import MCU_FLASH, BuildWorker
+from modules.build_manager.msys2_manager import Msys2Manager, Msys2SetupDialog, is_windows
 from modules.build_manager.toolchain import INSTALL_GUIDE_MSG, detect_toolchain
+from modules.build_manager.toolchain_installer import ToolchainInstaller, ToolchainSetupDialog
 from modules.build_manager.vial_qmk_manager import VIAL_QMK_DIR, VialQmkManager
 
 logger = logging.getLogger(__name__)
@@ -124,13 +127,49 @@ class BuildWidget(QWidget):
 
     def _on_build_clicked(self) -> None:
         """Lance la compilation après vérification des prérequis."""
+        # Windows : vérifier MSYS2 (fournit make + bash)
+        if is_windows() and not Msys2Manager().is_ready():
+            reply = QMessageBox.question(
+                self,
+                tr("msys2_setup.title"),
+                tr("build.msys2_missing_msg"),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                dlg = Msys2SetupDialog(self)
+                if dlg.exec() != QDialog.DialogCode.Accepted:
+                    return
+            else:
+                return
+
+        # Vérifier la toolchain ARM
         toolchain = detect_toolchain()
         if not toolchain.is_available:
-            QMessageBox.warning(
-                self,
-                tr("build.toolchain_missing_title"),
-                INSTALL_GUIDE_MSG,
-            )
+            if is_windows():
+                reply = QMessageBox.question(
+                    self,
+                    tr("toolchain_setup.title"),
+                    tr("build.toolchain_missing_install_msg"),
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    dlg = ToolchainSetupDialog(self)
+                    if dlg.exec() == QDialog.DialogCode.Accepted:
+                        toolchain = detect_toolchain()
+                    else:
+                        return
+                else:
+                    return
+            else:
+                QMessageBox.warning(
+                    self,
+                    tr("build.toolchain_missing_title"),
+                    INSTALL_GUIDE_MSG,
+                )
+                return
+
+        if not toolchain.is_available:
+            QMessageBox.warning(self, tr("build.toolchain_missing_title"), INSTALL_GUIDE_MSG)
             return
 
         if not VialQmkManager().is_ready():

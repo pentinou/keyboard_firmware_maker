@@ -23,6 +23,7 @@ except ModuleNotFoundError:
 from PySide6.QtCore import QObject, QUrl, Slot
 from PySide6.QtGui import QDesktopServices
 
+from _version import __version__
 from models.project_model import ProjectModel
 from ui.main_window import MainWindow
 
@@ -65,7 +66,7 @@ def main() -> int:
 
     app = QApplication(sys.argv)
     app.setApplicationName("keyboard_firmware_maker")
-    app.setApplicationVersion("0.1.0")
+    app.setApplicationVersion(__version__)
     app.setOrganizationName("Pentinou")
 
     if _is_wsl():
@@ -77,7 +78,7 @@ def main() -> int:
     window = MainWindow(model)
     window.show()
 
-    logger.info("keyboard_firmware_maker 0.1.0 started")
+    logger.info("keyboard_firmware_maker %s started", __version__)
     return app.exec()
 
 

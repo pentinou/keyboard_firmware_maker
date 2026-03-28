@@ -138,6 +138,18 @@ STRINGS: dict[str, dict[str, str]] = {
         "vial_setup.downloading": "T\u00e9l\u00e9chargement de Vial-QMK\u2026",
         "vial_setup.ready": "Vial-QMK pr\u00eat.",
         "vial_setup.error_title": "Erreur de t\u00e9l\u00e9chargement",
+        # MSYS2 (Windows)
+        "msys2_setup.title": "Installation des outils de compilation",
+        "msys2_setup.downloading": "T\u00e9l\u00e9chargement de MSYS2\u2026",
+        "msys2_setup.ready": "Outils de compilation pr\u00eats.",
+        "msys2_setup.error_title": "Erreur d\u2019installation MSYS2",
+        # Toolchain ARM (Windows)
+        "toolchain_setup.title": "Installation de la toolchain ARM",
+        "toolchain_setup.downloading": "T\u00e9l\u00e9chargement de la toolchain ARM\u2026",
+        "toolchain_setup.ready": "Toolchain ARM pr\u00eate.",
+        "toolchain_setup.error_title": "Erreur d\u2019installation toolchain",
+        "build.msys2_missing_msg": "Les outils de compilation (MSYS2) ne sont pas install\u00e9s.\nVoulez-vous les t\u00e9l\u00e9charger maintenant ? (~90 Mo)",
+        "build.toolchain_missing_install_msg": "La toolchain ARM n\u2019est pas install\u00e9e.\nVoulez-vous la t\u00e9l\u00e9charger maintenant ? (~250 Mo)",
         # Dialogues
         "dlg.error": "Erreur",
         "dlg.save_error": "Impossible de sauvegarder : {e}",
@@ -218,6 +230,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "keyboard_editor.parse_matrix_found": "{n} avec position matrice",
         "keyboard_editor.parse_auto_assign": "{n} seront auto-assignée(s)",
         "keyboard_editor.preview_label": "Aperçu du layout",
+        "keyboard_editor.view_layout": "Layout",
+        "keyboard_editor.view_wiring": "Schéma câblage",
         # RGB widget
         "rgb.instructions": "Couleurs par touche \u2014 cliquez une touche pour assigner une couleur",
         "rgb.underglow_label": "LEDs underglow / accent :",
@@ -476,6 +490,18 @@ STRINGS: dict[str, dict[str, str]] = {
         "vial_setup.downloading": "Downloading Vial-QMK\u2026",
         "vial_setup.ready": "Vial-QMK ready.",
         "vial_setup.error_title": "Download error",
+        # MSYS2 (Windows)
+        "msys2_setup.title": "Build tools installation",
+        "msys2_setup.downloading": "Downloading MSYS2\u2026",
+        "msys2_setup.ready": "Build tools ready.",
+        "msys2_setup.error_title": "MSYS2 installation error",
+        # ARM Toolchain (Windows)
+        "toolchain_setup.title": "ARM toolchain installation",
+        "toolchain_setup.downloading": "Downloading ARM toolchain\u2026",
+        "toolchain_setup.ready": "ARM toolchain ready.",
+        "toolchain_setup.error_title": "Toolchain installation error",
+        "build.msys2_missing_msg": "Build tools (MSYS2) are not installed.\nDownload them now? (~90 MB)",
+        "build.toolchain_missing_install_msg": "The ARM toolchain is not installed.\nDownload it now? (~250 MB)",
         # Dialogs
         "dlg.error": "Error",
         "dlg.save_error": "Cannot save: {e}",
@@ -556,6 +582,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "keyboard_editor.parse_matrix_found": "{n} with matrix position",
         "keyboard_editor.parse_auto_assign": "{n} will be auto-assigned",
         "keyboard_editor.preview_label": "Layout preview",
+        "keyboard_editor.view_layout": "Layout",
+        "keyboard_editor.view_wiring": "Wiring diagram",
         # RGB widget
         "rgb.instructions": "Per-key colors \u2014 click a key to assign a color",
         "rgb.underglow_label": "Underglow / accent LEDs:",
@@ -814,6 +842,18 @@ STRINGS: dict[str, dict[str, str]] = {
         "vial_setup.downloading": "Download di Vial-QMK\u2026",
         "vial_setup.ready": "Vial-QMK pronto.",
         "vial_setup.error_title": "Errore di download",
+        # MSYS2 (Windows)
+        "msys2_setup.title": "Installazione strumenti di compilazione",
+        "msys2_setup.downloading": "Download di MSYS2\u2026",
+        "msys2_setup.ready": "Strumenti di compilazione pronti.",
+        "msys2_setup.error_title": "Errore installazione MSYS2",
+        # Toolchain ARM (Windows)
+        "toolchain_setup.title": "Installazione toolchain ARM",
+        "toolchain_setup.downloading": "Download della toolchain ARM\u2026",
+        "toolchain_setup.ready": "Toolchain ARM pronta.",
+        "toolchain_setup.error_title": "Errore installazione toolchain",
+        "build.msys2_missing_msg": "Gli strumenti di compilazione (MSYS2) non sono installati.\nScaricarli ora? (~90 MB)",
+        "build.toolchain_missing_install_msg": "La toolchain ARM non \u00e8 installata.\nScaricarla ora? (~250 MB)",
         # Dialoghi
         "dlg.error": "Errore",
         "dlg.save_error": "Impossibile salvare: {e}",
@@ -894,6 +934,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "keyboard_editor.parse_matrix_found": "{n} con posizione matrice",
         "keyboard_editor.parse_auto_assign": "{n} saranno auto-assegnati",
         "keyboard_editor.preview_label": "Anteprima layout",
+        "keyboard_editor.view_layout": "Layout",
+        "keyboard_editor.view_wiring": "Schema cablaggio",
         # Widget RGB
         "rgb.instructions": "Colori per tasto \u2014 clicca un tasto per assegnare un colore",
         "rgb.underglow_label": "LED underglow / accent:",

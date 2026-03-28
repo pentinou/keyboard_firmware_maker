@@ -7,7 +7,7 @@ echo.
 
 set SCRIPT_DIR=%~dp0
 
-:: ── Python 3.11+ ──────────────────────────────────────────────────────────────
+:: ── Python 3.11+ ─────────────────────────────────────────────────────────────
 where python >nul 2>&1
 if errorlevel 1 (
     echo [ERREUR] Python introuvable.
@@ -32,7 +32,18 @@ pause & exit /b 1
 :python_ok
 echo [OK] Python !PYVER!
 
-:: ── Environnement virtuel ─────────────────────────────────────────────────────
+:: ── git ──────────────────────────────────────────────────────────────────────
+where git >nul 2>&1
+if errorlevel 1 (
+    echo [ERREUR] Git introuvable.
+    echo   Installez Git depuis https://git-scm.com/download/win
+    echo   Redemarrez ce script apres installation.
+    pause & exit /b 1
+)
+for /f "tokens=3" %%v in ('git --version') do set GITVER=%%v
+echo [OK] git !GITVER!
+
+:: ── Environnement virtuel ────────────────────────────────────────────────────
 set VENV_DIR=%SCRIPT_DIR%.venv
 if not exist "%VENV_DIR%\Scripts\activate.bat" (
     echo Creation de l'environnement virtuel...
@@ -40,7 +51,7 @@ if not exist "%VENV_DIR%\Scripts\activate.bat" (
 )
 call "%VENV_DIR%\Scripts\activate.bat"
 
-:: ── Dépendances Python ────────────────────────────────────────────────────────
+:: ── Dependances Python ───────────────────────────────────────────────────────
 echo Verification des dependances Python...
 pip install -q -r "%SCRIPT_DIR%requirements.txt"
 if errorlevel 1 (
@@ -49,13 +60,26 @@ if errorlevel 1 (
 )
 echo [OK] Dependances Python
 
-:: ── Note compilation ──────────────────────────────────────────────────────────
+:: ── Outils de compilation (informatif) ───────────────────────────────────────
 echo.
-echo [INFO] Compilation firmware : necessite WSL2 avec arm-none-eabi-gcc installe
-echo        DANS WSL2 — pas sur Windows.
-echo        Dans WSL2 : sudo apt install gcc-arm-none-eabi
-echo        L'interface graphique fonctionne sans WSL2.
-echo.
+where make >nul 2>&1
+if errorlevel 1 (
+    echo [INFO] make non detecte — la compilation firmware sera configuree au premier build.
+) else (
+    echo [OK] make
+)
 
-:: ── Lancement ─────────────────────────────────────────────────────────────────
+where arm-none-eabi-gcc >nul 2>&1
+if errorlevel 1 (
+    echo [INFO] arm-none-eabi-gcc non detecte — sera telecharge automatiquement si besoin.
+) else (
+    for /f "tokens=*" %%v in ('arm-none-eabi-gcc --version 2^>^&1') do (
+        echo [OK] %%v
+        goto :gcc_done
+    )
+)
+:gcc_done
+
+:: ── Lancement ────────────────────────────────────────────────────────────────
+echo.
 python "%SCRIPT_DIR%main.py"

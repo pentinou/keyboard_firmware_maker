@@ -1,6 +1,6 @@
 [project]
 name = "keyboard_firmware_maker"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Desktop app to create and customize QMK/Vial-QMK firmware for split mechanical keyboards"
 authors = [{ name = "Pentinou" }]
 readme = "README.md"
@@ -28,6 +28,9 @@ keyboard-firmware-maker = "main:main"
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+version = {attr = "_version.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -9,6 +9,7 @@ __pycache__/
 dist/
 build/
 *.spec
+!keyboard_firmware_maker.spec
 
 # PyInstaller output
 *.exe
