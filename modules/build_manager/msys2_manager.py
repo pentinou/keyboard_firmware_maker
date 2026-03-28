@@ -274,7 +274,7 @@ def resolve_make_env(
     env["CHERE_INVOKING"] = "1"
 
     # Créer un wrapper python3 → python.exe avec chemin absolu
-    _ensure_python3_wrapper(msys2_root, python_dir)
+    _ensure_python3_wrapper(msys2_root, _win_to_msys2_path(str(python_exe_dir)))
 
     return [str(bash), "-lc"], env, shell_prefix
 
