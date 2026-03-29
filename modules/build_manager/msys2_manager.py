@@ -263,13 +263,17 @@ def resolve_make_env(
     if scripts_dir.is_dir():
         unix_paths.append(_win_to_msys2_path(str(scripts_dir)))
 
-    # Construire le préfixe shell qui configure le PATH dans bash
+    # Construire le préfixe shell qui configure le PATH et MSYSTEM dans bash
     # IMPORTANT : guillemets doubles pour que $PATH soit expansé par bash
+    # On exporte aussi MSYSTEM dans le shell_prefix car bash -l peut le réinitialiser
     path_str = ":".join(unix_paths)
-    shell_prefix = f'export PATH="{path_str}:$PATH" && '
+    shell_prefix = (
+        f'export MSYSTEM=MINGW64 && '
+        f'export CHERE_INVOKING=1 && '
+        f'export PATH="{path_str}:$PATH" && '
+    )
 
-    # Environnement MSYS2 — MINGW64 requis par le Makefile QMK
-    # (MSYS déclenche un warning "not using MINGW64 terminal" qui casse le build)
+    # Environnement MSYS2 — aussi dans env dict pour les sous-processus
     env["MSYSTEM"] = "MINGW64"
     env["CHERE_INVOKING"] = "1"
 

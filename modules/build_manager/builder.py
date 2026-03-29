@@ -26,7 +26,7 @@ from PySide6.QtCore import QThread, Signal
 
 from models.project_model import ProjectModel
 from modules.build_manager.error_classifier import classify_build_error
-from modules.build_manager.msys2_manager import is_windows, resolve_make_env
+from modules.build_manager.msys2_manager import is_windows, resolve_make_env, _win_to_msys2_path
 from modules.build_manager.template_generator import TemplateGenerator
 from modules.build_manager.uf2_validator import validate_uf2
 
@@ -45,6 +45,29 @@ _PROGRESS_RE = re.compile(r"\[\s*(\d+)%\]")
 # Nom du clavier dans le répertoire vial-qmk
 _QMK_KEYBOARD_NAME = "keyboard_firmware_maker"
 _QMK_KEYMAP_NAME = "default"
+
+
+def _resolve_qmk_bin_override() -> str:
+    """Résout QMK_BIN et SKIP_GIT pour la commande make Windows.
+
+    Le Makefile QMK fait ``QMK_BIN := qmk`` (ligne 47) puis exécute ``$(QMK_BIN) hello``
+    pour vérifier l'installation. Sous MSYS2, ``qmk`` n'est pas dans le PATH même si
+    ``qmk.exe`` est dans le venv Windows. On passe donc le chemin absolu en format MSYS2.
+
+    Returns:
+        Chaîne à insérer *avant* ``-j4`` dans la commande make, ex :
+        ``QMK_BIN='/c/Users/.../qmk.exe' SKIP_GIT=true ``
+        (avec espace finale). Vide si qmk n'est pas trouvé.
+    """
+    import shutil as _shutil
+
+    qmk_exe = _shutil.which("qmk")
+    if not qmk_exe:
+        return ""
+
+    qmk_msys = _win_to_msys2_path(qmk_exe)
+    # SKIP_GIT=true évite les git submodule checks qui échouent sous MSYS2
+    return f"QMK_BIN='{qmk_msys}' SKIP_GIT=true "
 
 
 class BuildWorker(QThread):
@@ -136,8 +159,13 @@ class BuildWorker(QThread):
             return None
 
         if is_windows() and len(make_base) == 2 and make_base[1] == "-lc":
-            # MSYS2 bash -lc "export PATH='...'; make -j4 target"
-            cmd = [make_base[0], make_base[1], f"{shell_prefix}make -j4 {target}"]
+            # Sur Windows, passer QMK_BIN et SKIP_GIT explicitement à make
+            # car le PATH MSYS2 ne voit pas toujours les exécutables Windows
+            make_overrides = _resolve_qmk_bin_override()
+            cmd = [
+                make_base[0], make_base[1],
+                f"{shell_prefix}make {make_overrides}-j4 {target}",
+            ]
         else:
             cmd = [*make_base, "-j4", target]
 
