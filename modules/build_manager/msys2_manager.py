@@ -309,9 +309,10 @@ def _ensure_qmk_wrapper(msys2_root: Path, python_msys2_dir: str) -> None:
     MINGW64 terminal"), les mots supplémentaires cassent le grep du Makefile.
 
     Ce wrapper :
-    - ``hello`` : retourne une ligne propre "QMK" + exit 0
-    - ``--version`` : retourne "1.0.0" + exit 0
-    - tout le reste : délègue au vrai ``python.exe -m qmk``
+    - ``hello`` : retourne une ligne propre "QMK" + exit 0 (Makefile check)
+    - ``--version`` : retourne "1.0.0" + exit 0 (Makefile check)
+    - tout le reste : délègue à ``qmk.exe`` (le vrai CLI, pas ``python -m qmk``
+      qui échoue car le module PyPI s'appelle ``qmk_cli``, pas ``qmk``)
     """
     qmk_wrapper = msys2_root / "usr" / "bin" / "qmk"
     try:
@@ -328,7 +329,9 @@ def _ensure_qmk_wrapper(msys2_root: Path, python_msys2_dir: str) -> None:
             f'        exit 0\n'
             f'        ;;\n'
             f'    *)\n'
-            f'        exec "{python_msys2_dir}/python.exe" -m qmk "$@"\n'
+            f'        # qmk.exe est le vrai entry point installé par pip\n'
+            f'        # (python -m qmk échoue : le module PyPI est qmk_cli)\n'
+            f'        exec "{python_msys2_dir}/qmk.exe" "$@"\n'
             f'        ;;\n'
             f'esac\n',
             encoding="utf-8",
