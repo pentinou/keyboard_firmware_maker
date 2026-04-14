@@ -46,6 +46,7 @@ from modules.hardware.keyboard_loader import (
 )
 from modules.keyboard_editor.kle_parser import KleKey, parse_kle_json
 from modules.keyboard_editor.validator import validate_keyboard
+from modules.keyboard_editor.wiring_scene import WiringData, build_wiring_scene
 from modules.keyboard_editor.yaml_exporter import export_keyboard
 
 logger = logging.getLogger(__name__)
@@ -205,16 +206,41 @@ class KleImportWidget(QWidget):
 
         left_splitter.addWidget(kle_container)
 
-        # Preview canvas (read-only)
+        # Preview canvas (read-only) avec toggle Layout / Câblage
         preview_container = QWidget()
         preview_layout = QVBoxLayout(preview_container)
         preview_layout.setContentsMargins(0, 0, 0, 0)
 
+        preview_header = QHBoxLayout()
         preview_label = QLabel(tr("keyboard_editor.preview_label"))
         preview_label.setStyleSheet("font-weight: bold;")
-        preview_layout.addWidget(preview_label)
+        preview_header.addWidget(preview_label)
+        preview_header.addStretch()
+
+        self._btn_view_layout = QPushButton(tr("keyboard_editor.view_layout"))
+        self._btn_view_layout.setObjectName("btn_view_layout")
+        self._btn_view_layout.setCheckable(True)
+        self._btn_view_layout.setChecked(True)
+        self._btn_view_layout.setMaximumWidth(100)
+        self._btn_view_layout.setStyleSheet(
+            "QPushButton:checked { background-color: #4A90D9; color: white; }"
+        )
+        preview_header.addWidget(self._btn_view_layout)
+
+        self._btn_view_wiring = QPushButton(tr("keyboard_editor.view_wiring"))
+        self._btn_view_wiring.setObjectName("btn_view_wiring")
+        self._btn_view_wiring.setCheckable(True)
+        self._btn_view_wiring.setChecked(False)
+        self._btn_view_wiring.setMaximumWidth(140)
+        self._btn_view_wiring.setEnabled(False)
+        self._btn_view_wiring.setStyleSheet(
+            "QPushButton:checked { background-color: #E67E22; color: white; }"
+        )
+        preview_header.addWidget(self._btn_view_wiring)
+        preview_layout.addLayout(preview_header)
 
         self._preview_scene = QGraphicsScene()
+        self._wiring_scene: QGraphicsScene | None = None
         self._preview_view = QGraphicsView(self._preview_scene)
         self._preview_view.setMinimumHeight(150)
         self._preview_view.setBackgroundBrush(QBrush(QColor("#2B2B2B")))
@@ -354,6 +380,10 @@ class KleImportWidget(QWidget):
         self._pins_toggle.toggled.connect(self._on_pins_toggle)
         self._mcu_preset_combo.currentIndexChanged.connect(self._on_mcu_preset_changed)
         self._save_btn.clicked.connect(self._on_save)
+        self._btn_view_layout.clicked.connect(lambda: self._on_view_toggle("layout"))
+        self._btn_view_wiring.clicked.connect(lambda: self._on_view_toggle("wiring"))
+        self._pins_rows_edit.textChanged.connect(self._on_pins_changed)
+        self._pins_cols_edit.textChanged.connect(self._on_pins_changed)
 
     # ── API publique ─────────────────────────────────────────────────────────
 
@@ -408,6 +438,12 @@ class KleImportWidget(QWidget):
         self._parse_status.setStyleSheet("color: #6BCB77;")
         self._parse_status.setText(" \u2014 ".join(status_parts))
 
+        self._wiring_scene = None
+        has_pins = bool(
+            self._pins_rows_edit.text().strip() or self._pins_cols_edit.text().strip()
+        )
+        self._btn_view_wiring.setEnabled(has_pins)
+
         self._update_preview()
 
     def _update_preview(self) -> None:
@@ -444,6 +480,64 @@ class KleImportWidget(QWidget):
             Qt.AspectRatioMode.KeepAspectRatio,
         )
 
+    def _on_view_toggle(self, mode: str) -> None:
+        """Bascule entre la vue Layout et la vue Câblage."""
+        if mode == "layout":
+            self._btn_view_layout.setChecked(True)
+            self._btn_view_wiring.setChecked(False)
+            self._preview_view.setScene(self._preview_scene)
+        elif mode == "wiring":
+            self._btn_view_layout.setChecked(False)
+            self._btn_view_wiring.setChecked(True)
+            if self._wiring_scene is None:
+                self._rebuild_wiring_scene()
+            if self._wiring_scene is not None:
+                self._preview_view.setScene(self._wiring_scene)
+        self._preview_view.fitInView(
+            self._preview_view.scene().sceneRect().adjusted(-10, -10, 10, 10),
+            Qt.AspectRatioMode.KeepAspectRatio,
+        )
+
+    def _on_pins_changed(self) -> None:
+        """Invalide le schéma de câblage quand les pins changent."""
+        self._wiring_scene = None
+        has_pins = bool(
+            self._pins_rows_edit.text().strip() or self._pins_cols_edit.text().strip()
+        )
+        self._btn_view_wiring.setEnabled(bool(self._parsed_keys) and has_pins)
+
+    def _rebuild_wiring_scene(self) -> None:
+        """Reconstruit la scène de câblage depuis les données actuelles."""
+        if not self._parsed_keys:
+            return
+        row_pins = [p.strip() for p in self._pins_rows_edit.text().split(",") if p.strip()]
+        col_pins = [p.strip() for p in self._pins_cols_edit.text().split(",") if p.strip()]
+
+        data = WiringData(
+            keys=self._parsed_keys,
+            row_pins=row_pins,
+            col_pins=col_pins,
+            serial_tx=self._pins_serial_edit.text().strip(),
+            ws2812=self._pins_ws2812_edit.text().strip(),
+            has_oled=self._oled_check.isChecked(),
+            has_encoder=self._encoder_check.isChecked(),
+            has_rgb=self._rgb_check.isChecked(),
+            split=self._split_check.isChecked(),
+            encoder_a="",
+            encoder_b="",
+        )
+
+        # Essayer de récupérer encoder_a/b du MCU preset sélectionné
+        idx = self._mcu_preset_combo.currentIndex()
+        if idx > 0:
+            mcu = self._mcu_presets[idx - 1]
+            if mcu.pins.encoder_a:
+                data.encoder_a = mcu.pins.encoder_a[0]
+            if mcu.pins.encoder_b:
+                data.encoder_b = mcu.pins.encoder_b[0]
+
+        self._wiring_scene = build_wiring_scene(data)
+
     def _on_mcu_preset_changed(self, index: int) -> None:
         if index <= 0:
             return
@@ -457,6 +551,7 @@ class KleImportWidget(QWidget):
         self._pins_cols_edit.setText(", ".join(mcu.pins.matrix_cols))
         self._pins_serial_edit.setText(mcu.pins.serial_tx)
         self._pins_ws2812_edit.setText(mcu.pins.ws2812)
+        self._wiring_scene = None
 
     def _on_pins_toggle(self, checked: bool) -> None:
         self._pins_box.setVisible(checked)

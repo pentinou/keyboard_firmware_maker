@@ -169,7 +169,7 @@ def test_open_project_syncs_rgb_per_key(qtbot, tmp_path):
     with patch("ui.main_window.QFileDialog.getOpenFileName", return_value=(str(proj_path), "")):
         window._open_project()
 
-    assert "#FF0000" in window._tab_rgb._key_buttons["L_r0_c0"].styleSheet()
+    assert window._tab_rgb._key_buttons["L_r0_c0"].brush().color().name().upper() == "#FF0000"
 
 
 def test_initial_tab_state_reflects_default_keyboard_capabilities(qtbot):

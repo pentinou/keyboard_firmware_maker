@@ -11,7 +11,17 @@ from models.project_model import ProjectModel
 from modules.rgb_editor.effects import EFFECT_TYPES
 from modules.rgb_editor.widget import RgbWidget
 
-_REACTIVE_IDX = next(i for i, e in enumerate(EFFECT_TYPES) if e.id == "solid_reactive_simple")
+def _item_color(item) -> str:
+    """Retourne la couleur hex uppercase d'un KeyColorItem (QGraphicsRectItem)."""
+    return item.brush().color().name().upper()
+
+
+def _list_row_for(widget, effect_id: str) -> int:
+    """Trouve la row de la QListWidget correspondant à un effect_id donné."""
+    for row, eidx in widget._row_to_effect.items():
+        if EFFECT_TYPES[eidx].id == effect_id:
+            return row
+    raise ValueError(f"Effet '{effect_id}' non trouvé dans la liste")
 
 
 @pytest.fixture
@@ -49,8 +59,8 @@ class TestRgbWidgetInit:
         btn = widget._key_buttons["L_r0_c0"]
         from modules.rgb_editor.widget import KEY_SIZE
         # Physical layout uses KEY_SIZE-2; grid fallback uses KEY_SIZE
-        assert btn.width() in (KEY_SIZE, KEY_SIZE - 2)
-        assert btn.height() in (KEY_SIZE, KEY_SIZE - 2)
+        assert btn.rect().width() in (KEY_SIZE, KEY_SIZE - 2)
+        assert btn.rect().height() in (KEY_SIZE, KEY_SIZE - 2)
 
 
 class TestRgbWidgetColorAssignment:
@@ -58,10 +68,10 @@ class TestRgbWidgetColorAssignment:
         widget._apply_color("L_r0_c0", "#FF0000")
         assert model.rgb.per_key["L_r0_c0"] == "#FF0000"
 
-    def test_apply_color_updates_button_stylesheet(self, widget):
+    def test_apply_color_updates_button_color(self, widget):
         widget._apply_color("L_r1_c2", "#00FF00")
         btn = widget._key_buttons["L_r1_c2"]
-        assert "#00FF00" in btn.styleSheet()
+        assert _item_color(btn) == "#00FF00"
 
     def test_on_key_clicked_opens_color_dialog(self, widget, model, qtbot):
         """QColorDialog mocké retourne rouge → modèle mis à jour."""
@@ -90,8 +100,8 @@ class TestRgbWidgetSyncFromModel:
         model.rgb.per_key["R_r1_c1"] = "#00CC00"
         w = RgbWidget(model)
         qtbot.addWidget(w)
-        assert "#CC0000" in w._key_buttons["L_r0_c0"].styleSheet()
-        assert "#00CC00" in w._key_buttons["R_r1_c1"].styleSheet()
+        assert _item_color(w._key_buttons["L_r0_c0"]) == "#CC0000"
+        assert _item_color(w._key_buttons["R_r1_c1"]) == "#00CC00"
 
     def test_sync_ignores_unknown_keys(self, qtbot, model):
         """Les clés inconnues dans per_key ne doivent pas provoquer d'erreur."""
@@ -127,8 +137,8 @@ class TestRgbWidgetRefreshLayout:
         w = RgbWidget(model)
         qtbot.addWidget(w)
         w.refresh_layout()
-        assert "#FF0000" in w._key_buttons["L_r0_c0"].styleSheet()
-        assert "#0000FF" in w._key_buttons["R_r2_c3"].styleSheet()
+        assert _item_color(w._key_buttons["L_r0_c0"]) == "#FF0000"
+        assert _item_color(w._key_buttons["R_r2_c3"]) == "#0000FF"
 
 
 class TestRgbWidgetEffects:
@@ -146,8 +156,10 @@ class TestRgbWidgetEffects:
     def test_select_static_creates_effect(self, widget, model):
         from PySide6.QtWidgets import QListWidget
         lst = widget.findChild(QListWidget, "effect_list")
-        lst.setCurrentRow(1)  # passer à un autre effet d'abord
-        lst.setCurrentRow(0)  # revenir à static → signal émis
+        row_static = _list_row_for(widget, "static")
+        row_other = _list_row_for(widget, "alphas_mods")
+        lst.setCurrentRow(row_other)   # passer à un autre effet d'abord
+        lst.setCurrentRow(row_static)  # revenir à static → signal émis
         assert len(model.rgb.effects) >= 1
         assert model.rgb.effects[0].type == "static"
 
@@ -157,7 +169,7 @@ class TestRgbWidgetEffects:
 
     def test_color_primary_dialog_updates_model(self, widget, model):
         from PySide6.QtWidgets import QListWidget
-        widget.findChild(QListWidget, "effect_list").setCurrentRow(0)  # static
+        widget.findChild(QListWidget, "effect_list").setCurrentRow(_list_row_for(widget, "static"))  # static
         mock_color = QColor("#FF1234")
         with patch("modules.rgb_editor.widget.QColorDialog.getColor", return_value=mock_color):
             widget._on_color_primary_clicked()
@@ -169,7 +181,7 @@ class TestRgbWidgetEffects:
 
     def test_color_secondary_updates_model(self, widget, model):
         from PySide6.QtWidgets import QListWidget
-        widget.findChild(QListWidget, "effect_list").setCurrentRow(1)  # alphas_mods
+        widget.findChild(QListWidget, "effect_list").setCurrentRow(_list_row_for(widget, "alphas_mods"))  # alphas_mods
         mock_color = QColor("#00FF88")
         with patch("modules.rgb_editor.widget.QColorDialog.getColor", return_value=mock_color):
             widget._on_color_secondary_clicked()
@@ -182,7 +194,7 @@ class TestRgbWidgetEffects:
 
     def test_fade_ms_updates_model(self, widget, model):
         from PySide6.QtWidgets import QListWidget, QSpinBox
-        widget.findChild(QListWidget, "effect_list").setCurrentRow(_REACTIVE_IDX)
+        widget.findChild(QListWidget, "effect_list").setCurrentRow(_list_row_for(widget, "solid_reactive_simple"))
         widget.findChild(QSpinBox, "fade_ms_spin").setValue(750)
         assert model.rgb.effects[0].fade_ms == 750
 
@@ -196,7 +208,7 @@ class TestRgbWidgetEffects:
 
     def test_trigger_key_set_on_key_click_in_trigger_mode(self, widget, model):
         from PySide6.QtWidgets import QListWidget
-        widget.findChild(QListWidget, "effect_list").setCurrentRow(_REACTIVE_IDX)
+        widget.findChild(QListWidget, "effect_list").setCurrentRow(_list_row_for(widget, "solid_reactive_simple"))
         widget._trigger_mode = True
         widget._on_key_clicked("L_r0_c0")
         assert widget._trigger_mode is False
@@ -204,7 +216,7 @@ class TestRgbWidgetEffects:
 
     def test_trigger_mode_exits_after_key_click(self, widget, model):
         from PySide6.QtWidgets import QListWidget
-        widget.findChild(QListWidget, "effect_list").setCurrentRow(_REACTIVE_IDX)
+        widget.findChild(QListWidget, "effect_list").setCurrentRow(_list_row_for(widget, "solid_reactive_simple"))
         widget._trigger_mode = True
         widget._on_key_clicked("R_r2_c3")
         assert widget._trigger_mode is False
@@ -218,7 +230,7 @@ class TestRgbWidgetEffects:
         w = RgbWidget(model)
         qtbot.addWidget(w)
         lst = w.findChild(QListWidget, "effect_list")
-        assert lst.currentRow() == _REACTIVE_IDX
+        assert lst.currentRow() == _list_row_for(w, "solid_reactive_simple")
 
     def test_sync_restores_fade_ms(self, qtbot):
         model = ProjectModel()
@@ -235,10 +247,10 @@ class TestRgbWidgetEffects:
         """M1 — changer d'effet réinitialise le mode trigger."""
         from PySide6.QtWidgets import QListWidget
         lst = widget.findChild(QListWidget, "effect_list")
-        lst.setCurrentRow(1)  # alphas_mods
+        lst.setCurrentRow(_list_row_for(widget, "alphas_mods"))  # alphas_mods
         widget._trigger_mode = True
         widget._btn_trigger.setText("test marker")
-        lst.setCurrentRow(0)  # switch to static → must reset trigger
+        lst.setCurrentRow(_list_row_for(widget, "static"))  # switch to static → must reset trigger
         assert widget._trigger_mode is False
         from i18n import tr
         assert widget._btn_trigger.text() == tr("rgb.native.trigger_btn")
@@ -261,21 +273,21 @@ class TestRgbWidgetPreview:
 
     def test_select_reactive_starts_preview(self, widget):
         from PySide6.QtWidgets import QListWidget
-        widget.findChild(QListWidget, "effect_list").setCurrentRow(_REACTIVE_IDX)
+        widget.findChild(QListWidget, "effect_list").setCurrentRow(_list_row_for(widget, "solid_reactive_simple"))
         assert widget._preview.is_active()
         widget._preview.stop()
 
     def test_select_static_stops_timer(self, widget):
         from PySide6.QtWidgets import QListWidget
         lst = widget.findChild(QListWidget, "effect_list")
-        lst.setCurrentRow(_REACTIVE_IDX)  # reactive → timer démarre
-        lst.setCurrentRow(0)              # static → timer doit s'arrêter
+        lst.setCurrentRow(_list_row_for(widget, "solid_reactive_simple"))  # reactive → timer démarre
+        lst.setCurrentRow(_list_row_for(widget, "static"))                # static → timer doit s'arrêter
         assert not widget._preview.is_active()
 
     def test_hide_event_stops_preview(self, widget):
         from PySide6.QtGui import QHideEvent
         from PySide6.QtWidgets import QListWidget
-        widget.findChild(QListWidget, "effect_list").setCurrentRow(_REACTIVE_IDX)
+        widget.findChild(QListWidget, "effect_list").setCurrentRow(_list_row_for(widget, "solid_reactive_simple"))
         assert widget._preview.is_active()
         widget.hideEvent(QHideEvent())
         assert not widget._preview.is_active()
@@ -283,7 +295,7 @@ class TestRgbWidgetPreview:
     def test_show_event_starts_preview_with_effect(self, widget):
         from PySide6.QtGui import QShowEvent
         from PySide6.QtWidgets import QListWidget
-        widget.findChild(QListWidget, "effect_list").setCurrentRow(_REACTIVE_IDX)  # crée l'effet reactive
+        widget.findChild(QListWidget, "effect_list").setCurrentRow(_list_row_for(widget, "solid_reactive_simple"))  # crée l'effet reactive
         widget._preview.stop()  # stopper manuellement
         assert not widget._preview.is_active()
         widget.showEvent(QShowEvent())
@@ -322,7 +334,7 @@ class TestRgbWidgetPreview:
         qtbot.addWidget(w)
         # Le preview static écrase la couleur per-key
         w._preview.start(RgbEffect(type="static", color_primary="#FFFFFF"))
-        assert "#FFFFFF" in w._key_buttons["L_r0_c0"].styleSheet()
+        assert _item_color(w._key_buttons["L_r0_c0"]) == "#FFFFFF"
         # hideEvent doit restaurer la couleur per-key
         w.hideEvent(QHideEvent())
-        assert "#FF0000" in w._key_buttons["L_r0_c0"].styleSheet()
+        assert _item_color(w._key_buttons["L_r0_c0"]) == "#FF0000"

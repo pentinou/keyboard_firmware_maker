@@ -308,12 +308,29 @@ class HardwareWidget(QWidget):
                 self._all_keyboard_entries.append((None, entry, entry.category))
 
         # 3. Filtrer par catégorie
+        combo_idx = 0
         for i, (kb, entry, cat) in enumerate(self._all_keyboard_entries):
             if selected_cat == "all" or cat == selected_cat:
                 self._filtered_entries.append(i)
                 name = kb.display_name if kb else entry.name
                 suffix = f"  [{entry.qmk_path}]" if entry and not kb else ""
                 self._keyboard_combo.addItem(f"{name}{suffix}")
+                # Tooltip descriptif
+                if kb:
+                    tooltip = kb.description
+                elif entry:
+                    parts = [entry.qmk_path]
+                    if entry.key_count:
+                        parts.append(f"{entry.key_count} touches")
+                    if entry.category:
+                        parts.append(entry.category)
+                    tooltip = " — ".join(parts)
+                else:
+                    tooltip = name
+                self._keyboard_combo.setItemData(
+                    combo_idx, tooltip, Qt.ItemDataRole.ToolTipRole,
+                )
+                combo_idx += 1
 
         self._keyboard_combo.blockSignals(False)
 

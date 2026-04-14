@@ -444,7 +444,7 @@ class EffectPreview:
             self._timer.timeout.disconnect(self._tick_custom)
         except RuntimeError:
             pass
-        if not any(self._timer.receivers(self._timer.timeout)):
+        if self._timer.receivers("timeout()") == 0:
             self._timer.timeout.connect(self._tick)
         self._custom_effect = None
         self._reset_keys()

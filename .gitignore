@@ -33,3 +33,9 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Local tooling
+.mcp.json
+claude.sh
+_bmad/
+_bmad-output/

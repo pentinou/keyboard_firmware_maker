@@ -2,23 +2,32 @@
 from __future__ import annotations
 
 import pytest
-from PySide6.QtWidgets import QPushButton
-
 from models.project_model import RgbEffect
 from modules.rgb_editor.effect_preview import EffectPreview
 
 
+class FakeKeyButton:
+    """Stub minimal imitant KeyColorItem pour les tests d'EffectPreview."""
+
+    def __init__(self) -> None:
+        self._color = ""
+
+    def set_color(self, hex_color: str) -> None:
+        self._color = hex_color
+
+    def color_hex(self) -> str:
+        return self._color
+
+
 @pytest.fixture
-def key_buttons(qtbot) -> dict[str, QPushButton]:
+def key_buttons(qtbot) -> dict[str, FakeKeyButton]:
     """Grille 3×3 pour les deux côtés (L/R), 18 boutons au total."""
-    buttons: dict[str, QPushButton] = {}
+    buttons: dict[str, FakeKeyButton] = {}
     for side in ("L", "R"):
         for r in range(3):
             for c in range(3):
                 key_id = f"{side}_r{r}_c{c}"
-                btn = QPushButton()
-                qtbot.addWidget(btn)
-                buttons[key_id] = btn
+                buttons[key_id] = FakeKeyButton()
     return buttons
 
 
@@ -34,7 +43,7 @@ class TestEffectPreviewStatic:
         effect = RgbEffect(type="static", color_primary="#FF0000")
         preview.start(effect)
         for btn in key_buttons.values():
-            assert "#FF0000" in btn.styleSheet()
+            assert btn.color_hex() == "#FF0000"
 
     def test_start_static_timer_inactive(self, preview):
         preview.start(RgbEffect(type="static"))
@@ -44,7 +53,7 @@ class TestEffectPreviewStatic:
         preview.start(RgbEffect(type="static", color_primary="#FF0000"))
         preview.stop()
         for btn in key_buttons.values():
-            assert btn.styleSheet() == ""
+            assert btn.color_hex() == "#000000"
 
     def test_stop_timer_inactive(self, preview):
         preview.start(RgbEffect(type="static"))
@@ -55,7 +64,7 @@ class TestEffectPreviewStatic:
         preview.start(RgbEffect(type="static", color_primary="#FF0000"))
         preview.update(RgbEffect(type="static", color_primary="#0000FF"))
         for btn in key_buttons.values():
-            assert "#0000FF" in btn.styleSheet()
+            assert btn.color_hex() == "#0000FF"
 
     def test_update_static_timer_stays_inactive(self, preview):
         preview.start(RgbEffect(type="static"))
@@ -80,7 +89,7 @@ class TestEffectPreviewReactive:
         preview.start(RgbEffect(type="solid_reactive_simple"))
         preview.stop()
         for btn in key_buttons.values():
-            assert btn.styleSheet() == ""
+            assert btn.color_hex() == "#000000"
 
     def test_update_reactive_from_static_starts_timer(self, preview):
         preview.start(RgbEffect(type="static"))
@@ -108,7 +117,7 @@ class TestEffectPreviewTick:
         preview._center = ("L", 1, 1)
         preview._step = 0
         preview._tick()
-        assert "#FF0000" in key_buttons["L_r1_c1"].styleSheet()
+        assert key_buttons["L_r1_c1"].color_hex() == "#FF0000"
 
     def test_tick_step1_colors_center_and_neighbors(self, preview, key_buttons):
         """Étape 1 : centre en primaire, voisins à distance 1 en secondaire."""
@@ -117,11 +126,11 @@ class TestEffectPreviewTick:
         preview._center = ("L", 1, 1)
         preview._step = 1
         preview._tick()
-        assert "#FF0000" in key_buttons["L_r1_c1"].styleSheet()
-        assert "#0000FF" in key_buttons["L_r0_c1"].styleSheet()
-        assert "#0000FF" in key_buttons["L_r1_c0"].styleSheet()
-        assert "#0000FF" in key_buttons["L_r2_c1"].styleSheet()
-        assert "#0000FF" in key_buttons["L_r1_c2"].styleSheet()
+        assert key_buttons["L_r1_c1"].color_hex() == "#FF0000"
+        assert key_buttons["L_r0_c1"].color_hex() == "#0000FF"
+        assert key_buttons["L_r1_c0"].color_hex() == "#0000FF"
+        assert key_buttons["L_r2_c1"].color_hex() == "#0000FF"
+        assert key_buttons["L_r1_c2"].color_hex() == "#0000FF"
 
     def test_tick_step2_colors_only_neighbors(self, preview, key_buttons):
         """Étape 2 : seuls les voisins à distance 1 gardent la couleur secondaire."""
@@ -130,9 +139,9 @@ class TestEffectPreviewTick:
         preview._center = ("L", 1, 1)
         preview._step = 2
         preview._tick()
-        assert "#0000FF" in key_buttons["L_r0_c1"].styleSheet()
+        assert key_buttons["L_r0_c1"].color_hex() == "#0000FF"
         # Le centre n'est pas recoloré (juste reset)
-        assert "#0000FF" not in key_buttons["L_r1_c1"].styleSheet()
+        assert key_buttons["L_r1_c1"].color_hex() != "#0000FF"
 
     def test_tick_increments_step(self, preview, key_buttons):
         """_tick() doit incrémenter _step."""
@@ -162,7 +171,7 @@ class TestEffectPreviewTick:
         # Force un centre prévisible
         preview._pick_new_center = lambda: setattr(preview, "_center", ("R", 0, 0))
         preview._tick()
-        assert "#FF0000" in key_buttons["R_r0_c0"].styleSheet()
+        assert key_buttons["R_r0_c0"].color_hex() == "#FF0000"
 
     def test_tick_step3_next_step_is_one(self, preview, key_buttons):
         """L3 — après step 3, le prochain step est 1 (center + neighbors)."""
@@ -177,19 +186,15 @@ class TestEffectPreviewTick:
 # ─────────────────────────────────────────── Tests robustesse ──
 
 class TestEffectPreviewRobustness:
-    def test_pick_new_center_ignores_malformed_key(self, qtbot):
+    def test_pick_new_center_ignores_malformed_key(self):
         """L1 — _pick_new_center ne plante pas sur un key_id malformé."""
-        btn = QPushButton()
-        qtbot.addWidget(btn)
-        preview = EffectPreview({"bad_key": btn})
+        preview = EffectPreview({"bad_key": FakeKeyButton()})
         preview._pick_new_center()  # ne doit pas lever d'exception
         assert preview._center is None
 
-    def test_distance_returns_999_for_malformed_key(self, qtbot):
+    def test_distance_returns_999_for_malformed_key(self):
         """L1 — _distance retourne 999 pour un key_id malformé."""
-        btn = QPushButton()
-        qtbot.addWidget(btn)
-        preview = EffectPreview({"bad_key": btn})
+        preview = EffectPreview({"bad_key": FakeKeyButton()})
         preview._center = ("L", 1, 1)
         assert preview._distance("bad_key") == 999
 
@@ -202,6 +207,5 @@ class TestEffectPreviewRobustness:
         preview._step = 0
         preview._center = ("L", 1, 1)
         preview._tick()
-        assert "#00FF00" in key_buttons["L_r1_c1"].styleSheet()
-        assert "#FF0000" not in key_buttons["L_r1_c1"].styleSheet()
+        assert key_buttons["L_r1_c1"].color_hex() == "#00FF00"
         preview.stop()
