@@ -11,20 +11,26 @@ CONFIG_ZMK_SPLIT_BLE=y
 CONFIG_BT_MAX_CONN=5
 CONFIG_BT_MAX_PAIRED=5
 
+# ZMK Studio — remapping en temps réel via BLE/USB
+CONFIG_ZMK_STUDIO=y
+
 # Power management
 CONFIG_ZMK_SLEEP=y
 CONFIG_ZMK_IDLE_SLEEP_TIMEOUT=900000
 
 {% if has_display %}
-# Display
+# Display — built-in status screen with battery icon
 CONFIG_ZMK_DISPLAY=y
-{% if display_type == "nice_view" %}
 CONFIG_ZMK_DISPLAY_STATUS_SCREEN_BUILT_IN=y
-{% endif %}
 CONFIG_ZMK_WIDGET_LAYER_STATUS=y
 CONFIG_ZMK_WIDGET_BATTERY_STATUS=y
 CONFIG_ZMK_WIDGET_OUTPUT_STATUS=y
-CONFIG_ZMK_WIDGET_WPM_STATUS=y
+{% endif %}
+
+{% if split %}
+# Split battery — affiche le niveau des deux moitiés sur l'écran central
+CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_PROXY=y
+CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING=y
 {% endif %}
 
 {% if rgb_underglow %}

@@ -14,9 +14,12 @@ from __future__ import annotations
 
 import logging
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -37,8 +40,13 @@ from modules.build_manager.msys2_manager import Msys2Manager, Msys2SetupDialog, 
 from modules.build_manager.toolchain import INSTALL_GUIDE_MSG, detect_toolchain
 from modules.build_manager.toolchain_installer import ToolchainInstaller, ToolchainSetupDialog
 from modules.build_manager.vial_qmk_manager import VIAL_QMK_DIR, VialQmkManager
+from modules.build_manager.zmk_template_generator import ZmkTemplateGenerator
+from modules.hardware.keyboard_loader import load_keyboard, get_firmware_type
 
 logger = logging.getLogger(__name__)
+
+BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).parent.parent.parent))
+KEYBOARDS_DIR = BASE_DIR / "keyboards"
 
 
 class BuildWidget(QWidget):
@@ -49,6 +57,7 @@ class BuildWidget(QWidget):
         self._model = model
         self._worker: BuildWorker | None = None
         self._last_uf2: str | None = None  # chemin du dernier .uf2 compilé (FR28)
+        self._last_zmk_dir: Path | None = None  # dossier du dernier zmk-config généré
         self._setup_ui()
         self._refresh_toolchain_status()
 
@@ -108,6 +117,36 @@ class BuildWidget(QWidget):
         self._lbl_status.setObjectName("lbl_build_status")
         layout.addWidget(self._lbl_status)
 
+    # ──────────────────────────────────────────── Firmware type ──
+
+    def _firmware_type(self) -> str:
+        """Retourne 'qmk' ou 'zmk' selon le MCU sélectionné."""
+        model_name = self._model.keyboard.model
+        mcu = self._model.keyboard.mcu
+        if not model_name or not mcu:
+            return "qmk"
+        yaml_path = KEYBOARDS_DIR / f"{model_name}.yaml"
+        if not yaml_path.exists():
+            return "qmk"
+        kb_def = load_keyboard(yaml_path)
+        return get_firmware_type(kb_def, mcu)
+
+    def refresh_for_firmware(self) -> None:
+        """Adapte l'UI selon le firmware (QMK vs ZMK). Appelé quand le MCU change."""
+        is_zmk = self._firmware_type() == "zmk"
+        if is_zmk:
+            self._btn_build.setText(tr("build.zmk.generate_config"))
+            self._btn_export.setText(tr("build.zmk.open_folder"))
+            self._btn_guide.setVisible(False)
+            self._lbl_toolchain.setText(tr("build.zmk.toolchain_info"))
+            self._btn_export.setEnabled(self._last_zmk_dir is not None)
+        else:
+            self._btn_build.setText(tr("build.btn.generate"))
+            self._btn_export.setText(tr("build.btn.export"))
+            self._btn_guide.setVisible(True)
+            self._refresh_toolchain_status()
+            self._btn_export.setEnabled(self._last_uf2 is not None)
+
     # ─────────────────────────────────────────────────── Toolchain ──
 
     def _refresh_toolchain_status(self) -> None:
@@ -127,7 +166,11 @@ class BuildWidget(QWidget):
     # ─────────────────────────────────────────────────── Build ──
 
     def _on_build_clicked(self) -> None:
-        """Lance la compilation après vérification des prérequis."""
+        """Lance la compilation QMK ou la génération zmk-config."""
+        if self._firmware_type() == "zmk":
+            self._on_zmk_generate()
+            return
+        # ── QMK flow ──
         # Windows : vérifier MSYS2 (fournit make + bash)
         if is_windows() and not Msys2Manager().is_ready():
             reply = QMessageBox.question(
@@ -176,7 +219,6 @@ class BuildWidget(QWidget):
         # Vérifier que qmk CLI est installé (requis par le Makefile QMK)
         if not shutil.which("qmk"):
             self._log.appendPlainText("Installation de qmk CLI (pip install qmk)…")
-            import subprocess
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "qmk"],
                 capture_output=True, text=True,
@@ -216,6 +258,59 @@ class BuildWidget(QWidget):
         self._worker.start()
         logger.info("Compilation démarrée")
 
+    # ─────────────────────────────────────────────── ZMK generate ──
+
+    def _on_zmk_generate(self) -> None:
+        """Génère la config ZMK dans un dossier choisi par l'utilisateur."""
+        if not self._model.keyboard.model:
+            QMessageBox.warning(self, tr("build.zmk.error_title"), tr("build.zmk.no_model"))
+            return
+
+        output_dir = QFileDialog.getExistingDirectory(
+            self,
+            tr("build.zmk.select_output_dir"),
+            str(Path.home()),
+        )
+        if not output_dir:
+            return
+
+        self._btn_build.setEnabled(False)
+        self._progress.setValue(0)
+        self._log.clear()
+        self._lbl_size.setText("")
+        self._lbl_status.setText(tr("build.zmk.generating"))
+
+        try:
+            gen = ZmkTemplateGenerator()
+            generated = gen.generate(self._model, Path(output_dir))
+
+            for desc, path in generated.items():
+                self._log.appendPlainText(f"  {desc}: {path}")
+
+            self._progress.setValue(100)
+            self._last_zmk_dir = Path(output_dir)
+            self._btn_export.setEnabled(True)
+            self._lbl_status.setText(tr("build.zmk.success"))
+            self._lbl_size.setText(
+                tr("build.zmk.output_ready").format(path=output_dir)
+            )
+            logger.info("zmk-config g\u00e9n\u00e9r\u00e9 : %d fichiers dans %s", len(generated), output_dir)
+
+        except Exception as exc:
+            self._lbl_status.setText(tr("build.error"))
+            self._log.appendPlainText(str(exc))
+            QMessageBox.critical(
+                self,
+                tr("build.zmk.error_title"),
+                tr("build.zmk.error_msg").format(exc=exc),
+            )
+            logger.error("Erreur g\u00e9n\u00e9ration ZMK : %s", exc)
+
+        finally:
+            self._btn_build.setEnabled(True)
+
+    # ─────────────────────────────────────────── QMK build callbacks ──
+
     def _on_build_success(self, uf2_path: str) -> None:
         """Affiche la taille du firmware et avertit si dépassement flash (FR17, FR18)."""
         self._btn_build.setEnabled(True)
@@ -252,7 +347,11 @@ class BuildWidget(QWidget):
     # ─────────────────────────────────────────────── Export + Guide ──
 
     def _on_export_clicked(self) -> None:
-        """Exporte le .uf2 vers l'emplacement choisi par l'utilisateur (FR28)."""
+        """Exporte le .uf2 (QMK) ou ouvre le dossier zmk-config (ZMK)."""
+        if self._firmware_type() == "zmk":
+            if self._last_zmk_dir and self._last_zmk_dir.exists():
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._last_zmk_dir)))
+            return
         if not self._last_uf2:
             return
         src = Path(self._last_uf2)

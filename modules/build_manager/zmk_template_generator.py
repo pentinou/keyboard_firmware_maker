@@ -60,49 +60,40 @@ def _format_gpios(pins: list[str], flags: str) -> str:
     return "\n".join(lines)
 
 
+def _get_used_positions(kb_def: KeyboardDefinition) -> set[tuple[int, int]]:
+    """Retourne les positions (row, col) utilisées (hors encodeurs) dans la matrice combinée."""
+    cols = kb_def.matrix["cols"]
+    used: set[tuple[int, int]] = set()
+
+    for key in kb_def.layout.get("left", []):
+        if not key.encoder:
+            used.add((key.row, key.col))
+    for key in kb_def.layout.get("right", []):
+        if not key.encoder:
+            used.add((key.row, key.col + cols))
+    for key in kb_def.layout.get("keys", []):
+        if not key.encoder:
+            used.add((key.row, key.col))
+
+    return used
+
+
 def _build_matrix_transform(kb_def: KeyboardDefinition) -> str:
     """Construit le bloc map de la matrix-transform ZMK depuis le layout."""
     rows = kb_def.matrix["rows"]
     cols = kb_def.matrix["cols"]
+    total_cols = cols * 2 if kb_def.split else cols
 
-    if kb_def.split:
-        total_rows = rows
-        total_cols = cols * 2
-    else:
-        total_rows = rows
-        total_cols = cols
+    used_positions = _get_used_positions(kb_def)
 
-    # Initialise la matrice avec des positions vides
-    transform = [["RC({},{})".format(r, c) for c in range(total_cols)] for r in range(total_rows)]
-
-    # Récupérer les positions de touches réelles depuis le layout
-    used_positions: set[tuple[int, int]] = set()
-
-    left_keys = kb_def.layout.get("left", [])
-    right_keys = kb_def.layout.get("right", [])
-    single_keys = kb_def.layout.get("keys", [])
-
-    for key in left_keys:
-        if not key.encoder:
-            used_positions.add((key.row, key.col))
-    for key in right_keys:
-        if not key.encoder:
-            # Right side: cols offset by matrix cols
-            used_positions.add((key.row, key.col + cols))
-    for key in single_keys:
-        if not key.encoder:
-            used_positions.add((key.row, key.col))
-
-    # Construire les lignes du transform en ordre
     lines = []
-    for r in range(total_rows):
+    for r in range(rows):
         row_entries = []
         for c in range(total_cols):
             if (r, c) in used_positions:
                 row_entries.append(f"RC({r},{c})")
-            else:
-                row_entries.append("RC({},{})".format(r, c))
-        lines.append("            " + "  ".join(row_entries))
+        if row_entries:
+            lines.append("            " + "  ".join(row_entries))
 
     return "\n".join(lines)
 
@@ -111,27 +102,9 @@ def _build_trans_bindings(kb_def: KeyboardDefinition) -> str:
     """Construit une grille de &trans pour toutes les touches du keymap."""
     rows = kb_def.matrix["rows"]
     cols = kb_def.matrix["cols"]
+    total_cols = cols * 2 if kb_def.split else cols
 
-    if kb_def.split:
-        total_cols = cols * 2
-    else:
-        total_cols = cols
-
-    # Récupérer les positions utilisées
-    left_keys = kb_def.layout.get("left", [])
-    right_keys = kb_def.layout.get("right", [])
-    single_keys = kb_def.layout.get("keys", [])
-
-    used_positions: set[tuple[int, int]] = set()
-    for key in left_keys:
-        if not key.encoder:
-            used_positions.add((key.row, key.col))
-    for key in right_keys:
-        if not key.encoder:
-            used_positions.add((key.row, key.col + cols))
-    for key in single_keys:
-        if not key.encoder:
-            used_positions.add((key.row, key.col))
+    used_positions = _get_used_positions(kb_def)
 
     lines = []
     for r in range(rows):
@@ -141,6 +114,63 @@ def _build_trans_bindings(kb_def: KeyboardDefinition) -> str:
                 entries.append("&trans")
         if entries:
             lines.append("                " + "  ".join(entries))
+
+    return "\n".join(lines)
+
+
+def _build_physical_layout_keys(kb_def: KeyboardDefinition) -> str:
+    """Construit la propriété keys du physical-layout pour ZMK Studio.
+
+    Chaque touche est décrite par &key_physical_attrs w h x y r rx ry
+    en centi-key-units (100 = 1u). L'ordre doit correspondre exactement
+    au matrix transform et aux bindings du keymap.
+    """
+    rows = kb_def.matrix["rows"]
+    cols = kb_def.matrix["cols"]
+    total_cols = cols * 2 if kb_def.split else cols
+
+    left_keys = kb_def.layout.get("left", [])
+    right_keys = kb_def.layout.get("right", [])
+    single_keys = kb_def.layout.get("keys", [])
+
+    # Map (row, col_combined) → (x, y) en key-units
+    position_map: dict[tuple[int, int], tuple[float, float]] = {}
+
+    for key in left_keys:
+        if not key.encoder:
+            position_map[(key.row, key.col)] = (key.x, key.y)
+
+    # Offset côté droit : largeur max gauche + 1u (touche) + 2u (gap entre moitiés)
+    if kb_def.split and left_keys:
+        max_left_x = max(k.x for k in left_keys if not k.encoder)
+        right_x_offset = max_left_x + 3.0
+    else:
+        right_x_offset = 0.0
+
+    for key in right_keys:
+        if not key.encoder:
+            position_map[(key.row, key.col + cols)] = (key.x + right_x_offset, key.y)
+
+    for key in single_keys:
+        if not key.encoder:
+            position_map[(key.row, key.col)] = (key.x, key.y)
+
+    # Collecter dans l'ordre row-major (même ordre que transform / bindings)
+    entries: list[tuple[int, int]] = []
+    for r in range(rows):
+        for c in range(total_cols):
+            if (r, c) in position_map:
+                x, y = position_map[(r, c)]
+                entries.append((int(round(x * 100)), int(round(y * 100))))
+
+    if not entries:
+        return ""
+
+    lines = []
+    for i, (x, y) in enumerate(entries):
+        prefix = "        keys = " if i == 0 else "             , "
+        suffix = ";" if i == len(entries) - 1 else ""
+        lines.append(f"{prefix}<&key_physical_attrs 100 100 {x:>5} {y:>5} 0 0 0>{suffix}")
 
     return "\n".join(lines)
 
@@ -265,6 +295,9 @@ class ZmkTemplateGenerator:
         # Bindings (toutes les touches en &trans)
         trans_bindings = _build_trans_bindings(kb_def)
 
+        # Physical layout pour ZMK Studio
+        physical_layout_keys = _build_physical_layout_keys(kb_def)
+
         # Display
         has_display = bool(model.keyboard.oled_sides)
         # TODO: détecter nice!view vs OLED depuis la config
@@ -304,4 +337,5 @@ class ZmkTemplateGenerator:
             "nice_view": nice_view,
             "rgb_underglow": rgb_underglow,
             "rgb_max_brightness": kb_def.rgb_hw.max_brightness,
+            "physical_layout_keys": physical_layout_keys,
         }
