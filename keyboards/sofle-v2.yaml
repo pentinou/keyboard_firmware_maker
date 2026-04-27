@@ -16,6 +16,13 @@ mcu_options:
       encoder_b: ["GP28"]
       encoder_a_right: ["GP28"]
       encoder_b_right: ["GP29"]
+      # WS2812 DATA = pad position 1 du footprint Pro Micro (silkscreen "GP0"
+      # / "TX" sur Sparkfun Pro Micro RP2040 et Sea Picro). Validé empiriquement
+      # par le firmware QMK fonctionnel sur l'ancien Sofle de l'utilisateur
+      # (mêmes LEDs WS2812). Côté ZMK, ce même pad physique est `&pro_micro 1`
+      # (= D1 Arduino = P0.06 sur SuperMini/nice!nano).
+      # ⚠ Ne PAS confondre avec QMK `D1=GP2` du _pin_defs.h promicro_to_sparkfun_pm2040 :
+      # c'est un alias logique Arduino historique, pas le silkscreen physique.
       ws2812: "GP0"
       serial_tx: "GP1"
       serial_driver: "vendor"
@@ -29,10 +36,17 @@ mcu_options:
     bootloader: "adafruit-nrf52"
     pins:
       matrix_rows: ["&pro_micro 5", "&pro_micro 6", "&pro_micro 7", "&pro_micro 8", "&pro_micro 9"]
-      matrix_cols: ["&pro_micro 21", "&pro_micro 20", "&pro_micro 19", "&pro_micro 18", "&pro_micro 15", "&pro_micro 14"]
-      encoder_a: ["&pro_micro 16"]
-      encoder_b: ["&pro_micro 10"]
-      ws2812: "&pro_micro 0"
+      matrix_cols: ["&pro_micro 19", "&pro_micro 18", "&pro_micro 15", "&pro_micro 14", "&pro_micro 16", "&pro_micro 10"]
+      encoder_a: ["&pro_micro 21"]
+      encoder_b: ["&pro_micro 20"]
+      # WS2812 DATA = pad position 1 du footprint Pro Micro = `&pro_micro 1` en
+      # ZMK = P0.06 sur SuperMini/nice!nano. C'est le même pad que `GP0` côté
+      # Sparkfun Pro Micro RP2040 (silkscreen "GP0" / "TX") — validé sur les
+      # deux PCB Sofle de l'utilisateur (ancien RP2040 et nouveau v2.1 RGB).
+      # Note : la doc QMK sofle/info.json dit "D3" mais en QMK Arduino, "D1" et
+      # "D3" ne réfèrent pas aux silkscreen physiques d'un Pro Micro RP2040 —
+      # c'est encore une autre couche d'alias historique AVR. Ne pas s'y fier.
+      ws2812: "&pro_micro 1"
   - id: supermini_nrf52840
     display_name: "SuperMini nRF52840 (BLE)"
     description: "Clone Pro Micro pas cher avec nRF52840 BLE 5.0. Firmware ZMK. RGB underglow uniquement."
@@ -40,10 +54,10 @@ mcu_options:
     bootloader: "adafruit-nrf52"
     pins:
       matrix_rows: ["&pro_micro 5", "&pro_micro 6", "&pro_micro 7", "&pro_micro 8", "&pro_micro 9"]
-      matrix_cols: ["&pro_micro 21", "&pro_micro 20", "&pro_micro 19", "&pro_micro 18", "&pro_micro 15", "&pro_micro 14"]
-      encoder_a: ["&pro_micro 16"]
-      encoder_b: ["&pro_micro 10"]
-      ws2812: "&pro_micro 0"
+      matrix_cols: ["&pro_micro 19", "&pro_micro 18", "&pro_micro 15", "&pro_micro 14", "&pro_micro 16", "&pro_micro 10"]
+      encoder_a: ["&pro_micro 21"]
+      encoder_b: ["&pro_micro 20"]
+      ws2812: "&pro_micro 1"
   - id: nrfmicro
     display_name: "nRFMicro 1.3 (nRF52840 BLE)"
     description: "MCU nRF52840 open-source avec BLE 5.0. Firmware ZMK. Charge LiPo intégrée. RGB underglow uniquement."
@@ -51,10 +65,10 @@ mcu_options:
     bootloader: "adafruit-nrf52"
     pins:
       matrix_rows: ["&pro_micro 5", "&pro_micro 6", "&pro_micro 7", "&pro_micro 8", "&pro_micro 9"]
-      matrix_cols: ["&pro_micro 21", "&pro_micro 20", "&pro_micro 19", "&pro_micro 18", "&pro_micro 15", "&pro_micro 14"]
-      encoder_a: ["&pro_micro 16"]
-      encoder_b: ["&pro_micro 10"]
-      ws2812: "&pro_micro 0"
+      matrix_cols: ["&pro_micro 19", "&pro_micro 18", "&pro_micro 15", "&pro_micro 14", "&pro_micro 16", "&pro_micro 10"]
+      encoder_a: ["&pro_micro 21"]
+      encoder_b: ["&pro_micro 20"]
+      ws2812: "&pro_micro 1"
 diode_direction: "COL2ROW"
 layout_macro: "LAYOUT"
 vial_qmk_keyboard: "sofle/rev1"
@@ -74,6 +88,10 @@ oled:
   display: "128X32"
 rgb:
   max_brightness: 200
+  # Longueur chaîne WS2812 par moitié (split). Sur Sofle v2.1 RGB :
+  # 1 status LED (près OLED) + underglow + per-key. Valeur typique 35-36.
+  # Ajuster si build échoue ou si LEDs s'éteignent au-delà d'un index.
+  led_count: 36
 # Physical key positions (x, y in key units). Source: QMK info.json sofle/rev1
 # Right side positions are normalized relative to left (x_min subtracted = 9.5)
 layout:
@@ -149,3 +167,28 @@ layout:
     - {row: 4, col: 2, x: 2.0,  y: 4.15}
     - {row: 4, col: 3, x: 1.0,  y: 4.25}
     - {row: 4, col: 4, x: 0.0,  y: 4.25}
+
+# Keymap ZMK par défaut — ordre des bindings = ordre des colonnes de la matrice combinée.
+# Pour un split à 6 colonnes : [left col 0..5, right col 0..5]. Sur le Sofle rev1, right col 0
+# correspond à la touche la PLUS À DROITE physiquement (extérieur), right col 5 à la plus
+# proche du gap central. Les bindings sont donc "miroirs" sur la moitié droite.
+# Row 4 (thumb cluster) : 10 touches (cols 0-4 des deux moitiés, encodeur col 5 exclu).
+default_keymap_zmk:
+  default:
+    - ["&kp ESC",   "&kp N1", "&kp N2", "&kp N3", "&kp N4", "&kp N5",   "&kp BSPC",  "&kp N0",   "&kp N9",  "&kp N8",    "&kp N7", "&kp N6"]
+    - ["&kp TAB",   "&kp Q",  "&kp W",  "&kp E",  "&kp R",  "&kp T",    "&kp BSLH",  "&kp P",    "&kp O",   "&kp I",     "&kp U",  "&kp Y"]
+    - ["&kp LSHFT", "&kp A",  "&kp S",  "&kp D",  "&kp F",  "&kp G",    "&kp SQT",   "&kp SEMI", "&kp L",   "&kp K",     "&kp J",  "&kp H"]
+    - ["&kp LCTRL", "&kp Z",  "&kp X",  "&kp C",  "&kp V",  "&kp B",    "&kp RSHFT", "&kp FSLH", "&kp DOT", "&kp COMMA", "&kp M",  "&kp N"]
+    - ["&kp LGUI",  "&kp LALT", "&kp LCTRL", "&lt 1 SPACE", "&kp RET",   "&kp RGUI",  "&kp RALT", "&kp RCTRL", "&lt 2 SPACE", "&kp RET"]
+  lower:
+    - ["&kp GRAVE", "&kp F1",   "&kp F2",   "&kp F3",   "&kp F4",   "&kp F5",     "&kp F11",  "&kp F10", "&kp F9",     "&kp F8",   "&kp F7",   "&kp F6"]
+    - ["&trans",    "&kp N1",   "&kp N2",   "&kp N3",   "&kp N4",   "&kp N5",     "&kp F12",  "&kp N0",  "&kp N9",     "&kp N8",   "&kp N7",   "&kp N6"]
+    - ["&trans",    "&trans",   "&trans",   "&trans",   "&trans",   "&trans",     "&trans",   "&trans",  "&kp RIGHT",  "&kp UP",   "&kp DOWN", "&kp LEFT"]
+    - ["&trans",    "&trans",   "&trans",   "&trans",   "&trans",   "&trans",     "&trans",   "&trans",  "&trans",     "&trans",   "&trans",   "&trans"]
+    - ["&trans",    "&trans",   "&trans",   "&trans",   "&trans",     "&trans",   "&trans",   "&trans",  "&trans",     "&trans"]
+  raise:
+    - ["&trans", "&trans",    "&trans",  "&trans",    "&trans",    "&trans",     "&trans", "&trans",   "&trans",   "&trans",   "&trans",   "&trans"]
+    - ["&trans", "&kp EXCL",  "&kp AT",  "&kp HASH",  "&kp DLLR",  "&kp PRCNT",  "&trans", "&kp RPAR", "&kp LPAR", "&kp STAR", "&kp AMPS", "&kp CARET"]
+    - ["&trans", "&trans",    "&trans",  "&trans",    "&trans",    "&trans",     "&trans", "&trans",   "&trans",   "&trans",   "&trans",   "&trans"]
+    - ["&trans", "&trans",    "&trans",  "&trans",    "&trans",    "&trans",     "&trans", "&trans",   "&trans",   "&trans",   "&trans",   "&trans"]
+    - ["&trans", "&trans",    "&trans",  "&trans",    "&trans",      "&trans",   "&trans", "&trans",   "&trans",   "&trans"]

@@ -12,6 +12,9 @@
 {% if has_encoder %}
         zmk,keymap-sensors = &sensors;
 {% endif %}
+{% if has_display %}
+        zephyr,display = &oled;
+{% endif %}
     };
 
     kscan0: kscan_0 {
@@ -57,3 +60,26 @@
 {{ physical_layout_keys }}
     };
 };
+
+{% if has_display %}
+&pro_micro_i2c {
+    status = "okay";
+
+    oled: {{ oled_driver }}@3c {
+        compatible = "solomon,{{ oled_driver }}fb";
+        reg = <0x3c>;
+        width = <{{ oled_width }}>;
+        height = <{{ oled_height }}>;
+        segment-offset = <0>;
+        page-offset = <0>;
+        display-offset = <0>;
+        multiplex-ratio = <{{ oled_multiplex }}>;
+        prechargep = <0x22>;
+        segment-remap;
+        com-invdir;
+{% if oled_height <= 32 %}
+        com-sequential;
+{% endif %}
+    };
+};
+{% endif %}

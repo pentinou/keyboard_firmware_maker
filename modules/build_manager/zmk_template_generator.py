@@ -19,6 +19,7 @@ Structure de sortie dans output_dir/ :
 from __future__ import annotations
 
 import logging
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -34,12 +35,54 @@ BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).parent.parent.parent))
 ZMK_TEMPLATES_DIR = BASE_DIR / "templates" / "zmk"
 KEYBOARDS_DIR = BASE_DIR / "keyboards"
 
-# Mapping MCU id → ZMK board name
+# Mapping MCU id → ZMK board name (HWMv2 qualifier form).
+# Les variantes `//zmk` / `/<soc>/zmk` sélectionnent le defconfig ZMK
+# (CONFIG_FLASH, CONFIG_NVS, CONFIG_SETTINGS_NVS) requis par Studio/BLE bond.
 _ZMK_BOARD_MAP: dict[str, str] = {
-    "nice_nano_v2": "nice_nano_v2",
-    "supermini_nrf52840": "nice_nano_v2",
-    "nrfmicro": "nrfmicro_13",
+    "nice_nano_v2": "nice_nano//zmk",
+    "supermini_nrf52840": "nice_nano//zmk",
+    "nrfmicro": "nrfmicro/nrf52840/zmk",
 }
+
+# Traduction `&pro_micro N` → (port, pin) pour la board `nice_nano//zmk`
+# (source : zmk/app/boards/shields/../nice_nano.dts gpio-map).
+# Les SuperMini nRF52840 partagent cette table via _ZMK_BOARD_MAP.
+_NICE_NANO_PRO_MICRO_TO_NRF: dict[int, tuple[int, int]] = {
+    0:  (0, 8),
+    1:  (0, 6),
+    2:  (0, 17),
+    3:  (0, 20),
+    4:  (0, 22),
+    5:  (0, 24),
+    6:  (1, 0),
+    7:  (0, 11),
+    8:  (1, 4),
+    9:  (1, 6),
+    10: (0, 9),
+    14: (1, 11),
+    15: (1, 13),
+    16: (0, 10),
+    18: (1, 15),
+    19: (0, 2),
+    20: (0, 29),
+    21: (0, 31),
+}
+
+_PRO_MICRO_RE = re.compile(r"^\s*&pro_micro\s+(\d+)\s*$")
+
+
+def _pro_micro_to_nrf_psel(expr: str, mcu: str) -> tuple[int, int] | None:
+    """Traduit une expression `&pro_micro N` en couple (port, pin) nRF52.
+
+    Retourne None si le format n'est pas reconnu, si N n'est pas dans la
+    table pro_micro du MCU, ou si le MCU n'a pas de table (nrfmicro).
+    """
+    if mcu not in ("nice_nano_v2", "supermini_nrf52840"):
+        return None
+    match = _PRO_MICRO_RE.match(expr)
+    if not match:
+        return None
+    return _NICE_NANO_PRO_MICRO_TO_NRF.get(int(match.group(1)))
 
 
 def _load_keyboard_def(model: str) -> KeyboardDefinition | None:
@@ -98,20 +141,33 @@ def _build_matrix_transform(kb_def: KeyboardDefinition) -> str:
     return "\n".join(lines)
 
 
-def _build_trans_bindings(kb_def: KeyboardDefinition) -> str:
-    """Construit une grille de &trans pour toutes les touches du keymap."""
+def _build_layer_bindings(kb_def: KeyboardDefinition, layer_name: str) -> str:
+    """Construit les bindings d'un layer.
+
+    Si `kb_def.default_keymap_zmk[layer_name]` est défini, utilise ces bindings
+    en ordre row-major (chaque ligne YAML = une ligne de la matrice combinée).
+    Les positions non couvertes (YAML plus court que la matrice) retombent sur &trans.
+    Aucune entrée pour ce layer → grille complète de &trans.
+    """
     rows = kb_def.matrix["rows"]
     cols = kb_def.matrix["cols"]
     total_cols = cols * 2 if kb_def.split else cols
 
     used_positions = _get_used_positions(kb_def)
+    layer_data = kb_def.default_keymap_zmk.get(layer_name) or []
 
     lines = []
     for r in range(rows):
         entries = []
+        row_bindings = layer_data[r] if r < len(layer_data) else []
+        idx = 0
         for c in range(total_cols):
             if (r, c) in used_positions:
-                entries.append("&trans")
+                if idx < len(row_bindings):
+                    entries.append(str(row_bindings[idx]))
+                else:
+                    entries.append("&trans")
+                idx += 1
         if entries:
             lines.append("                " + "  ".join(entries))
 
@@ -236,7 +292,11 @@ class ZmkTemplateGenerator:
         keymap_path.write_text(env.get_template("shield.keymap.j2").render(context), encoding="utf-8")
         generated["keymap"] = keymap_path
 
-        conf_path = shield_dir / f"{shield_name}.conf"
+        # User conf à la racine de config/ (chargé par post_boards_shields.cmake de ZMK
+        # via candidate ${ZMK_CONFIG}/<shield_dir_name>.conf). Zephyr ne charge
+        # dans boards/shields/X/ QUE les fichiers nommés exactement <SHIELD>.conf,
+        # donc le fichier commun doit vivre à la racine.
+        conf_path = output_dir / "config" / f"{shield_name}.conf"
         conf_path.write_text(env.get_template("shield.conf.j2").render(context), encoding="utf-8")
         generated["conf"] = conf_path
 
@@ -252,6 +312,11 @@ class ZmkTemplateGenerator:
         build_yaml = output_dir / "build.yaml"
         build_yaml.write_text(env.get_template("build.yaml.j2").render(context), encoding="utf-8")
         generated["build.yaml"] = build_yaml
+
+        # config/west.yml — manifest pour `west init -l config` (compilation locale)
+        west_yml = output_dir / "config" / "west.yml"
+        west_yml.write_text(env.get_template("west.yml.j2").render(context), encoding="utf-8")
+        generated["west.yml"] = west_yml
 
         logger.info("ZMK config générée : %d fichiers dans %s", len(generated), output_dir)
         return generated
@@ -272,7 +337,14 @@ class ZmkTemplateGenerator:
                 break
 
         shield_name = kb_def.model.replace("-", "_")
-        zmk_board = _ZMK_BOARD_MAP.get(mcu, "nice_nano_v2")
+        if mcu not in _ZMK_BOARD_MAP:
+            raise ValueError(
+                f"MCU '{mcu}' non supporté pour la compilation ZMK. "
+                f"MCUs supportés : {sorted(_ZMK_BOARD_MAP.keys())}. "
+                f"Ajoutez-le à _ZMK_BOARD_MAP dans zmk_template_generator.py "
+                f"avec le nom de board HWMv2 correspondant."
+            )
+        zmk_board = _ZMK_BOARD_MAP[mcu]
 
         # GPIO flags selon direction diode
         diode_dir = kb_def.diode_direction.lower()
@@ -292,8 +364,10 @@ class ZmkTemplateGenerator:
         # Matrix transform
         matrix_transform_map = _build_matrix_transform(kb_def)
 
-        # Bindings (toutes les touches en &trans)
-        trans_bindings = _build_trans_bindings(kb_def)
+        # Bindings par layer (depuis YAML default_keymap_zmk, fallback &trans)
+        default_bindings = _build_layer_bindings(kb_def, "default")
+        lower_bindings = _build_layer_bindings(kb_def, "lower")
+        raise_bindings = _build_layer_bindings(kb_def, "raise")
 
         # Physical layout pour ZMK Studio
         physical_layout_keys = _build_physical_layout_keys(kb_def)
@@ -304,8 +378,40 @@ class ZmkTemplateGenerator:
         display_type = "oled"
         nice_view = False
 
-        # RGB underglow
-        rgb_underglow = kb_def.capabilities.get("rgb", False) and model.keyboard.rgb_enabled
+        # Paramètres OLED devicetree (ex: display="128X32" → width=128, height=32)
+        oled_driver = kb_def.oled_hw.driver
+        display_str = (kb_def.oled_hw.display or "128X32").lower()
+        w_part, _, h_part = display_str.partition("x")
+        try:
+            oled_width = int(w_part)
+            oled_height = int(h_part)
+        except ValueError:
+            oled_width, oled_height = 128, 32
+        oled_multiplex = max(oled_height - 1, 0)
+
+        # RGB underglow — activé si user rgb_enabled + capability + ws2812 pin
+        # + led_count > 0 + MCU avec table pro_micro connue. Sinon désactivé
+        # (build casse sinon : src/rgb_underglow.c : #error "zmk,underglow chosen node…").
+        rgb_underglow = False
+        ws2812_port = 0
+        ws2812_pin = 0
+        ws2812_chain_length = 0
+        if (
+            model.keyboard.rgb_enabled
+            and kb_def.capabilities.get("rgb", False)
+            and pins.ws2812
+            and kb_def.rgb_hw.led_count > 0
+        ):
+            port_pin = _pro_micro_to_nrf_psel(pins.ws2812, mcu)
+            if port_pin is None:
+                logger.warning(
+                    "RGB underglow désactivé : ws2812 pin '%s' non traduisible "
+                    "en NRF_PSEL pour le MCU '%s'", pins.ws2812, mcu,
+                )
+            else:
+                rgb_underglow = True
+                ws2812_port, ws2812_pin = port_pin
+                ws2812_chain_length = kb_def.rgb_hw.led_count
 
         # Encodeur
         encoder_a = pins.encoder_a[0] if pins.encoder_a else ""
@@ -323,19 +429,28 @@ class ZmkTemplateGenerator:
             "col_gpios_left": col_gpios_left,
             "row_gpios_right": row_gpios_right,
             "col_gpios_right": col_gpios_right,
-            "matrix_rows_total": kb_def.matrix["rows"] * (2 if kb_def.split else 1),
+            "matrix_rows_total": kb_def.matrix["rows"],
             "matrix_cols": kb_def.matrix["cols"],
+            "matrix_cols_total": kb_def.matrix["cols"] * (2 if kb_def.split else 1),
             "matrix_transform_map": matrix_transform_map,
-            "default_bindings": trans_bindings,
-            "lower_bindings": trans_bindings,
-            "raise_bindings": trans_bindings,
+            "default_bindings": default_bindings,
+            "lower_bindings": lower_bindings,
+            "raise_bindings": raise_bindings,
             "has_encoder": kb_def.has_encoder,
             "encoder_a": encoder_a,
             "encoder_b": encoder_b,
             "has_display": has_display,
             "display_type": display_type,
             "nice_view": nice_view,
+            "oled_driver": oled_driver,
+            "oled_width": oled_width,
+            "oled_height": oled_height,
+            "oled_multiplex": oled_multiplex,
             "rgb_underglow": rgb_underglow,
-            "rgb_max_brightness": kb_def.rgb_hw.max_brightness,
+            "ws2812_port": ws2812_port,
+            "ws2812_pin": ws2812_pin,
+            "ws2812_chain_length": ws2812_chain_length,
+            # ZMK cappe ZMK_RGB_UNDERGLOW_BRT_MAX à [0, 100] (pourcent), pas 0-255 comme QMK
+            "rgb_max_brightness": min(max(kb_def.rgb_hw.max_brightness, 0), 100),
             "physical_layout_keys": physical_layout_keys,
         }

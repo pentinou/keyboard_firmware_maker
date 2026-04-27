@@ -6,12 +6,21 @@
 
 #include <dt-bindings/zmk/matrix_transform.h>
 #include <physical_layouts.dtsi>
+{% if rgb_underglow %}
+#include <zephyr/dt-bindings/led/led.h>
+{% endif %}
 
 / {
     chosen {
         zmk,physical-layout = &physical_layout0;
 {% if has_encoder %}
         zmk,keymap-sensors = &sensors;
+{% endif %}
+{% if has_display %}
+        zephyr,display = &oled;
+{% endif %}
+{% if rgb_underglow %}
+        zmk,underglow = &led_strip;
 {% endif %}
     };
 
@@ -38,7 +47,7 @@
     default_transform: matrix_transform_0 {
         compatible = "zmk,matrix-transform";
         rows = <{{ matrix_rows_total }}>;
-        columns = <{{ matrix_cols }}>;
+        columns = <{{ matrix_cols_total }}>;
         map = <
 {{ matrix_transform_map }}
         >;
@@ -52,3 +61,68 @@
 {{ physical_layout_keys }}
     };
 };
+
+{% if has_display %}
+&pro_micro_i2c {
+    status = "okay";
+
+    oled: {{ oled_driver }}@3c {
+        compatible = "solomon,{{ oled_driver }}fb";
+        reg = <0x3c>;
+        width = <{{ oled_width }}>;
+        height = <{{ oled_height }}>;
+        segment-offset = <0>;
+        page-offset = <0>;
+        display-offset = <0>;
+        multiplex-ratio = <{{ oled_multiplex }}>;
+        prechargep = <0x22>;
+        segment-remap;
+        com-invdir;
+{% if oled_height <= 32 %}
+        com-sequential;
+{% endif %}
+    };
+};
+{% endif %}
+
+{% if rgb_underglow %}
+/*
+ * WS2812 underglow — pilotée via SPIM3 (seul peripheral nRF52840 qui supporte
+ * les timings ≥ 4 MHz nécessaires pour encoder les trames WS2812). Le pin MOSI
+ * est dérivé de pins.ws2812 (`&pro_micro {{ ws2812_chain_length }}`) via la
+ * table nice_nano pro_micro → NRF_PSEL(port, pin).
+ */
+&pinctrl {
+    spi3_default: spi3_default {
+        group1 {
+            psels = <NRF_PSEL(SPIM_MOSI, {{ ws2812_port }}, {{ ws2812_pin }})>;
+        };
+    };
+
+    spi3_sleep: spi3_sleep {
+        group1 {
+            psels = <NRF_PSEL(SPIM_MOSI, {{ ws2812_port }}, {{ ws2812_pin }})>;
+            low-power-enable;
+        };
+    };
+};
+
+&spi3 {
+    compatible = "nordic,nrf-spim";
+    status = "okay";
+    pinctrl-0 = <&spi3_default>;
+    pinctrl-1 = <&spi3_sleep>;
+    pinctrl-names = "default", "sleep";
+
+    led_strip: ws2812@0 {
+        compatible = "worldsemi,ws2812-spi";
+        reg = <0>;
+        /* Timing WS2812 encodé en frames SPI 4 MHz */
+        spi-max-frequency = <4000000>;
+        spi-one-frame = <0x70>;
+        spi-zero-frame = <0x40>;
+        chain-length = <{{ ws2812_chain_length }}>;
+        color-mapping = <LED_COLOR_ID_GREEN LED_COLOR_ID_RED LED_COLOR_ID_BLUE>;
+    };
+};
+{% endif %}

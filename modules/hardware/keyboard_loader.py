@@ -80,6 +80,9 @@ class RgbHardwareConfig:
     """Configuration matérielle RGB depuis le YAML clavier."""
 
     max_brightness: int = 200
+    led_count: int = 0
+    """Longueur de la chaîne WS2812 (par moitié pour split, total sinon).
+    0 = pas de RGB ZMK ; le pipeline QMK utilise vial-qmk info.json séparément."""
 
 
 @dataclass
@@ -109,6 +112,8 @@ class KeyboardDefinition:
     """Chemin relatif dans vial-qmk (ex: 'sofle/rev1'). Si défini, le layout natif est utilisé."""
     oled_hw: OledHardwareConfig = field(default_factory=OledHardwareConfig)
     rgb_hw: RgbHardwareConfig = field(default_factory=RgbHardwareConfig)
+    default_keymap_zmk: dict[str, list[list[str]]] = field(default_factory=dict)
+    """Keymap ZMK par défaut : {layer_name: [[binding, ...], ...]}. Vide = tout &trans."""
 
 
 def _parse_pins(raw: dict | None) -> McuPins:
@@ -239,7 +244,21 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
     raw_rgb = data.get("rgb", {})
     rgb_hw = RgbHardwareConfig(
         max_brightness=raw_rgb.get("max_brightness", 200) if isinstance(raw_rgb, dict) else 200,
+        led_count=raw_rgb.get("led_count", 0) if isinstance(raw_rgb, dict) else 0,
     )
+
+    raw_keymap = data.get("default_keymap_zmk", {}) or {}
+    default_keymap_zmk: dict[str, list[list[str]]] = {}
+    if isinstance(raw_keymap, dict):
+        for layer_name, rows_data in raw_keymap.items():
+            if not isinstance(rows_data, list):
+                continue
+            parsed_rows = [
+                [str(b) for b in row]
+                for row in rows_data
+                if isinstance(row, list)
+            ]
+            default_keymap_zmk[str(layer_name)] = parsed_rows
 
     return KeyboardDefinition(
         model=data["model"],
@@ -260,6 +279,7 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
         vial_qmk_keyboard=data.get("vial_qmk_keyboard", ""),
         oled_hw=oled_hw,
         rgb_hw=rgb_hw,
+        default_keymap_zmk=default_keymap_zmk,
     )
 
 

@@ -5,14 +5,13 @@ include:
 {% if split %}
   - board: {{ zmk_board }}
     shield: {{ shield_name }}_left{% if nice_view %} nice_view_adapter nice_view{% endif %}
-
     snippet: studio-rpc-usb-uart
   - board: {{ zmk_board }}
     shield: {{ shield_name }}_right{% if nice_view %} nice_view_adapter nice_view{% endif %}
-
 {% else %}
   - board: {{ zmk_board }}
     shield: {{ shield_name }}{% if nice_view %} nice_view_adapter nice_view{% endif %}
-
     snippet: studio-rpc-usb-uart
 {% endif %}
+  - board: {{ zmk_board }}
+    shield: settings_reset
