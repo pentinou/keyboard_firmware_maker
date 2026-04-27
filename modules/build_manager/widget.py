@@ -40,6 +40,12 @@ from modules.build_manager.msys2_manager import Msys2Manager, Msys2SetupDialog, 
 from modules.build_manager.toolchain import INSTALL_GUIDE_MSG, detect_toolchain
 from modules.build_manager.toolchain_installer import ToolchainInstaller, ToolchainSetupDialog
 from modules.build_manager.vial_qmk_manager import VIAL_QMK_DIR, VialQmkManager
+from modules.build_manager.zmk_builder import (
+    ZEPHYR_SDK_DIR,
+    ZmkBuildWorker,
+    is_west_available,
+    is_zephyr_sdk_installed,
+)
 from modules.build_manager.zmk_template_generator import ZmkTemplateGenerator
 from modules.hardware.keyboard_loader import load_keyboard, get_firmware_type
 
@@ -56,8 +62,10 @@ class BuildWidget(QWidget):
         super().__init__(parent)
         self._model = model
         self._worker: BuildWorker | None = None
+        self._zmk_worker: ZmkBuildWorker | None = None
         self._last_uf2: str | None = None  # chemin du dernier .uf2 compilé (FR28)
         self._last_zmk_dir: Path | None = None  # dossier du dernier zmk-config généré
+        self._last_zmk_uf2s: list[Path] = []  # .uf2 produits par la dernière compilation ZMK locale
         self._setup_ui()
         self._refresh_toolchain_status()
 
@@ -84,6 +92,13 @@ class BuildWidget(QWidget):
         self._btn_export.setEnabled(False)  # activé seulement après succès (FR28)
         self._btn_export.clicked.connect(self._on_export_clicked)
         btn_row.addWidget(self._btn_export)
+
+        # Bouton ZMK secondaire : génère uniquement la config (pour GitHub Actions)
+        self._btn_zmk_config = QPushButton(tr("build.zmk.generate_config"))
+        self._btn_zmk_config.setObjectName("btn_zmk_config")
+        self._btn_zmk_config.clicked.connect(self._on_zmk_generate)
+        self._btn_zmk_config.setVisible(False)
+        btn_row.addWidget(self._btn_zmk_config)
 
         self._btn_guide = QPushButton(tr("build.btn.guide"))
         self._btn_guide.setObjectName("btn_guide")
@@ -135,17 +150,38 @@ class BuildWidget(QWidget):
         """Adapte l'UI selon le firmware (QMK vs ZMK). Appelé quand le MCU change."""
         is_zmk = self._firmware_type() == "zmk"
         if is_zmk:
-            self._btn_build.setText(tr("build.zmk.generate_config"))
-            self._btn_export.setText(tr("build.zmk.open_folder"))
+            self._btn_build.setText(tr("build.zmk.build_local"))
+            self._btn_export.setText(tr("build.zmk.export_uf2"))
+            self._btn_zmk_config.setVisible(True)
             self._btn_guide.setVisible(False)
-            self._lbl_toolchain.setText(tr("build.zmk.toolchain_info"))
-            self._btn_export.setEnabled(self._last_zmk_dir is not None)
+            self._refresh_zmk_toolchain_status()
+            self._btn_export.setEnabled(bool(self._last_zmk_uf2s))
         else:
             self._btn_build.setText(tr("build.btn.generate"))
             self._btn_export.setText(tr("build.btn.export"))
+            self._btn_zmk_config.setVisible(False)
             self._btn_guide.setVisible(True)
             self._refresh_toolchain_status()
             self._btn_export.setEnabled(self._last_uf2 is not None)
+
+    def _refresh_zmk_toolchain_status(self) -> None:
+        """Affiche le statut de la toolchain ZMK (Zephyr SDK + west)."""
+        sdk_ok = is_zephyr_sdk_installed()
+        west_ok = is_west_available()
+        if sdk_ok and west_ok:
+            self._lbl_toolchain.setText(
+                tr("build.zmk.toolchain_ready").format(sdk_dir=ZEPHYR_SDK_DIR)
+            )
+        else:
+            missing = []
+            if not sdk_ok:
+                missing.append("Zephyr SDK")
+            if not west_ok:
+                missing.append("west")
+            script = "setup_zmk.bat" if is_windows() else "setup_zmk.sh"
+            self._lbl_toolchain.setText(
+                tr("build.zmk.toolchain_missing").format(missing=", ".join(missing), script=script)
+            )
 
     # ─────────────────────────────────────────────────── Toolchain ──
 
@@ -166,9 +202,9 @@ class BuildWidget(QWidget):
     # ─────────────────────────────────────────────────── Build ──
 
     def _on_build_clicked(self) -> None:
-        """Lance la compilation QMK ou la génération zmk-config."""
+        """Lance la compilation QMK ou ZMK locale."""
         if self._firmware_type() == "zmk":
-            self._on_zmk_generate()
+            self._on_zmk_build_local()
             return
         # ── QMK flow ──
         # Windows : vérifier MSYS2 (fournit make + bash)
@@ -258,6 +294,60 @@ class BuildWidget(QWidget):
         self._worker.start()
         logger.info("Compilation démarrée")
 
+    # ─────────────────────────────────────────────── ZMK local build ──
+
+    def _on_zmk_build_local(self) -> None:
+        """Lance la compilation ZMK locale dans le workspace cache."""
+        if not self._model.keyboard.model:
+            QMessageBox.warning(self, tr("build.zmk.error_title"), tr("build.zmk.no_model"))
+            return
+
+        # Vérifier prérequis ZMK
+        if not is_zephyr_sdk_installed() or not is_west_available():
+            script = "setup_zmk.bat" if is_windows() else "setup_zmk.sh"
+            QMessageBox.warning(
+                self,
+                tr("build.zmk.toolchain_missing_title"),
+                tr("build.zmk.toolchain_missing_msg").format(script=script),
+            )
+            return
+
+        self._btn_build.setEnabled(False)
+        self._btn_zmk_config.setEnabled(False)
+        self._btn_export.setEnabled(False)
+        self._progress.setValue(0)
+        self._log.clear()
+        self._lbl_size.setText("")
+        self._last_zmk_uf2s = []
+        self._lbl_status.setText(tr("build.zmk.compiling"))
+
+        self._zmk_worker = ZmkBuildWorker(model=self._model)
+        self._zmk_worker.progress.connect(self._progress.setValue)
+        self._zmk_worker.log_line.connect(self._log.appendPlainText)
+        self._zmk_worker.success.connect(self._on_zmk_build_success)
+        self._zmk_worker.error.connect(self._on_zmk_build_error)
+        self._zmk_worker.start()
+        logger.info("Compilation ZMK locale démarrée")
+
+    def _on_zmk_build_success(self, uf2_paths: list) -> None:
+        """Affiche les .uf2 produits et active l'export."""
+        self._btn_build.setEnabled(True)
+        self._btn_zmk_config.setEnabled(True)
+        self._last_zmk_uf2s = [Path(p) for p in uf2_paths]
+        self._btn_export.setEnabled(bool(self._last_zmk_uf2s))
+        self._lbl_status.setText(tr("build.zmk.success"))
+        names = ", ".join(p.name for p in self._last_zmk_uf2s)
+        self._lbl_size.setText(tr("build.zmk.uf2_produced").format(names=names))
+        logger.info("Compilation ZMK réussie : %d .uf2", len(self._last_zmk_uf2s))
+
+    def _on_zmk_build_error(self, msg: str) -> None:
+        """Affiche l'erreur de compilation ZMK."""
+        self._btn_build.setEnabled(True)
+        self._btn_zmk_config.setEnabled(True)
+        self._lbl_status.setText(tr("build.error"))
+        QMessageBox.critical(self, tr("build.zmk.error_title"), msg)
+        logger.error("Erreur compilation ZMK : %s", msg)
+
     # ─────────────────────────────────────────────── ZMK generate ──
 
     def _on_zmk_generate(self) -> None:
@@ -275,9 +365,13 @@ class BuildWidget(QWidget):
             return
 
         self._btn_build.setEnabled(False)
+        self._btn_zmk_config.setEnabled(False)
         self._progress.setValue(0)
         self._log.clear()
         self._lbl_size.setText("")
+        # On clear les UF2 du build local pour que Export tombe sur "ouvrir le dossier"
+        self._last_zmk_uf2s = []
+        self._btn_export.setEnabled(False)
         self._lbl_status.setText(tr("build.zmk.generating"))
 
         try:
@@ -308,6 +402,7 @@ class BuildWidget(QWidget):
 
         finally:
             self._btn_build.setEnabled(True)
+            self._btn_zmk_config.setEnabled(True)
 
     # ─────────────────────────────────────────── QMK build callbacks ──
 
@@ -347,8 +442,42 @@ class BuildWidget(QWidget):
     # ─────────────────────────────────────────────── Export + Guide ──
 
     def _on_export_clicked(self) -> None:
-        """Exporte le .uf2 (QMK) ou ouvre le dossier zmk-config (ZMK)."""
+        """Exporte le ou les .uf2 (QMK/ZMK) ou ouvre le dossier zmk-config si seule config générée."""
         if self._firmware_type() == "zmk":
+            # Priorité : .uf2 produits par compilation locale
+            if self._last_zmk_uf2s:
+                dest_dir = QFileDialog.getExistingDirectory(
+                    self,
+                    tr("build.zmk.export_uf2_dialog"),
+                    str(Path.home()),
+                )
+                if not dest_dir:
+                    return
+                model = self._model.keyboard.model or "firmware"
+                try:
+                    for uf2 in self._last_zmk_uf2s:
+                        if not uf2.exists():
+                            continue
+                        # uf2.stem = 'zmk' pour chaque moitié : utiliser le nom du
+                        # build_dir (build/<shield>/zephyr/zmk.uf2) pour distinguer
+                        # left/right et éviter que la seconde copie écrase la première.
+                        build_tag = uf2.parent.parent.name
+                        dest = Path(dest_dir) / f"KFM_{model}_{build_tag}.uf2"
+                        shutil.copy2(uf2, dest)
+                except OSError as exc:
+                    QMessageBox.critical(
+                        self,
+                        tr("build.export_error_title"),
+                        tr("build.export_error_msg").format(exc=exc),
+                    )
+                    return
+                QMessageBox.information(
+                    self,
+                    tr("build.export_success_title"),
+                    tr("build.zmk.export_success_msg").format(count=len(self._last_zmk_uf2s), dest=dest_dir),
+                )
+                return
+            # Fallback : ouvrir le dossier zmk-config si seule config générée
             if self._last_zmk_dir and self._last_zmk_dir.exists():
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._last_zmk_dir)))
             return
@@ -398,3 +527,9 @@ class BuildWidget(QWidget):
         from ui.widgets.flash_guide_dialog import FlashGuideDialog
         dlg = FlashGuideDialog(self)
         dlg.exec()
+
+    def cleanup(self) -> None:
+        """Tue les builds en cours. Appelé à la fermeture de l'application."""
+        if self._zmk_worker and self._zmk_worker.isRunning():
+            self._zmk_worker.stop()
+            self._zmk_worker.wait(5000)

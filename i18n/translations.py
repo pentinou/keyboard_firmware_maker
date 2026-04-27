@@ -75,6 +75,19 @@ STRINGS: dict[str, dict[str, str]] = {
         "build.zmk.no_model": "Aucun clavier s\u00e9lectionn\u00e9.",
         "build.zmk.open_folder": "Ouvrir le dossier",
         "build.zmk.toolchain_info": "ZMK (Bluetooth) \u2014 Compilez via GitHub Actions ou localement avec West/Zephyr.",
+        "build.zmk.build_local": "Compiler firmware ZMK",
+        "build.zmk.compiling": "Compilation ZMK en cours\u2026",
+        "build.zmk.export_uf2": "Exporter les .uf2",
+        "build.zmk.export_uf2_dialog": "Choisir le dossier d'export .uf2",
+        "build.zmk.export_success_msg": "{count} firmware(s) .uf2 export\u00e9(s) dans : {dest}",
+        "build.zmk.uf2_produced": "Firmware(s) produit(s) : {names}",
+        "build.zmk.toolchain_ready": "ZMK pr\u00eat \u2014 Zephyr SDK : {sdk_dir}",
+        "build.zmk.toolchain_missing": "\u26a0 Prerequis ZMK manquants : {missing}. Lancez scripts/{script}.",
+        "build.zmk.toolchain_missing_title": "Pr\u00e9requis ZMK manquants",
+        "build.zmk.toolchain_missing_msg": (
+            "Le Zephyr SDK ou west est manquant.\n\n"
+            "Lancez scripts/{script} pour installer la toolchain ZMK, puis relancez KFM."
+        ),
         "build.btn.generate": "G\u00e9n\u00e9rer firmware",
         "build.btn.export": "Exporter le firmware",
         "build.btn.guide": "Guide de flash",
@@ -435,6 +448,19 @@ STRINGS: dict[str, dict[str, str]] = {
         "build.zmk.no_model": "No keyboard selected.",
         "build.zmk.open_folder": "Open folder",
         "build.zmk.toolchain_info": "ZMK (Bluetooth) \u2014 Build via GitHub Actions or locally with West/Zephyr.",
+        "build.zmk.build_local": "Build ZMK firmware",
+        "build.zmk.compiling": "Compiling ZMK\u2026",
+        "build.zmk.export_uf2": "Export .uf2 files",
+        "build.zmk.export_uf2_dialog": "Choose .uf2 export folder",
+        "build.zmk.export_success_msg": "Exported {count} .uf2 file(s) to: {dest}",
+        "build.zmk.uf2_produced": "Firmware(s) produced: {names}",
+        "build.zmk.toolchain_ready": "ZMK ready \u2014 Zephyr SDK: {sdk_dir}",
+        "build.zmk.toolchain_missing": "\u26a0 Missing ZMK prerequisites: {missing}. Run scripts/{script}.",
+        "build.zmk.toolchain_missing_title": "Missing ZMK prerequisites",
+        "build.zmk.toolchain_missing_msg": (
+            "Zephyr SDK or west is missing.\n\n"
+            "Run scripts/{script} to install the ZMK toolchain, then restart KFM."
+        ),
         "build.btn.generate": "Generate firmware",
         "build.btn.export": "Export firmware",
         "build.btn.guide": "Flash guide",
@@ -795,6 +821,19 @@ STRINGS: dict[str, dict[str, str]] = {
         "build.zmk.no_model": "Nessuna tastiera selezionata.",
         "build.zmk.open_folder": "Apri cartella",
         "build.zmk.toolchain_info": "ZMK (Bluetooth) \u2014 Compila tramite GitHub Actions o localmente con West/Zephyr.",
+        "build.zmk.build_local": "Compila firmware ZMK",
+        "build.zmk.compiling": "Compilazione ZMK in corso\u2026",
+        "build.zmk.export_uf2": "Esporta i .uf2",
+        "build.zmk.export_uf2_dialog": "Scegli la cartella di esportazione .uf2",
+        "build.zmk.export_success_msg": "{count} firmware .uf2 esportati in: {dest}",
+        "build.zmk.uf2_produced": "Firmware prodotti: {names}",
+        "build.zmk.toolchain_ready": "ZMK pronto \u2014 Zephyr SDK: {sdk_dir}",
+        "build.zmk.toolchain_missing": "\u26a0 Prerequisiti ZMK mancanti: {missing}. Avvia scripts/{script}.",
+        "build.zmk.toolchain_missing_title": "Prerequisiti ZMK mancanti",
+        "build.zmk.toolchain_missing_msg": (
+            "Zephyr SDK o west mancante.\n\n"
+            "Avvia scripts/{script} per installare la toolchain ZMK, poi riavvia KFM."
+        ),
         "build.btn.generate": "Genera firmware",
         "build.btn.export": "Esporta firmware",
         "build.btn.guide": "Guida flash",

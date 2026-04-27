@@ -80,6 +80,23 @@ if errorlevel 1 (
 )
 :gcc_done
 
+:: ── west (Zephyr meta-tool, requis pour ZMK) ─────────────────────────────────
+python -c "import west" >nul 2>&1
+if errorlevel 1 (
+    echo Installation de west ^(meta-tool Zephyr^)...
+    pip install -q west
+    if errorlevel 1 (
+        echo [ERREUR] Echec de l'installation de west.
+        pause ^& exit /b 1
+    )
+)
+for /f "tokens=*" %%v in ('west --version 2^>^&1') do (
+    echo [OK] %%v
+    goto :west_done
+)
+:west_done
+echo [INFO] Outils ZMK natifs (cmake, ninja, dtc, Zephyr SDK) : lances setup_zmk.bat avant le premier build ZMK.
+
 :: ── Lancement ────────────────────────────────────────────────────────────────
 echo.
 python "%SCRIPT_DIR%main.py"

@@ -85,6 +85,33 @@ fi
 GCC_VER=$(arm-none-eabi-gcc --version | head -1 | grep -oP '\d+\.\d+(\.\d+)?' | head -1)
 echo -e "${GREEN}[OK]${NC} arm-none-eabi-gcc $GCC_VER"
 
+# ── Outils ZMK légers (cmake, ninja, dtc, gperf, ccache, dfu-util, xz-utils) ──
+# Le Zephyr SDK (lourd) est installé à la demande via scripts/setup_zmk.sh.
+ZMK_PKGS=()
+command -v cmake    &>/dev/null || ZMK_PKGS+=(cmake)
+command -v ninja    &>/dev/null || ZMK_PKGS+=(ninja-build)
+command -v dtc      &>/dev/null || ZMK_PKGS+=(device-tree-compiler)
+command -v gperf    &>/dev/null || ZMK_PKGS+=(gperf)
+command -v ccache   &>/dev/null || ZMK_PKGS+=(ccache)
+command -v dfu-util &>/dev/null || ZMK_PKGS+=(dfu-util)
+command -v xz       &>/dev/null || ZMK_PKGS+=(xz-utils)
+command -v wget     &>/dev/null || ZMK_PKGS+=(wget)
+
+if [ ${#ZMK_PKGS[@]} -gt 0 ]; then
+    echo -e "${YELLOW}[INFO]${NC} Outils ZMK manquants (${ZMK_PKGS[*]}) — installation..."
+    _apt_update_once
+    sudo apt-get install -y "${ZMK_PKGS[@]}"
+fi
+echo -e "${GREEN}[OK]${NC} Outils ZMK (cmake, ninja, dtc, gperf, ccache, dfu-util)"
+
+# ── west (Zephyr meta-tool) ───────────────────────────────────────────────────
+if ! python3 -c "import west" &>/dev/null; then
+    echo "Installation de west (meta-tool Zephyr)..."
+    pip install -q west
+fi
+WEST_VER=$(west --version 2>/dev/null | awk '{print $NF}')
+echo -e "${GREEN}[OK]${NC} west $WEST_VER"
+
 # ── Lancement ─────────────────────────────────────────────────────────────────
 echo ""
 python3 "$SCRIPT_DIR/main.py"
