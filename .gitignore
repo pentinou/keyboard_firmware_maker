@@ -39,3 +39,10 @@ Thumbs.db
 claude.sh
 _bmad/
 _bmad-output/
+.agentvibes/
+
+# Firmware build artifacts (générés par scripts/generate_test_firmware_*.py)
+firmware_test_*/
+
+# Pinout / datasheet local files
+Supermini-nRF52840-Pinout.webp
