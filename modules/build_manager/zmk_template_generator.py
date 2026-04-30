@@ -417,6 +417,15 @@ class ZmkTemplateGenerator:
         encoder_a = pins.encoder_a[0] if pins.encoder_a else ""
         encoder_b = pins.encoder_b[0] if pins.encoder_b else ""
 
+        # Idle sleep timeout (en ms). Si l'utilisateur a activé sleep_enabled,
+        # on prend sleep_timeout_s × 1000. Sinon valeur par défaut 15 min (cohérente
+        # avec l'ancien hardcode 900000). Cap à 1 min minimum pour éviter un
+        # clavier qui dort instantanément.
+        if model.oled.sleep_enabled and model.oled.sleep_timeout_s > 0:
+            idle_sleep_ms = max(60_000, model.oled.sleep_timeout_s * 1000)
+        else:
+            idle_sleep_ms = 900_000
+
         return {
             "shield_name": shield_name,
             "shield_name_upper": shield_name.upper(),
@@ -453,4 +462,10 @@ class ZmkTemplateGenerator:
             # ZMK cappe ZMK_RGB_UNDERGLOW_BRT_MAX à [0, 100] (pourcent), pas 0-255 comme QMK
             "rgb_max_brightness": min(max(kb_def.rgb_hw.max_brightness, 0), 100),
             "physical_layout_keys": physical_layout_keys,
+            "idle_sleep_ms": idle_sleep_ms,
+            "studio_transport": (
+                model.keyboard.zmk_studio_transport
+                if model.keyboard.zmk_studio_transport in ("ble", "usb")
+                else "ble"
+            ),
         }

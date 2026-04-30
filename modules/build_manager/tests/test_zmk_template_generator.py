@@ -266,10 +266,16 @@ class TestZmkStudioSupport:
         assert "transform = <&default_transform>" in content
         assert "kscan = <&kscan0>" in content
 
-    def test_build_yaml_has_studio_snippet(self, zmk_gen, corne_model, tmp_path):
+    def test_build_yaml_no_studio_snippet_in_ble_mode(self, zmk_gen, corne_model, tmp_path):
+        # Studio est désormais en transport BLE par défaut → aucune entrée du
+        # build.yaml ne doit avoir le snippet studio-rpc-usb-uart (USB transport).
+        import yaml
         zmk_gen.generate(corne_model, tmp_path)
-        content = (tmp_path / "build.yaml").read_text()
-        assert "studio-rpc-usb-uart" in content
+        data = yaml.safe_load((tmp_path / "build.yaml").read_text())
+        for entry in data.get("include", []):
+            assert "snippet" not in entry, (
+                f"Entrée build.yaml ne doit pas avoir de snippet en mode BLE : {entry}"
+            )
 
     def test_physical_layout_key_count_matches_bindings(self, zmk_gen, sofle_model, tmp_path):
         """Le nombre de keys dans le physical layout doit correspondre aux bindings du keymap."""

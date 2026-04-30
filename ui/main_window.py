@@ -95,10 +95,18 @@ class MainWindow(QMainWindow):
         # Passer le KeyboardDefinition courant au widget RGB
         current_kb = getattr(self._tab_hardware, "_current_kb", None)
         self._tab_rgb.refresh_layout(current_kb)
+        # Propager le firmware (qmk/zmk) aux widgets Hardware/OLED/RGB pour que
+        # ceux-ci masquent les fonctionnalités QMK-only en mode ZMK (overlays
+        # OLED, per-key colors, custom effects).
+        firmware = capabilities.get("firmware", "qmk")
+        self._tab_hardware.set_firmware(firmware)
+        self._tab_oled.set_firmware(firmware)
+        self._tab_rgb.set_firmware(firmware)
         # Adapter l'onglet Build au firmware (QMK vs ZMK)
         self._tab_build.refresh_for_firmware()
         logger.info(
-            "Capacités mises à jour : OLED=%s, RGB=%s",
+            "Capacités mises à jour : firmware=%s, OLED=%s, RGB=%s",
+            firmware,
             capabilities.get("oled"),
             capabilities.get("rgb"),
         )

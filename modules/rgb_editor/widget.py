@@ -456,10 +456,22 @@ class RgbWidget(QWidget):
     def _setup_ui(self) -> None:
         outer = QVBoxLayout(self)
 
+        # Bandeau d'info ZMK — caché par défaut, affiché par set_firmware("zmk")
+        self._zmk_info_banner = QLabel(tr("rgb.zmk.underglow_only"))
+        self._zmk_info_banner.setObjectName("rgb_zmk_info")
+        self._zmk_info_banner.setWordWrap(True)
+        self._zmk_info_banner.setStyleSheet(
+            "background-color: #2A4860; color: #E0F0FF; "
+            "padding: 8px 12px; border-radius: 6px; "
+            "border: 1px solid #4A78A0; margin-bottom: 6px;"
+        )
+        self._zmk_info_banner.hide()
+        outer.addWidget(self._zmk_info_banner)
+
         # Section touches
-        key_label = QLabel(tr("rgb.instructions"))
-        key_label.setObjectName("rgb_instructions")
-        outer.addWidget(key_label)
+        self._key_label = QLabel(tr("rgb.instructions"))
+        self._key_label.setObjectName("rgb_instructions")
+        outer.addWidget(self._key_label)
 
         # Option underglow
         underglow_row = QHBoxLayout()
@@ -480,12 +492,12 @@ class RgbWidget(QWidget):
         underglow_help.setStyleSheet("color: #888; font-size: 11px; margin-bottom: 6px;")
         outer.addWidget(underglow_help)
 
-        keys_container = QWidget()
-        keys_container.setObjectName("rgb_keys_container")
-        self._keys_hbox = QHBoxLayout(keys_container)
+        self._keys_container = QWidget()
+        self._keys_container.setObjectName("rgb_keys_container")
+        self._keys_hbox = QHBoxLayout(self._keys_container)
         self._keys_hbox.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._keys_hbox.setContentsMargins(0, 0, 0, 0)
-        outer.addWidget(keys_container)
+        outer.addWidget(self._keys_container)
 
         # Section effets — QListWidget à gauche, description + stack à droite
         effects_group = QGroupBox(tr("rgb.effects_group"))
@@ -2031,3 +2043,21 @@ class RgbWidget(QWidget):
         self._build_layout()
         self._preview = EffectPreview(self._key_buttons)
         self._sync_from_model()
+
+    def set_firmware(self, firmware: str) -> None:
+        """Adapte l'UI au firmware cible (qmk/zmk).
+
+        En ZMK : le RGB se limite à l'underglow global (toutes LEDs = même couleur/effet).
+        On masque le canvas per-key, les instructions correspondantes, l'éditeur d'effets
+        custom et son bouton "Nouvel effet". Le bandeau d'info devient visible.
+        """
+        is_zmk = firmware == "zmk"
+        self._zmk_info_banner.setVisible(is_zmk)
+        # Per-key colorisation : sans objet en ZMK
+        self._key_label.setVisible(not is_zmk)
+        self._keys_container.setVisible(not is_zmk)
+        # Custom effects : non implémenté en ZMK
+        self._btn_new_custom.setVisible(not is_zmk)
+        # Page 2 du stack = éditeur custom — si visible en ZMK, on bascule sur la page 0
+        if is_zmk and self._effect_stack.currentIndex() == 2:
+            self._effect_stack.setCurrentIndex(0)

@@ -103,6 +103,18 @@ class HardwareWidget(QWidget):
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(8, 8, 8, 8)
 
+        # Bandeau d'info ZMK — caché par défaut, affiché par set_firmware("zmk")
+        self._zmk_info_banner = QLabel(tr("hardware.firmware.zmk_info"))
+        self._zmk_info_banner.setObjectName("hardware_zmk_info")
+        self._zmk_info_banner.setWordWrap(True)
+        self._zmk_info_banner.setStyleSheet(
+            "background-color: #2A4860; color: #E0F0FF; "
+            "padding: 8px 12px; border-radius: 6px; "
+            "border: 1px solid #4A78A0; margin-bottom: 8px;"
+        )
+        self._zmk_info_banner.hide()
+        main_layout.addWidget(self._zmk_info_banner)
+
         # Page stack : 0 = choix, 1 = compatible, 2 = custom
         self._stack = QStackedWidget()
         main_layout.addWidget(self._stack)
@@ -255,6 +267,27 @@ class HardwareWidget(QWidget):
         self._rgb_checkbox.setObjectName("rgb_checkbox")
         options_form.addRow(QLabel(tr("hardware.rgb")), self._rgb_checkbox)
 
+        # ZMK Studio transport (visible uniquement pour les firmwares ZMK)
+        self._studio_transport_label = QLabel(tr("hardware.zmk_studio.transport"))
+        self._studio_transport_combo = QComboBox()
+        self._studio_transport_combo.setObjectName("studio_transport_combo")
+        # itemData : "ble" / "usb" pour persister sans dépendre de l'i18n
+        self._studio_transport_combo.addItem(tr("hardware.zmk_studio.ble"), "ble")
+        self._studio_transport_combo.addItem(tr("hardware.zmk_studio.usb"), "usb")
+        self._studio_transport_combo.setCurrentIndex(
+            0 if self._model.keyboard.zmk_studio_transport == "ble" else 1
+        )
+        options_form.addRow(self._studio_transport_label, self._studio_transport_combo)
+        # Help text sous le combo
+        self._studio_transport_help = QLabel(tr("hardware.zmk_studio.help"))
+        self._studio_transport_help.setWordWrap(True)
+        self._studio_transport_help.setStyleSheet("color: #888; font-size: 11px;")
+        options_form.addRow("", self._studio_transport_help)
+        # Cachés par défaut, set_firmware("zmk") les affiche
+        self._studio_transport_label.hide()
+        self._studio_transport_combo.hide()
+        self._studio_transport_help.hide()
+
         layout.addLayout(options_form)
         layout.addStretch()
 
@@ -353,6 +386,7 @@ class HardwareWidget(QWidget):
         self._variant_combo.currentIndexChanged.connect(self._on_variant_changed)
         self._oled_combo.currentIndexChanged.connect(self._on_oled_changed)
         self._rgb_checkbox.stateChanged.connect(self._on_rgb_changed)
+        self._studio_transport_combo.currentIndexChanged.connect(self._on_studio_transport_changed)
 
         self._kle_widget.keyboard_saved.connect(self._on_custom_keyboard_saved)
 
@@ -557,6 +591,27 @@ class HardwareWidget(QWidget):
                 caps["firmware"] = fw
                 caps["rgb_per_key"] = value and fw == "qmk"
                 self.capabilities_changed.emit(caps)
+
+    def set_firmware(self, firmware: str) -> None:
+        """Affiche/masque le bandeau d'info ZMK et le selector de transport Studio
+        selon le firmware courant. Synchronise aussi le combo avec le modèle (utile
+        après chargement d'un projet sauvegardé)."""
+        is_zmk = firmware == "zmk"
+        self._zmk_info_banner.setVisible(is_zmk)
+        self._studio_transport_label.setVisible(is_zmk)
+        self._studio_transport_combo.setVisible(is_zmk)
+        self._studio_transport_help.setVisible(is_zmk)
+        # Sync combo ↔ model
+        target_idx = 0 if self._model.keyboard.zmk_studio_transport == "ble" else 1
+        if self._studio_transport_combo.currentIndex() != target_idx:
+            self._studio_transport_combo.blockSignals(True)
+            self._studio_transport_combo.setCurrentIndex(target_idx)
+            self._studio_transport_combo.blockSignals(False)
+
+    def _on_studio_transport_changed(self, idx: int) -> None:
+        """Met à jour model.keyboard.zmk_studio_transport selon la sélection."""
+        value = self._studio_transport_combo.itemData(idx) or "ble"
+        self._model.keyboard.zmk_studio_transport = str(value)
 
     def _reload_keyboards(self, select_model: str = "") -> None:
         """Recharge la liste des claviers (prédéfinis + custom) et sélectionne select_model."""

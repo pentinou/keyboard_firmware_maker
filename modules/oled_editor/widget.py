@@ -341,6 +341,9 @@ class OledWidget(QWidget):
         self._canvas_right: _OledCanvas | None = None
         self._group_left: QGroupBox | None = None
         self._group_right: QGroupBox | None = None
+        # Widgets désactivés en mode ZMK (overlays QMK, boutons image, canvas, anti-burnin).
+        # ZMK affiche uniquement le status screen built-in, aucune de ces features ne se compile.
+        self._qmk_only_widgets: list[QWidget] = []
         self._setup_ui()
         self.set_active_sides(model.keyboard.oled_sides)
         self._sync_from_model()
@@ -350,10 +353,23 @@ class OledWidget(QWidget):
         main = QVBoxLayout(self)
         main.setContentsMargins(0, 0, 0, 0)
 
+        # Bandeau d'info ZMK — caché par défaut, affiché par set_firmware("zmk")
+        self._zmk_info_banner = QLabel(tr("oled.zmk.status_screen_only"))
+        self._zmk_info_banner.setObjectName("oled_zmk_info")
+        self._zmk_info_banner.setWordWrap(True)
+        self._zmk_info_banner.setStyleSheet(
+            "background-color: #2A4860; color: #E0F0FF; "
+            "padding: 8px 12px; border-radius: 6px; "
+            "border: 1px solid #4A78A0; margin-bottom: 6px;"
+        )
+        self._zmk_info_banner.hide()
+        main.addWidget(self._zmk_info_banner)
+
         self._anti_burnin_check = QCheckBox(tr("oled.anti_burnin"))
         self._anti_burnin_check.setObjectName("anti_burnin_check")
         self._anti_burnin_check.stateChanged.connect(self._on_anti_burnin_changed)
         main.addWidget(self._anti_burnin_check)
+        self._qmk_only_widgets.append(self._anti_burnin_check)
 
         sleep_row = QHBoxLayout()
         self._sleep_check = QCheckBox(tr("oled.sleep"))
@@ -387,9 +403,11 @@ class OledWidget(QWidget):
         btn.setObjectName(f"import_btn_{side}")
         btn.clicked.connect(lambda _=None, s=side: self._on_import_clicked(s))
         vl.addWidget(btn)
+        self._qmk_only_widgets.append(btn)
 
         utils_label = QLabel(f"<b>{tr('oled.group.utils')}</b>")
         vl.addWidget(utils_label)
+        self._qmk_only_widgets.append(utils_label)
         for name, label in [
             ("layer", tr("oled.overlay.layer")),
             ("caps", tr("oled.overlay.caps_lock")),
@@ -401,9 +419,11 @@ class OledWidget(QWidget):
                 lambda state, s=side, n=name: self._on_check_changed(s, n, bool(state))
             )
             vl.addWidget(cb)
+            self._qmk_only_widgets.append(cb)
 
         eyecandy_label = QLabel(f"<b>{tr('oled.group.eyecandy')}</b>")
         vl.addWidget(eyecandy_label)
+        self._qmk_only_widgets.append(eyecandy_label)
         for name, label in [
             ("wpm", tr("oled.overlay.wpm")),
             ("kfm", tr("oled.overlay.kfm")),
@@ -419,26 +439,31 @@ class OledWidget(QWidget):
                 lambda state, s=side, n=name: self._on_check_changed(s, n, bool(state))
             )
             vl.addWidget(cb)
+            self._qmk_only_widgets.append(cb)
 
         btn_neg = QPushButton(tr("oled.btn.negative"))
         btn_neg.setObjectName(f"negative_btn_{side}")
         btn_neg.clicked.connect(lambda _=None, s=side: self._on_negative_clicked(s))
         vl.addWidget(btn_neg)
+        self._qmk_only_widgets.append(btn_neg)
 
         btn_rot = QPushButton(tr("oled.btn.rotate"))
         btn_rot.setObjectName(f"rotate_btn_{side}")
         btn_rot.clicked.connect(lambda _=None, s=side: self._on_rotate_clicked(s))
         vl.addWidget(btn_rot)
+        self._qmk_only_widgets.append(btn_rot)
 
         btn_reset = QPushButton(tr("oled.btn.reset"))
         btn_reset.setObjectName(f"reset_btn_{side}")
         btn_reset.clicked.connect(lambda _=None, s=side: self._on_reset_clicked(s))
         vl.addWidget(btn_reset)
+        self._qmk_only_widgets.append(btn_reset)
 
         side_config = self._model.oled.left if side == "left" else self._model.oled.right
         canvas = _OledCanvas(side_config)
         canvas.setObjectName(f"canvas_{side}")
         vl.addWidget(canvas)
+        self._qmk_only_widgets.append(canvas)
 
         if side == "left":
             self._canvas_left = canvas
@@ -652,6 +677,20 @@ class OledWidget(QWidget):
             self._group_left.setVisible("left" in sides)
         if self._group_right is not None:
             self._group_right.setVisible("right" in sides)
+
+    def set_firmware(self, firmware: str) -> None:
+        """Adapte l'UI au firmware cible (qmk/zmk).
+
+        En ZMK, l'OLED affiche uniquement le status screen built-in (layer, batterie,
+        USB/BLE) — aucune animation custom, overlay ou image n'est compilable. On masque
+        donc tous les widgets QMK-only (overlays, boutons image, canvas, anti-burnin) et
+        on affiche le bandeau d'info. Les contrôles de sleep restent disponibles car
+        ZMK les utilise via CONFIG_ZMK_IDLE_SLEEP_TIMEOUT.
+        """
+        is_zmk = firmware == "zmk"
+        self._zmk_info_banner.setVisible(is_zmk)
+        for w in self._qmk_only_widgets:
+            w.setVisible(not is_zmk)
 
     def _sync_from_model(self) -> None:
         """Synchronise les checkboxes et le canvas depuis le modèle (ex : après chargement projet)."""

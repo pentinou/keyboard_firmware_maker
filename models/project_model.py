@@ -29,6 +29,9 @@ class KeyboardConfig:
     # -1 = auto (toutes les LEDs underglow de la config native)
     #  0 = aucune LED underglow/accent sur le PCB
     #  N = exactement N LEDs underglow/accent par moitié (split) ou total (non-split)
+    zmk_studio_transport: str = "ble"
+    # Transport ZMK Studio : "ble" (sans fil, défaut) ou "usb" (CDC ACM filaire).
+    # Affecte uniquement les firmwares ZMK. Ignoré pour QMK.
 
     def to_dict(self) -> dict[str, Any]:
         d = {
@@ -40,6 +43,8 @@ class KeyboardConfig:
         }
         if self.rgb_underglow_per_side != -1:
             d["rgb_underglow_per_side"] = self.rgb_underglow_per_side
+        if self.zmk_studio_transport != "ble":
+            d["zmk_studio_transport"] = self.zmk_studio_transport
         return d
 
     @classmethod
@@ -54,6 +59,9 @@ class KeyboardConfig:
             underglow = -1 if data["rgb_underglow"] else 0
         else:
             underglow = -1
+        transport = str(data.get("zmk_studio_transport", "ble")).lower()
+        if transport not in ("ble", "usb"):
+            transport = "ble"
         return cls(
             model=data.get("model", ""),
             mcu=data.get("mcu", ""),
@@ -61,6 +69,7 @@ class KeyboardConfig:
             layout_variant=data.get("layout_variant", ""),
             rgb_enabled=bool(data.get("rgb_enabled", False)),
             rgb_underglow_per_side=underglow,
+            zmk_studio_transport=transport,
         )
 
 
