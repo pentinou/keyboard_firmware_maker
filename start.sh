@@ -1,9 +1,33 @@
 #!/usr/bin/env bash
 # start.sh — Lance Keyboard Firmware Maker après vérification des prérequis.
-# Usage : ./start.sh
+#
+# Usage :
+#   ./start.sh           : check prérequis + lance KFM
+#   ./start.sh --update  : met à jour KFM (git pull) + deps Python + ZMK workspace
+#                          + vial-qmk, puis lance KFM
+#   ./start.sh --help    : affiche cette aide
 set -e
 
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; BOLD='\033[1m'; NC='\033[0m'
+
+# ── Parse args ────────────────────────────────────────────────────────────────
+UPDATE_MODE=0
+for arg in "$@"; do
+    case "$arg" in
+        --update|-u)
+            UPDATE_MODE=1
+            ;;
+        --help|-h)
+            awk '/^set -e/{exit} /^#/{sub(/^# ?/, ""); print}' "$0"
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}[ERREUR] Argument inconnu : $arg${NC}"
+            echo "Usage : $0 [--update | --help]"
+            exit 1
+            ;;
+    esac
+done
 
 echo -e "${BOLD}=== Keyboard Firmware Maker ===${NC}"
 echo ""
@@ -55,9 +79,38 @@ fi
 # shellcheck disable=SC1091
 source "$VENV_DIR/bin/activate"
 
+# ── Mode --update : git pull du repo KFM ──────────────────────────────────────
+if [ "$UPDATE_MODE" -eq 1 ]; then
+    echo ""
+    echo -e "${BOLD}── Mode --update activé ──${NC}"
+    echo ""
+    if git -C "$SCRIPT_DIR" rev-parse --git-dir &>/dev/null; then
+        echo "Mise à jour de KFM (git pull)..."
+        # Avertit si modifs locales non commit pour éviter conflits silencieux
+        if ! git -C "$SCRIPT_DIR" diff-index --quiet HEAD -- 2>/dev/null; then
+            echo -e "${YELLOW}[ATTENTION]${NC} Modifications locales non committées détectées."
+            echo "  Le pull peut échouer si un fichier modifié est aussi modifié sur origin."
+            echo "  Pour annuler tes modifs : git stash"
+        fi
+        if git -C "$SCRIPT_DIR" pull --ff-only 2>&1; then
+            echo -e "${GREEN}[OK]${NC} KFM à jour"
+        else
+            echo -e "${RED}[ERREUR]${NC} git pull a échoué (conflits ?). KFM non mis à jour."
+            echo "  Continue avec la version locale actuelle."
+        fi
+    else
+        echo -e "${YELLOW}[INFO]${NC} Pas de dépôt git détecté — skip update KFM."
+    fi
+fi
+
 # ── Dépendances Python ────────────────────────────────────────────────────────
-echo "Vérification des dépendances Python..."
-pip install -q -r "$SCRIPT_DIR/requirements.txt"
+if [ "$UPDATE_MODE" -eq 1 ]; then
+    echo "Mise à jour des dépendances Python (pip install --upgrade)..."
+    pip install -q --upgrade -r "$SCRIPT_DIR/requirements.txt"
+else
+    echo "Vérification des dépendances Python..."
+    pip install -q -r "$SCRIPT_DIR/requirements.txt"
+fi
 echo -e "${GREEN}[OK]${NC} Dépendances Python"
 
 # ── git ───────────────────────────────────────────────────────────────────────
@@ -111,6 +164,35 @@ if ! python3 -c "import west" &>/dev/null; then
 fi
 WEST_VER=$(west --version 2>/dev/null | awk '{print $NF}')
 echo -e "${GREEN}[OK]${NC} west $WEST_VER"
+
+# ── Mode --update : ZMK workspace + vial-qmk ──────────────────────────────────
+if [ "$UPDATE_MODE" -eq 1 ]; then
+    # ZMK workspace : west update (modules Zephyr + ZMK app)
+    ZMK_WORKSPACE="$HOME/.keyboard_firmware_maker/zmk-workspace"
+    if [ -d "$ZMK_WORKSPACE" ]; then
+        echo "Mise à jour de la ZMK workspace (west update)..."
+        if (cd "$ZMK_WORKSPACE" && west update 2>&1 | tail -20); then
+            echo -e "${GREEN}[OK]${NC} ZMK workspace à jour"
+        else
+            echo -e "${YELLOW}[ATTENTION]${NC} west update a rencontré des problèmes."
+            echo "  Vérifier $ZMK_WORKSPACE manuellement si besoin."
+        fi
+    else
+        echo -e "${YELLOW}[INFO]${NC} ZMK workspace absente — skip (sera créée par setup_zmk.sh à la demande)."
+    fi
+
+    # vial-qmk repo (référence layouts compatibles QMK)
+    VIAL_QMK_DIR="$HOME/.keyboard_firmware_maker/vial-qmk"
+    if [ -d "$VIAL_QMK_DIR/.git" ]; then
+        echo "Mise à jour de vial-qmk (git pull)..."
+        if git -C "$VIAL_QMK_DIR" pull --ff-only 2>&1 | tail -3; then
+            echo -e "${GREEN}[OK]${NC} vial-qmk à jour"
+        else
+            echo -e "${YELLOW}[ATTENTION]${NC} git pull vial-qmk a échoué."
+        fi
+    fi
+    echo ""
+fi
 
 # ── Lancement ─────────────────────────────────────────────────────────────────
 echo ""
