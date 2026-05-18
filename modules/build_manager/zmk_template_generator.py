@@ -18,16 +18,24 @@ Structure de sortie dans output_dir/ :
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
 
-from models.project_model import ProjectModel
+from models.project_model import OledSideConfig, ProjectModel
 from modules.hardware.keyboard_loader import KeyboardDefinition, McuPins, load_keyboard
+from modules.oled_editor.processor import (
+    composite_side_frame,
+    composite_side_frames,
+    composite_side_frames_per_layer,
+    frame_32x128_to_lvgl_128x32,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -141,22 +149,89 @@ def _build_matrix_transform(kb_def: KeyboardDefinition) -> str:
     return "\n".join(lines)
 
 
-def _build_layer_bindings(kb_def: KeyboardDefinition, layer_name: str) -> str:
-    """Construit les bindings d'un layer.
+def _build_bluetooth_layer_bindings(kb_def: KeyboardDefinition) -> str:
+    """Génère le layer Bluetooth : touches `&bt` + `&out` sur les 9 premières
+    positions utilisées (en ordre row-major), `&trans` partout ailleurs.
 
-    Si `kb_def.default_keymap_zmk[layer_name]` est défini, utilise ces bindings
-    en ordre row-major (chaque ligne YAML = une ligne de la matrice combinée).
-    Les positions non couvertes (YAML plus court que la matrice) retombent sur &trans.
-    Aucune entrée pour ce layer → grille complète de &trans.
+    Layout :
+      1. `&bt BT_CLR`     (effacer profil actif)
+      2. `&bt BT_SEL 0`   (profil 1)
+      3. `&bt BT_SEL 1`   (profil 2)
+      4. `&bt BT_SEL 2`   (profil 3)
+      5. `&bt BT_SEL 3`   (profil 4)
+      6. `&bt BT_SEL 4`   (profil 5)
+      7. `&out OUT_USB`   (forcer USB)
+      8. `&out OUT_BLE`   (forcer BLE)
+      9. `&out OUT_TOG`   (toggle USB/BLE)
+
+    Accès via tri-layer : LOWER + RAISE simultanément → bluetooth_layer actif.
     """
+    bt_bindings = [
+        "&bt BT_CLR",
+        "&bt BT_SEL 0",
+        "&bt BT_SEL 1",
+        "&bt BT_SEL 2",
+        "&bt BT_SEL 3",
+        "&bt BT_SEL 4",
+        "&out OUT_USB",
+        "&out OUT_BLE",
+        "&out OUT_TOG",
+    ]
+    rows = kb_def.matrix["rows"]
+    cols = kb_def.matrix["cols"]
+    total_cols = cols * 2 if kb_def.split else cols
+    used_positions = _get_used_positions(kb_def)
+
+    lines = []
+    placed = 0
+    for r in range(rows):
+        entries = []
+        for c in range(total_cols):
+            if (r, c) in used_positions:
+                if placed < len(bt_bindings):
+                    entries.append(bt_bindings[placed])
+                    placed += 1
+                else:
+                    entries.append("&trans")
+        if entries:
+            lines.append("                " + "  ".join(entries))
+    return "\n".join(lines)
+
+
+# Bindings BT/OUT injectés dans le layer raise (mêmes que le tri-layer Bluetooth)
+# pour faciliter l'accès sans avoir à connaître le combo LOWER+RAISE — visible
+# aussi dans ZMK Studio qui peut ne pas afficher les conditional_layers.
+_BLUETOOTH_BINDINGS_FOR_RAISE = [
+    "&bt BT_CLR",
+    "&bt BT_SEL 0",
+    "&bt BT_SEL 1",
+    "&bt BT_SEL 2",
+    "&bt BT_SEL 3",
+    "&bt BT_SEL 4",
+    "&out OUT_USB",
+    "&out OUT_BLE",
+    "&out OUT_TOG",
+]
+
+
+def _compute_layer_grid(
+    kb_def: KeyboardDefinition,
+    layer_name: str,
+    keymap_override: dict[str, list[list[str]]] | None = None,
+) -> list[list[str]]:
+    """Retourne la grille `rows × used_cols_par_row` du layer, avec `&trans`
+    aux positions non couvertes par le YAML / override."""
     rows = kb_def.matrix["rows"]
     cols = kb_def.matrix["cols"]
     total_cols = cols * 2 if kb_def.split else cols
 
     used_positions = _get_used_positions(kb_def)
-    layer_data = kb_def.default_keymap_zmk.get(layer_name) or []
+    if keymap_override is not None and layer_name in keymap_override:
+        layer_data = keymap_override[layer_name]
+    else:
+        layer_data = kb_def.default_keymap_zmk.get(layer_name) or []
 
-    lines = []
+    grid = []
     for r in range(rows):
         entries = []
         row_bindings = layer_data[r] if r < len(layer_data) else []
@@ -168,10 +243,55 @@ def _build_layer_bindings(kb_def: KeyboardDefinition, layer_name: str) -> str:
                 else:
                     entries.append("&trans")
                 idx += 1
-        if entries:
-            lines.append("                " + "  ".join(entries))
+        grid.append(entries)
+    return grid
 
+
+def _inject_bluetooth_into_grid(grid: list[list[str]]) -> list[list[str]]:
+    """Remplace les premiers `&trans` (en ordre row-major) du layer raise par
+    les bindings BT_CLR / BT_SEL 0..4 / OUT_USB / OUT_BLE / OUT_TOG.
+
+    Mute (`&none`) ou bindings non-trans sont préservés (priorité à ce que
+    l'utilisateur a déjà placé). Le tri-layer Bluetooth reste accessible.
+    """
+    bt = list(_BLUETOOTH_BINDINGS_FOR_RAISE)
+    out = [list(row) for row in grid]
+    for r in range(len(out)):
+        for c in range(len(out[r])):
+            if not bt:
+                return out
+            if out[r][c] == "&trans":
+                out[r][c] = bt.pop(0)
+    return out
+
+
+def _format_grid(grid: list[list[str]]) -> str:
+    """Convertit la grille en string ZMK indentée."""
+    lines = []
+    for row in grid:
+        if row:
+            lines.append("                " + "  ".join(row))
     return "\n".join(lines)
+
+
+def _build_layer_bindings(
+    kb_def: KeyboardDefinition,
+    layer_name: str,
+    keymap_override: dict[str, list[list[str]]] | None = None,
+    inject_bluetooth: bool = False,
+) -> str:
+    """Construit les bindings d'un layer.
+
+    Si `keymap_override` contient `layer_name`, ces bindings ont priorité sur
+    `kb_def.default_keymap_zmk[layer_name]` (cas import Vial-QMK).
+
+    Si `inject_bluetooth=True`, remplace les premiers `&trans` par les
+    behaviors BT/OUT (utile pour le raise_layer : accessibles sans tri-layer).
+    """
+    grid = _compute_layer_grid(kb_def, layer_name, keymap_override)
+    if inject_bluetooth:
+        grid = _inject_bluetooth_into_grid(grid)
+    return _format_grid(grid)
 
 
 def _build_physical_layout_keys(kb_def: KeyboardDefinition) -> str:
@@ -229,6 +349,199 @@ def _build_physical_layout_keys(kb_def: KeyboardDefinition) -> str:
         lines.append(f"{prefix}<&key_physical_attrs 100 100 {x:>5} {y:>5} 0 0 0>{suffix}")
 
     return "\n".join(lines)
+
+
+def _side_has_custom_oled(side: OledSideConfig) -> bool:
+    """True si la moitié a au moins une image (avec frames) ou un widget ZMK activé.
+
+    Utilisé pour décider si on génère un `status_screen.c` custom pour cette moitié,
+    ou si on garde le status screen built-in de ZMK.
+    """
+    if any(img.frames for img in side.images):
+        return True
+    return (
+        side.zmk_battery.enabled
+        or side.zmk_output.enabled
+        or side.zmk_layer.enabled
+        or side.zmk_peripheral.enabled
+    )
+
+
+# Hauteur typique d'un widget ZMK (icône) en pixels LVGL natifs après rotation.
+# Utilisée pour calculer l'offset y depuis le bord supérieur du framebuffer 128×32.
+# 12 px suffit pour les icônes battery/output/layer/peripheral natives ZMK.
+_WIDGET_LVGL_APPROX_H = 12
+
+
+def _editor_to_lvgl_pos(col: int, line: int, approx_h: int = _WIDGET_LVGL_APPROX_H) -> tuple[int, int]:
+    """Traduit une position éditeur (col, line) → coordonnées LVGL (x, y) après rotation 90° CW.
+
+    Éditeur : 32×128 (vertical), grille 6×8 (col*6, line*8 = pixel coords).
+    LVGL natif (SSD1306 horizontal) : 128×32. Rotation 90° CW :
+        editor_x = col*6 → contribue à lvgl_y inversé
+        editor_y = line*8 → contribue à lvgl_x
+
+    Pour qu'un widget de hauteur approx_h en LVGL tienne dans le framebuffer,
+    on offset lvgl_y par `32 - col*6 - approx_h`. Clamping à 0 si négatif.
+    """
+    lvgl_x = max(0, min(127, line * 8))
+    lvgl_y = max(0, 32 - col * 6 - approx_h)
+    return lvgl_x, lvgl_y
+
+
+def _build_widgets_context(side: OledSideConfig, role: str) -> list[dict]:
+    """Construit la liste des widgets ZMK à instancier pour une moitié.
+
+    Args:
+        side: configuration OLED de la moitié (gauche/droite).
+        role: "central" (left en split, ou seule moitié non-split) ou "peripheral" (right en split).
+
+    Returns:
+        Liste de dicts {type, x, y, [show_peer]}. Peripheral exclu pour central,
+        layer/output exclus pour peripheral (ces widgets dépendent d'événements ZMK
+        central-only ou peripheral-only).
+    """
+    widgets: list[dict] = []
+    if side.zmk_battery.enabled:
+        x, y = _editor_to_lvgl_pos(side.zmk_battery.col, side.zmk_battery.line)
+        # show_peer uniquement valide en central (peripheral n'a pas accès au peer)
+        show_peer = bool(side.zmk_battery.show_peer) and role == "central"
+        widgets.append({"type": "battery", "x": x, "y": y, "show_peer": show_peer})
+    if role == "central":
+        if side.zmk_output.enabled:
+            x, y = _editor_to_lvgl_pos(side.zmk_output.col, side.zmk_output.line)
+            widgets.append({"type": "output", "x": x, "y": y})
+        if side.zmk_layer.enabled:
+            x, y = _editor_to_lvgl_pos(side.zmk_layer.col, side.zmk_layer.line)
+            widgets.append({"type": "layer", "x": x, "y": y})
+    if role == "peripheral" and side.zmk_peripheral.enabled:
+        x, y = _editor_to_lvgl_pos(side.zmk_peripheral.col, side.zmk_peripheral.line)
+        widgets.append({"type": "peripheral", "x": x, "y": y})
+    return widgets
+
+
+def _encode_lvgl_bytes_for_c(data: bytes) -> str:
+    """Encode des octets en littéraux C `0xNN, 0xNN, ...` regroupés par 16 par ligne.
+
+    Format de sortie compatible avec `static const uint8_t arr[] = { ... };`.
+    Le résultat est inséré tel quel dans le template `status_screen.c.j2`.
+    """
+    chunks: list[str] = []
+    for i in range(0, len(data), 16):
+        row = data[i : i + 16]
+        chunks.append(", ".join(f"0x{b:02X}" for b in row))
+    return ",\n    ".join(chunks)
+
+
+def _build_animation_context(images: list) -> dict:
+    """Construit le contexte d'animation pour une moitié (single-layer / Phase 3).
+
+    Retourne un dict avec :
+      - `frames` : liste de chaînes hex C (une par frame d'animation, format LVGL 128×32)
+      - `delays` : liste de délais en ms entre frames (même longueur que `frames`)
+      - `animated` : True si l'animation contient ≥ 2 frames (sinon image statique)
+    """
+    raw_frames, delays = composite_side_frames(images)
+    lvgl_frames = [_encode_lvgl_bytes_for_c(frame_32x128_to_lvgl_128x32(f)) for f in raw_frames]
+    return {
+        "frames": lvgl_frames,
+        "delays": delays,
+        "animated": len(lvgl_frames) > 1,
+    }
+
+
+def _build_layered_animation_context(images: list) -> dict:
+    """Construit le contexte d'animation par-couche pour Phase 4 (layer-aware).
+
+    Retourne un dict :
+      - `layers`: liste de dicts `{layer: int, frames: [hex,...], delays: [ms,...], animated: bool}`
+        triés par `layer` croissant (la couche -1 / fallback en premier).
+      - `has_layer_aware`: True si au moins une image est assignée à une couche != -1
+        (donc plusieurs entrées dans `layers`). Sinon False (Phase 3 path).
+    """
+    per_layer = composite_side_frames_per_layer(images)
+    layers_ctx = []
+    for layer_id in sorted(per_layer.keys()):
+        raw_frames, delays = per_layer[layer_id]
+        lvgl_frames = [_encode_lvgl_bytes_for_c(frame_32x128_to_lvgl_128x32(f)) for f in raw_frames]
+        layers_ctx.append({
+            "layer": layer_id,
+            "frames": lvgl_frames,
+            "delays": delays,
+            "animated": len(lvgl_frames) > 1,
+        })
+    return {
+        "layers": layers_ctx,
+        "has_layer_aware": len(layers_ctx) > 1,
+    }
+
+
+def _extract_kp_keycode(zmk_binding: str) -> str | None:
+    """Extrait le keycode pur d'un binding `&kp X` (= "X"). None si pas un &kp."""
+    if zmk_binding.startswith("&kp "):
+        return zmk_binding[4:].strip()
+    return None
+
+
+# Defaults sensor-bindings par layer pour les claviers split avec 2 encoders.
+# Premier élément = left encoder (sensor 0), second = right encoder (sensor 1).
+# Format ZMK `&inc_dec_kp <CW> <CCW>` (Clockwise d'abord).
+_DEFAULT_SENSOR_BINDINGS: dict[str, tuple[str, str]] = {
+    "default": ("&inc_dec_kp C_VOL_UP C_VOL_DN", "&inc_dec_kp PG_DN PG_UP"),
+    "lower":   ("&inc_dec_kp PG_UP PG_DN",       "&inc_dec_kp HOME END"),
+    "raise":   ("&inc_dec_kp C_BRI_UP C_BRI_DN", "&inc_dec_kp RIGHT LEFT"),
+    "bluetooth": ("&inc_dec_kp C_VOL_UP C_VOL_DN", "&inc_dec_kp PG_DN PG_UP"),
+}
+
+
+def _build_sensor_bindings_for_layer(
+    layer_name: str,
+    layer_idx: int,
+    custom_encoder_layout: list | None,
+    split: bool,
+) -> str:
+    """Retourne le string `sensor-bindings = <...>` pour un layer.
+
+    Si `custom_encoder_layout` (depuis Vial) est fourni et contient ce layer,
+    convertit les keycodes QMK → ZMK pour produire les `&inc_dec_kp`.
+    Sinon, fallback sur les defaults `_DEFAULT_SENSOR_BINDINGS`.
+
+    Format Vial : `encoder_layout[layer][encoder_idx] = [CCW_kc, CW_kc]`.
+    Format ZMK : `&inc_dec_kp <CW> <CCW>` (inversé).
+    """
+    from modules.keymap_importer.vial_to_zmk import convert_qmk_keycode_to_zmk
+
+    def _kc_to_inc_dec_arg(qmk_kc: str) -> str:
+        """QMK keycode → keycode ZMK utilisable dans `&inc_dec_kp` (sans préfixe)."""
+        zmk = convert_qmk_keycode_to_zmk(qmk_kc)
+        kp = _extract_kp_keycode(zmk)
+        return kp or "C_VOL_UP"  # fallback peu impactant si pas mappable
+
+    if custom_encoder_layout and layer_idx < len(custom_encoder_layout):
+        encoders = custom_encoder_layout[layer_idx]  # [[CCW_L, CW_L], [CCW_R, CW_R]]
+        bindings = []
+        for enc_idx in range(2 if split else 1):
+            if enc_idx >= len(encoders):
+                break
+            ccw, cw = encoders[enc_idx][0], encoders[enc_idx][1]
+            cw_zmk = _kc_to_inc_dec_arg(cw)
+            ccw_zmk = _kc_to_inc_dec_arg(ccw)
+            bindings.append(f"&inc_dec_kp {cw_zmk} {ccw_zmk}")
+        if bindings:
+            return " ".join(bindings)
+
+    # Fallback defaults
+    defaults = _DEFAULT_SENSOR_BINDINGS.get(layer_name, _DEFAULT_SENSOR_BINDINGS["default"])
+    return defaults[0] + (" " + defaults[1] if split else "")
+
+
+def _kfm_version() -> str:
+    """Lit la version KFM depuis _version.py (source de vérité), sinon 'dev'."""
+    try:
+        from _version import __version__  # type: ignore[import-not-found]
+        return str(__version__)
+    except (ImportError, AttributeError):
+        return "dev"
 
 
 class ZmkTemplateGenerator:
@@ -308,6 +621,52 @@ class ZmkTemplateGenerator:
         kconfig_defconfig.write_text(env.get_template("Kconfig.defconfig.j2").render(context), encoding="utf-8")
         generated["Kconfig.defconfig"] = kconfig_defconfig
 
+        # OLED custom status screen (Phase 1) — image plein écran générée par KFM.
+        # CMakeLists.txt du shield + status_screen[_left|_right].c selon split.
+        if context["oled_custom_screen"]:
+            cmake_path = shield_dir / "CMakeLists.txt"
+            cmake_path.write_text(env.get_template("CMakeLists.txt.j2").render(context), encoding="utf-8")
+            generated["CMakeLists.txt"] = cmake_path
+
+            screen_template = env.get_template("status_screen.c.j2")
+            if split:
+                if context["oled_custom_left"]:
+                    left_screen = shield_dir / "status_screen_left.c"
+                    left_ctx = {
+                        **context,
+                        "oled_animation": context["oled_animation_left"],
+                        "oled_layered": context["oled_layered_left"],
+                        "oled_has_image": context["oled_has_image_left"],
+                        "oled_widgets": context["oled_widgets_left"],
+                        "oled_side": "left",
+                    }
+                    left_screen.write_text(screen_template.render(left_ctx), encoding="utf-8")
+                    generated["status_screen_left.c"] = left_screen
+                if context["oled_custom_right"]:
+                    right_screen = shield_dir / "status_screen_right.c"
+                    right_ctx = {
+                        **context,
+                        "oled_animation": context["oled_animation_right"],
+                        "oled_layered": context["oled_layered_right"],
+                        "oled_has_image": context["oled_has_image_right"],
+                        "oled_widgets": context["oled_widgets_right"],
+                        "oled_side": "right",
+                    }
+                    right_screen.write_text(screen_template.render(right_ctx), encoding="utf-8")
+                    generated["status_screen_right.c"] = right_screen
+            else:
+                screen_path = shield_dir / "status_screen.c"
+                screen_ctx = {
+                    **context,
+                    "oled_animation": context["oled_animation_left"],
+                    "oled_layered": context["oled_layered_left"],
+                    "oled_has_image": context["oled_has_image_left"],
+                    "oled_widgets": context["oled_widgets_left"],
+                    "oled_side": "single",
+                }
+                screen_path.write_text(screen_template.render(screen_ctx), encoding="utf-8")
+                generated["status_screen.c"] = screen_path
+
         # build.yaml à la racine
         build_yaml = output_dir / "build.yaml"
         build_yaml.write_text(env.get_template("build.yaml.j2").render(context), encoding="utf-8")
@@ -317,6 +676,37 @@ class ZmkTemplateGenerator:
         west_yml = output_dir / "config" / "west.yml"
         west_yml.write_text(env.get_template("west.yml.j2").render(context), encoding="utf-8")
         generated["west.yml"] = west_yml
+
+        # kfm_debug_dump.json — snapshot du contexte de génération pour debug post-mortem.
+        # Permet à l'utilisateur ou à un agent IA de comprendre ce qui a été généré
+        # SANS avoir à re-deviner depuis l'UI : version KFM, timestamp, ProjectModel
+        # sérialisé, liste des fichiers, état des features critiques (custom screen,
+        # widgets actifs, debug_logging, etc.). Lire AVANT de debug un firmware.
+        debug_dump = {
+            "kfm_version": _kfm_version(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "output_dir": str(output_dir),
+            "project_model": model.to_dict(),
+            "shield_name": context.get("shield_name"),
+            "shield_name_upper": context.get("shield_name_upper"),
+            "split": context.get("split"),
+            "has_display": context.get("has_display"),
+            "has_encoder": context.get("has_encoder"),
+            "rgb_underglow": context.get("rgb_underglow"),
+            "studio_transport": context.get("studio_transport"),
+            "debug_logging": context.get("debug_logging"),
+            "show_battery_percentage": context.get("show_battery_percentage"),
+            "oled_custom_screen": context.get("oled_custom_screen"),
+            "oled_has_image_left": context.get("oled_has_image_left"),
+            "oled_has_image_right": context.get("oled_has_image_right"),
+            "oled_widgets_left": context.get("oled_widgets_left"),
+            "oled_widgets_right": context.get("oled_widgets_right"),
+            "idle_sleep_ms": context.get("idle_sleep_ms"),
+            "generated_files": {k: str(v) for k, v in generated.items()},
+        }
+        dump_path = output_dir / "kfm_debug_dump.json"
+        dump_path.write_text(json.dumps(debug_dump, indent=2, default=str), encoding="utf-8")
+        generated["kfm_debug_dump.json"] = dump_path
 
         logger.info("ZMK config générée : %d fichiers dans %s", len(generated), output_dir)
         return generated
@@ -365,9 +755,65 @@ class ZmkTemplateGenerator:
         matrix_transform_map = _build_matrix_transform(kb_def)
 
         # Bindings par layer (depuis YAML default_keymap_zmk, fallback &trans)
-        default_bindings = _build_layer_bindings(kb_def, "default")
-        lower_bindings = _build_layer_bindings(kb_def, "lower")
-        raise_bindings = _build_layer_bindings(kb_def, "raise")
+        # Si l'utilisateur a importé un keymap perso via UI, on convertit le
+        # JSON Vial → bindings ZMK et on l'utilise comme override des layers
+        # default/lower/raise (le bluetooth_layer reste généré à part).
+        keymap_override = None
+        if model.keyboard.use_custom_keymap and model.keyboard.custom_keymap:
+            try:
+                from modules.keymap_importer.vial_to_zmk import convert_vial_to_zmk_keymap
+                # Construire les positions encodeur par row pour que le converter
+                # filtre les entrées Vial correspondantes (sinon décalage des
+                # bindings après chaque position encodeur — bug touche SPACE).
+                cols = kb_def.matrix["cols"]
+                encoder_cols_per_row: dict[int, set[int]] = {}
+                for key in kb_def.layout.get("left", []):
+                    if key.encoder:
+                        encoder_cols_per_row.setdefault(key.row, set()).add(key.col)
+                for key in kb_def.layout.get("right", []):
+                    if key.encoder:
+                        encoder_cols_per_row.setdefault(key.row, set()).add(key.col + cols)
+                keymap_override = convert_vial_to_zmk_keymap(
+                    model.keyboard.custom_keymap,
+                    encoder_cols_per_row=encoder_cols_per_row or None,
+                )
+                # Si le clavier cible n'a pas de RGB underglow (ex: Corne) mais
+                # le keymap importé vient d'un clavier qui en avait (ex: Sofle),
+                # les `&rgb_ug RGB_*` se retrouvent dans le keymap → erreur DT
+                # parse car le header `<dt-bindings/zmk/rgb.h>` n'est pas inclus
+                # ET undefined reference au link sur `&rgb_ug`. On les remplace
+                # par `&none` pour permettre la compilation.
+                kb_has_rgb = bool(model.keyboard.rgb_enabled) and kb_def.capabilities.get("rgb", False)
+                if not kb_has_rgb:
+                    rgb_count = 0
+                    for layer_name, rows in keymap_override.items():
+                        for r, row in enumerate(rows):
+                            for c, binding in enumerate(row):
+                                if binding.startswith("&rgb_ug"):
+                                    rows[r][c] = "&none"
+                                    rgb_count += 1
+                    if rgb_count:
+                        logger.warning(
+                            "ZMK : %d bindings &rgb_ug remplacés par &none "
+                            "(clavier %s sans RGB)", rgb_count, model.keyboard.model,
+                        )
+                logger.info(
+                    "ZMK : custom keymap importé (%d layers convertis depuis Vial, encodeurs filtrés : %s)",
+                    len(keymap_override), encoder_cols_per_row,
+                )
+            except Exception as exc:
+                logger.error("Échec conversion Vial → ZMK : %s, fallback default YAML", exc)
+                keymap_override = None
+
+        default_bindings = _build_layer_bindings(kb_def, "default", keymap_override)
+        lower_bindings = _build_layer_bindings(kb_def, "lower", keymap_override)
+        # raise_layer : on injecte les BT/OUT aux premiers &trans pour que les
+        # touches de gestion BLE soient accessibles facilement (visible dans
+        # ZMK Studio même si le conditional_layer Bluetooth ne l'est pas).
+        raise_bindings = _build_layer_bindings(
+            kb_def, "raise", keymap_override, inject_bluetooth=True,
+        )
+        bluetooth_bindings = _build_bluetooth_layer_bindings(kb_def)
 
         # Physical layout pour ZMK Studio
         physical_layout_keys = _build_physical_layout_keys(kb_def)
@@ -445,6 +891,37 @@ class ZmkTemplateGenerator:
             "default_bindings": default_bindings,
             "lower_bindings": lower_bindings,
             "raise_bindings": raise_bindings,
+            "bluetooth_bindings": bluetooth_bindings,
+            # Sensor bindings par layer (encodeurs). Split → 2 bindings,
+            # non-split → 1. Si custom_keymap a un encoder_layout, on l'utilise.
+            "default_sensor_bindings": _build_sensor_bindings_for_layer(
+                "default", 0,
+                model.keyboard.custom_keymap.get("encoder_layout") if (
+                    model.keyboard.use_custom_keymap and model.keyboard.custom_keymap
+                ) else None,
+                kb_def.split,
+            ),
+            "lower_sensor_bindings": _build_sensor_bindings_for_layer(
+                "lower", 1,
+                model.keyboard.custom_keymap.get("encoder_layout") if (
+                    model.keyboard.use_custom_keymap and model.keyboard.custom_keymap
+                ) else None,
+                kb_def.split,
+            ),
+            "raise_sensor_bindings": _build_sensor_bindings_for_layer(
+                "raise", 2,
+                model.keyboard.custom_keymap.get("encoder_layout") if (
+                    model.keyboard.use_custom_keymap and model.keyboard.custom_keymap
+                ) else None,
+                kb_def.split,
+            ),
+            "bluetooth_sensor_bindings": _build_sensor_bindings_for_layer(
+                "bluetooth", 3,
+                model.keyboard.custom_keymap.get("encoder_layout") if (
+                    model.keyboard.use_custom_keymap and model.keyboard.custom_keymap
+                ) else None,
+                kb_def.split,
+            ),
             "has_encoder": kb_def.has_encoder,
             "encoder_a": encoder_a,
             "encoder_b": encoder_b,
@@ -467,5 +944,75 @@ class ZmkTemplateGenerator:
                 model.keyboard.zmk_studio_transport
                 if model.keyboard.zmk_studio_transport in ("ble", "usb")
                 else "ble"
+            ),
+            "debug_logging": bool(model.keyboard.debug_logging),
+            "show_battery_percentage": bool(model.oled.show_battery_percentage),
+            # OLED custom screen (Phase 1 — image-only) : si au moins une image
+            # est placée par l'utilisateur sur le canvas, on bascule de
+            # STATUS_SCREEN_BUILT_IN vers STATUS_SCREEN_CUSTOM dans shield.conf
+            # et on génère un (ou deux pour split) status_screen.c qui affiche
+            # le composite plein écran en LVGL INDEXED_1BIT.
+            # Si use_builtin_screen est coché, on force STATUS_SCREEN_BUILT_IN
+            # quoi qu'il y ait dans le canvas — l'utilisateur a explicitement
+            # choisi le screen natif ZMK.
+            "oled_custom_screen": (
+                has_display
+                and not model.oled.use_builtin_screen
+                and (
+                    _side_has_custom_oled(model.oled.left)
+                    or (kb_def.split and _side_has_custom_oled(model.oled.right))
+                )
+            ),
+            "oled_custom_left": (
+                has_display
+                and not model.oled.use_builtin_screen
+                and _side_has_custom_oled(model.oled.left)
+            ),
+            "oled_custom_right": (
+                has_display
+                and not model.oled.use_builtin_screen
+                and kb_def.split
+                and _side_has_custom_oled(model.oled.right)
+            ),
+            # Phase 3 — animation multi-frames LVGL : retourne {frames, delays, animated}
+            # par côté. Pour les écrans sans image (widgets seuls), `animated=False` et la
+            # liste contient un seul frame noir — affiché en background mais inoffensif.
+            "oled_animation_left": (
+                _build_animation_context(model.oled.left.images)
+                if has_display and _side_has_custom_oled(model.oled.left)
+                else {"frames": [], "delays": [], "animated": False}
+            ),
+            "oled_animation_right": (
+                _build_animation_context(model.oled.right.images)
+                if has_display and kb_def.split and _side_has_custom_oled(model.oled.right)
+                else {"frames": [], "delays": [], "animated": False}
+            ),
+            # Phase 4 — animation par-couche : si au moins une image a layer != -1,
+            # on bascule vers le pipeline layer-aware avec listener
+            # zmk_layer_state_changed et arrays par-couche.
+            "oled_layered_left": (
+                _build_layered_animation_context(model.oled.left.images)
+                if has_display and _side_has_custom_oled(model.oled.left)
+                else {"layers": [], "has_layer_aware": False}
+            ),
+            "oled_layered_right": (
+                _build_layered_animation_context(model.oled.right.images)
+                if has_display and kb_def.split and _side_has_custom_oled(model.oled.right)
+                else {"layers": [], "has_layer_aware": False}
+            ),
+            # Phase 2 — widgets ZMK natifs par côté.
+            # En non-split, "left" est la seule moitié = central. En split, gauche = central,
+            # droite = peripheral. Les widgets sont instanciés via `zmk_widget_*_init` côté C.
+            "oled_widgets_left": _build_widgets_context(model.oled.left, "central"),
+            "oled_widgets_right": (
+                _build_widgets_context(model.oled.right, "peripheral") if kb_def.split else []
+            ),
+            # Flag image-only séparé pour le template (permet un `if` distinct du flag widgets)
+            "oled_has_image_left": (
+                has_display and any(img.frames for img in model.oled.left.images)
+            ),
+            "oled_has_image_right": (
+                has_display and kb_def.split
+                and any(img.frames for img in model.oled.right.images)
             ),
         }

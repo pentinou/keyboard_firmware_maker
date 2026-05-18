@@ -6,9 +6,7 @@
 #include <behaviors.dtsi>
 #include <dt-bindings/zmk/keys.h>
 #include <dt-bindings/zmk/bt.h>
-{% if has_encoder %}
 #include <dt-bindings/zmk/outputs.h>
-{% endif %}
 {% if rgb_underglow %}
 #include <dt-bindings/zmk/rgb.h>
 {% endif %}
@@ -23,7 +21,7 @@
 {{ default_bindings }}
             >;
 {% if has_encoder %}
-            sensor-bindings = <&inc_dec_kp C_VOL_UP C_VOL_DN>;
+            sensor-bindings = <{{ default_sensor_bindings }}>;
 {% endif %}
         };
 
@@ -33,7 +31,7 @@
 {{ lower_bindings }}
             >;
 {% if has_encoder %}
-            sensor-bindings = <&inc_dec_kp PG_UP PG_DN>;
+            sensor-bindings = <{{ lower_sensor_bindings }}>;
 {% endif %}
         };
 
@@ -43,8 +41,36 @@
 {{ raise_bindings }}
             >;
 {% if has_encoder %}
-            sensor-bindings = <&inc_dec_kp C_BRI_UP C_BRI_DN>;
+            sensor-bindings = <{{ raise_sensor_bindings }}>;
 {% endif %}
+        };
+
+        /*
+         * Couche Bluetooth — accessible via tri-layer (LOWER + RAISE).
+         * Touches (sur les 9 premières positions du clavier) :
+         *   1. BT_CLR      : efface le profil BLE actif (pour ré-appairer)
+         *   2-6. BT_SEL 0..4 : sélectionne le profil BLE 1 à 5
+         *   7. OUT_USB     : force l'envoi HID en USB
+         *   8. OUT_BLE     : force l'envoi HID en Bluetooth
+         *   9. OUT_TOG     : toggle USB/BLE
+         */
+        bluetooth_layer {
+            display-name = "Bluetooth";
+            bindings = <
+{{ bluetooth_bindings }}
+            >;
+{% if has_encoder %}
+            sensor-bindings = <{{ bluetooth_sensor_bindings }}>;
+{% endif %}
+        };
+    };
+
+    conditional_layers {
+        compatible = "zmk,conditional-layers";
+        /* Tri-layer : LOWER (1) + RAISE (2) actifs simultanément → Bluetooth (3) */
+        tri_layer {
+            if-layers = <1 2>;
+            then-layer = <3>;
         };
     };
 };

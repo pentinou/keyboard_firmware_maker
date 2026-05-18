@@ -260,6 +260,19 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
             ]
             default_keymap_zmk[str(layer_name)] = parsed_rows
 
+    # Validation : si le clavier déclare au moins un MCU ZMK mais que le
+    # default_keymap_zmk est vide, le firmware compilera sans bindings réels
+    # (= toutes les touches en &trans → clavier muet). Warning explicite pour
+    # éviter une compilation silencieusement non fonctionnelle.
+    has_zmk_mcu = any(opt.firmware == "zmk" for opt in mcu_options)
+    if has_zmk_mcu and not default_keymap_zmk.get("default"):
+        logger.warning(
+            "Clavier '%s' a un MCU ZMK déclaré mais aucun default_keymap_zmk.default "
+            "défini. Le firmware ZMK compilera avec un keymap entièrement &trans "
+            "(clavier muet). Ajouter default_keymap_zmk dans le YAML.",
+            data.get("model", path.name),
+        )
+
     return KeyboardDefinition(
         model=data["model"],
         display_name=data["display_name"],

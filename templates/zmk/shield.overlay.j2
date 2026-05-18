@@ -20,6 +20,7 @@
     kscan0: kscan_0 {
         compatible = "zmk,kscan-gpio-matrix";
         diode-direction = "{{ diode_direction_zmk }}";
+        wakeup-source;
 {% if not split %}
         row-gpios = {{ row_gpios_left }}
             ;

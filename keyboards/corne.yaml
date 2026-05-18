@@ -128,3 +128,23 @@ layout:
     - {row: 3, col: 5, x: 0.0, y: 3.2}
     - {row: 3, col: 4, x: 1.0, y: 3.7}
     - {row: 3, col: 3, x: 2.0, y: 3.7}
+
+# Keymap ZMK par défaut — mêmes conventions que sofle-v2 (cf. commentaire qui suit).
+# Structure Corne : 3 rows × 12 cols (combined 6 left + 6 right) + 1 row de 6 thumbs.
+# Right cols miroir : binding 6 = extérieur droit, binding 11 = près gap central.
+default_keymap_zmk:
+  default:
+    - ["&kp TAB",   "&kp Q",  "&kp W",  "&kp E",  "&kp R",  "&kp T",     "&kp BSPC",  "&kp P",    "&kp O",   "&kp I",     "&kp U",  "&kp Y"]
+    - ["&kp LCTRL", "&kp A",  "&kp S",  "&kp D",  "&kp F",  "&kp G",     "&kp SQT",   "&kp SEMI", "&kp L",   "&kp K",     "&kp J",  "&kp H"]
+    - ["&kp LSHFT", "&kp Z",  "&kp X",  "&kp C",  "&kp V",  "&kp B",     "&kp RSHFT", "&kp FSLH", "&kp DOT", "&kp COMMA", "&kp M",  "&kp N"]
+    - ["&kp LGUI",  "&mo 1",  "&kp SPACE",   "&kp RALT", "&mo 2", "&kp RET"]
+  lower:
+    - ["&kp GRAVE", "&kp N1",   "&kp N2",   "&kp N3",   "&kp N4",   "&kp N5",     "&trans",   "&kp N0",  "&kp N9",     "&kp N8",   "&kp N7",   "&kp N6"]
+    - ["&trans",    "&trans",   "&trans",   "&trans",   "&trans",   "&trans",     "&trans",   "&trans",  "&kp RIGHT",  "&kp UP",   "&kp DOWN", "&kp LEFT"]
+    - ["&trans",    "&trans",   "&trans",   "&trans",   "&trans",   "&trans",     "&trans",   "&trans",  "&trans",     "&trans",   "&trans",   "&trans"]
+    - ["&trans",    "&trans",   "&trans",   "&trans",   "&trans",   "&trans"]
+  raise:
+    - ["&trans", "&kp F1",   "&kp F2",   "&kp F3",   "&kp F4",    "&kp F5",     "&kp F12", "&kp F6",   "&kp F7",   "&kp F8",   "&kp F9",   "&kp F10"]
+    - ["&trans", "&kp EXCL", "&kp AT",   "&kp HASH", "&kp DLLR",  "&kp PRCNT",  "&trans",  "&kp RPAR", "&kp LPAR", "&kp STAR", "&kp AMPS", "&kp CARET"]
+    - ["&trans", "&trans",   "&trans",   "&trans",   "&trans",    "&trans",     "&trans",  "&trans",   "&trans",   "&trans",   "&trans",   "&trans"]
+    - ["&trans", "&trans",   "&trans",   "&trans",   "&trans",    "&trans"]

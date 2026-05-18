@@ -46,3 +46,7 @@ firmware_test_*/
 
 # Pinout / datasheet local files
 Supermini-nRF52840-Pinout.webp
+
+# Keymaps personnels Vial-QMK (export utilisateur, à la racine)
+*.vil
+penti.*

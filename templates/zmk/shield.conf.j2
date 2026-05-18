@@ -33,12 +33,44 @@ CONFIG_ZMK_IDLE_SLEEP_TIMEOUT={{ idle_sleep_ms }}
 CONFIG_NFCT_PINS_AS_GPIOS=y
 
 {% if has_display %}
-# Display — built-in status screen with battery icon
+# Display
 CONFIG_ZMK_DISPLAY=y
+{% if oled_custom_screen %}
+# Status screen custom — fichier status_screen.c généré par KFM, compilé via
+# CMakeLists.txt du shield. L'image affichée est la composition des éléments
+# placés sur le canvas de l'éditeur OLED de KFM (rotation 90° CW au build-time).
+CONFIG_ZMK_DISPLAY_STATUS_SCREEN_CUSTOM=y
+# Active le widget LVGL "image" (lv_image_create / lv_image_set_src). Désactivé
+# par défaut sous LV_CONF_MINIMAL=y de ZMK — sans ce flag, undefined references
+# au link sur lv_image_create/set_src.
+CONFIG_LV_USE_IMAGE=y
+{# Activation conditionnelle des widgets ZMK natifs selon ce qui a été placé.
+   On vérifie chaque côté pour activer le Kconfig correspondant — les Kconfig
+   sont globaux au build, ils sont activés dès qu'au moins une moitié l'utilise. #}
+{% set all_widgets = oled_widgets_left + oled_widgets_right %}
+{% if all_widgets | selectattr("type", "equalto", "battery") | list %}
+CONFIG_ZMK_WIDGET_BATTERY_STATUS=y
+{% endif %}
+{% if all_widgets | selectattr("type", "equalto", "output") | list %}
+CONFIG_ZMK_WIDGET_OUTPUT_STATUS=y
+{% endif %}
+{% if all_widgets | selectattr("type", "equalto", "layer") | list %}
+CONFIG_ZMK_WIDGET_LAYER_STATUS=y
+{% endif %}
+{% if all_widgets | selectattr("type", "equalto", "peripheral") | list %}
+CONFIG_ZMK_WIDGET_PERIPHERAL_STATUS=y
+{% endif %}
+{% else %}
+# Status screen built-in (par défaut) : layer + batterie + output
 CONFIG_ZMK_DISPLAY_STATUS_SCREEN_BUILT_IN=y
 CONFIG_ZMK_WIDGET_LAYER_STATUS=y
 CONFIG_ZMK_WIDGET_BATTERY_STATUS=y
 CONFIG_ZMK_WIDGET_OUTPUT_STATUS=y
+{% endif %}
+{% if show_battery_percentage %}
+# Affiche le pourcentage en texte à côté de l'icône batterie (option KFM)
+CONFIG_ZMK_WIDGET_BATTERY_STATUS_SHOW_PERCENTAGE=y
+{% endif %}
 {% endif %}
 
 {% if split %}
@@ -61,4 +93,24 @@ CONFIG_ZMK_RGB_UNDERGLOW_BRT_START=50
 # Encoder
 CONFIG_EC11=y
 CONFIG_EC11_TRIGGER_GLOBAL_THREAD=y
+{% endif %}
+
+{% if debug_logging %}
+# ── Mode debug logging KFM ─────────────────────────────────────────────────────
+# Active le logging Zephyr/ZMK sur USB CDC ACM. Permet de capturer les messages
+# de boot (panic, k_oops, init OLED/BLE/USB, etc.) avec :
+#   screen /dev/ttyACM0 115200      # Linux/Mac
+#   picocom /dev/ttyACM0 -b 115200
+# ⚠ Augmente significativement la taille flash et la conso énergétique BLE.
+# À désactiver pour les firmwares de production.
+CONFIG_LOG=y
+CONFIG_LOG_DEFAULT_LEVEL=4
+CONFIG_LOG_MODE_DEFERRED=y
+CONFIG_LOG_BACKEND_UART=y
+CONFIG_USB_DEVICE_STACK=y
+CONFIG_USB_CDC_ACM=y
+CONFIG_UART_LINE_CTRL=y
+CONFIG_SERIAL=y
+CONFIG_CONSOLE=y
+CONFIG_UART_CONSOLE=y
 {% endif %}

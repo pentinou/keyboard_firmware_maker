@@ -15,3 +15,10 @@
     col-gpios = {{ col_gpios_right }}
         ;
 };
+
+{% if has_encoder %}
+/* Active l'encodeur local de cette moitié uniquement. */
+&right_encoder {
+    status = "okay";
+};
+{% endif %}

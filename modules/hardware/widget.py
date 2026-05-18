@@ -13,11 +13,13 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QStackedWidget,
@@ -283,10 +285,47 @@ class HardwareWidget(QWidget):
         self._studio_transport_help.setWordWrap(True)
         self._studio_transport_help.setStyleSheet("color: #888; font-size: 11px;")
         options_form.addRow("", self._studio_transport_help)
+        # Debug logging (visible uniquement pour les firmwares ZMK)
+        self._debug_logging_checkbox = QCheckBox(tr("hardware.zmk_debug_logging.label"))
+        self._debug_logging_checkbox.setObjectName("debug_logging_checkbox")
+        self._debug_logging_checkbox.setChecked(bool(self._model.keyboard.debug_logging))
+        options_form.addRow("", self._debug_logging_checkbox)
+        self._debug_logging_help = QLabel(tr("hardware.zmk_debug_logging.help"))
+        self._debug_logging_help.setWordWrap(True)
+        self._debug_logging_help.setStyleSheet("color: #888; font-size: 11px;")
+        options_form.addRow("", self._debug_logging_help)
+
+        # Import keymap perso Vial-QMK (visible uniquement pour les firmwares ZMK)
+        self._custom_keymap_checkbox = QCheckBox(tr("hardware.zmk_custom_keymap.label"))
+        self._custom_keymap_checkbox.setObjectName("custom_keymap_checkbox")
+        self._custom_keymap_checkbox.setChecked(bool(self._model.keyboard.use_custom_keymap))
+        options_form.addRow("", self._custom_keymap_checkbox)
+        # Ligne import : bouton + label fichier
+        custom_keymap_row = QHBoxLayout()
+        self._custom_keymap_btn = QPushButton(tr("hardware.zmk_custom_keymap.import_btn"))
+        self._custom_keymap_btn.setObjectName("custom_keymap_btn")
+        self._custom_keymap_btn.setEnabled(bool(self._model.keyboard.use_custom_keymap))
+        custom_keymap_row.addWidget(self._custom_keymap_btn)
+        self._custom_keymap_label = QLabel(self._custom_keymap_status_text())
+        self._custom_keymap_label.setObjectName("custom_keymap_label")
+        self._custom_keymap_label.setStyleSheet("color: #888; font-size: 11px;")
+        custom_keymap_row.addWidget(self._custom_keymap_label, 1)
+        options_form.addRow("", custom_keymap_row)
+        self._custom_keymap_help = QLabel(tr("hardware.zmk_custom_keymap.help"))
+        self._custom_keymap_help.setWordWrap(True)
+        self._custom_keymap_help.setStyleSheet("color: #888; font-size: 11px;")
+        options_form.addRow("", self._custom_keymap_help)
+
         # Cachés par défaut, set_firmware("zmk") les affiche
         self._studio_transport_label.hide()
         self._studio_transport_combo.hide()
         self._studio_transport_help.hide()
+        self._debug_logging_checkbox.hide()
+        self._debug_logging_help.hide()
+        self._custom_keymap_checkbox.hide()
+        self._custom_keymap_btn.hide()
+        self._custom_keymap_label.hide()
+        self._custom_keymap_help.hide()
 
         layout.addLayout(options_form)
         layout.addStretch()
@@ -387,6 +426,9 @@ class HardwareWidget(QWidget):
         self._oled_combo.currentIndexChanged.connect(self._on_oled_changed)
         self._rgb_checkbox.stateChanged.connect(self._on_rgb_changed)
         self._studio_transport_combo.currentIndexChanged.connect(self._on_studio_transport_changed)
+        self._debug_logging_checkbox.stateChanged.connect(self._on_debug_logging_changed)
+        self._custom_keymap_checkbox.stateChanged.connect(self._on_use_custom_keymap_changed)
+        self._custom_keymap_btn.clicked.connect(self._on_import_custom_keymap_clicked)
 
         self._kle_widget.keyboard_saved.connect(self._on_custom_keyboard_saved)
 
@@ -601,17 +643,86 @@ class HardwareWidget(QWidget):
         self._studio_transport_label.setVisible(is_zmk)
         self._studio_transport_combo.setVisible(is_zmk)
         self._studio_transport_help.setVisible(is_zmk)
+        self._debug_logging_checkbox.setVisible(is_zmk)
+        self._debug_logging_help.setVisible(is_zmk)
+        self._custom_keymap_checkbox.setVisible(is_zmk)
+        self._custom_keymap_btn.setVisible(is_zmk)
+        self._custom_keymap_label.setVisible(is_zmk)
+        self._custom_keymap_help.setVisible(is_zmk)
         # Sync combo ↔ model
         target_idx = 0 if self._model.keyboard.zmk_studio_transport == "ble" else 1
         if self._studio_transport_combo.currentIndex() != target_idx:
             self._studio_transport_combo.blockSignals(True)
             self._studio_transport_combo.setCurrentIndex(target_idx)
             self._studio_transport_combo.blockSignals(False)
+        # Sync checkbox debug_logging ↔ model
+        if self._debug_logging_checkbox.isChecked() != bool(self._model.keyboard.debug_logging):
+            self._debug_logging_checkbox.blockSignals(True)
+            self._debug_logging_checkbox.setChecked(bool(self._model.keyboard.debug_logging))
+            self._debug_logging_checkbox.blockSignals(False)
+        # Sync checkbox use_custom_keymap ↔ model + label statut
+        use_custom = bool(self._model.keyboard.use_custom_keymap)
+        if self._custom_keymap_checkbox.isChecked() != use_custom:
+            self._custom_keymap_checkbox.blockSignals(True)
+            self._custom_keymap_checkbox.setChecked(use_custom)
+            self._custom_keymap_checkbox.blockSignals(False)
+        self._custom_keymap_btn.setEnabled(use_custom)
+        self._custom_keymap_label.setText(self._custom_keymap_status_text())
 
     def _on_studio_transport_changed(self, idx: int) -> None:
         """Met à jour model.keyboard.zmk_studio_transport selon la sélection."""
         value = self._studio_transport_combo.itemData(idx) or "ble"
         self._model.keyboard.zmk_studio_transport = str(value)
+
+    def _on_debug_logging_changed(self, state: int) -> None:
+        """Met à jour model.keyboard.debug_logging selon la checkbox."""
+        self._model.keyboard.debug_logging = bool(state)
+
+    def _custom_keymap_status_text(self) -> str:
+        """Texte affiché à côté du bouton d'import (statut keymap)."""
+        if self._model.keyboard.custom_keymap is None:
+            return tr("hardware.zmk_custom_keymap.no_file")
+        n_layers = len(self._model.keyboard.custom_keymap.get("layout", []))
+        return tr("hardware.zmk_custom_keymap.loaded").format(n=n_layers)
+
+    def _on_use_custom_keymap_changed(self, state: int) -> None:
+        """Toggle use_custom_keymap : active/désactive le bouton import."""
+        enabled = bool(state)
+        self._model.keyboard.use_custom_keymap = enabled
+        self._custom_keymap_btn.setEnabled(enabled)
+
+    def _on_import_custom_keymap_clicked(self) -> None:
+        """Ouvre un QFileDialog pour choisir un fichier .json Vial-QMK,
+        le parse, stocke dans model.keyboard.custom_keymap."""
+        import json
+
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            tr("hardware.zmk_custom_keymap.dialog_title"),
+            "",
+            "Vial JSON (*.json *.vil);;All files (*)",
+        )
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError) as exc:
+            QMessageBox.critical(
+                self,
+                tr("hardware.zmk_custom_keymap.error_title"),
+                tr("hardware.zmk_custom_keymap.error_msg").format(exc=exc),
+            )
+            return
+        if not isinstance(data, dict) or "layout" not in data:
+            QMessageBox.critical(
+                self,
+                tr("hardware.zmk_custom_keymap.error_title"),
+                tr("hardware.zmk_custom_keymap.invalid_format"),
+            )
+            return
+        self._model.keyboard.custom_keymap = data
+        self._custom_keymap_label.setText(self._custom_keymap_status_text())
 
     def _reload_keyboards(self, select_model: str = "") -> None:
         """Recharge la liste des claviers (prédéfinis + custom) et sélectionne select_model."""

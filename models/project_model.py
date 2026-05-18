@@ -32,6 +32,17 @@ class KeyboardConfig:
     zmk_studio_transport: str = "ble"
     # Transport ZMK Studio : "ble" (sans fil, défaut) ou "usb" (CDC ACM filaire).
     # Affecte uniquement les firmwares ZMK. Ignoré pour QMK.
+    debug_logging: bool = False
+    # Si True, active le logging Zephyr/ZMK sur USB CDC ACM (port série virtuel).
+    # Permet de capturer les messages de boot (panic, k_oops, init OLED/BLE/USB,
+    # etc.) via `screen /dev/ttyACM0 115200` ou `picocom`. ZMK uniquement.
+    use_custom_keymap: bool = False
+    # Si True (ZMK uniquement) : utilise `custom_keymap` au lieu du default
+    # défini dans le YAML du clavier. Le format est celui du converter Vial-ZMK.
+    custom_keymap: dict[str, Any] | None = None
+    # Contenu brut du keymap Vial-QMK importé (JSON). Converti à la volée par
+    # `modules.keymap_importer.vial_to_zmk.convert_vial_to_zmk_keymap` au moment
+    # de la génération du firmware. None si aucun import effectué.
 
     def to_dict(self) -> dict[str, Any]:
         d = {
@@ -45,6 +56,12 @@ class KeyboardConfig:
             d["rgb_underglow_per_side"] = self.rgb_underglow_per_side
         if self.zmk_studio_transport != "ble":
             d["zmk_studio_transport"] = self.zmk_studio_transport
+        if self.debug_logging:
+            d["debug_logging"] = True
+        if self.use_custom_keymap:
+            d["use_custom_keymap"] = True
+        if self.custom_keymap is not None:
+            d["custom_keymap"] = self.custom_keymap
         return d
 
     @classmethod
@@ -70,6 +87,48 @@ class KeyboardConfig:
             rgb_enabled=bool(data.get("rgb_enabled", False)),
             rgb_underglow_per_side=underglow,
             zmk_studio_transport=transport,
+            debug_logging=bool(data.get("debug_logging", False)),
+            use_custom_keymap=bool(data.get("use_custom_keymap", False)),
+            custom_keymap=data.get("custom_keymap"),
+        )
+
+
+@dataclass
+class ZmkBatteryWidget:
+    """Widget ZMK natif batterie pour status_screen custom.
+
+    `show_peer` : si True, affiche le niveau de la moitié peer (split-battery
+    central uniquement, requiert `CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING=y`).
+    Sinon affiche la batterie locale.
+    """
+
+    enabled: bool = False
+    col: int = 0
+    line: int = 0
+    show_peer: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "col": self.col,
+            "line": self.line,
+            "show_peer": self.show_peer,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ZmkBatteryWidget":
+        try:
+            col = int(data.get("col", 0))
+        except (ValueError, TypeError):
+            col = 0
+        try:
+            line = int(data.get("line", 0))
+        except (ValueError, TypeError):
+            line = 0
+        return cls(
+            enabled=bool(data.get("enabled", False)),
+            col=col, line=line,
+            show_peer=bool(data.get("show_peer", False)),
         )
 
 
@@ -122,6 +181,10 @@ class OledImageItem:
     col: int = 0          # colonne curseur QMK (0-4)
     line: int = 0         # page QMK (0-15)
     inverted: bool = False
+    # Phase 4 OLED ZMK custom : couche keymap où l'image est visible.
+    # -1 = toutes les couches (image "globale", toujours présente).
+    # 0/1/2/... = uniquement quand cette couche est la plus haute active.
+    layer: int = -1
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -131,6 +194,7 @@ class OledImageItem:
             "col": self.col,
             "line": self.line,
             "inverted": self.inverted,
+            "layer": self.layer,
         }
 
     @classmethod
@@ -147,6 +211,7 @@ class OledImageItem:
             col=_int("col", 0),
             line=_int("line", 0),
             inverted=bool(data.get("inverted", False)),
+            layer=_int("layer", -1),
         )
 
 
@@ -173,6 +238,12 @@ class OledSideConfig:
     bongo_line: int = 0  # page de départ Bongo Cat (0-15)
     crab_enabled: bool = False
     crab_line: int = 0  # page de départ Crab (0-15)
+    # Widgets ZMK natifs (Phase 2 OLED custom ZMK) — ignorés en backend QMK.
+    # Ils sont instanciés via les helpers `zmk_widget_*_init` de ZMK.
+    zmk_battery: ZmkBatteryWidget = field(default_factory=ZmkBatteryWidget)
+    zmk_output: OledOverlayItem = field(default_factory=OledOverlayItem)
+    zmk_layer: OledOverlayItem = field(default_factory=OledOverlayItem)
+    zmk_peripheral: OledOverlayItem = field(default_factory=OledOverlayItem)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -192,6 +263,10 @@ class OledSideConfig:
             "bongo_line": self.bongo_line,
             "crab_enabled": self.crab_enabled,
             "crab_line": self.crab_line,
+            "zmk_battery": self.zmk_battery.to_dict(),
+            "zmk_output": self.zmk_output.to_dict(),
+            "zmk_layer": self.zmk_layer.to_dict(),
+            "zmk_peripheral": self.zmk_peripheral.to_dict(),
         }
 
     @classmethod
@@ -237,6 +312,10 @@ class OledSideConfig:
             bongo_line=int(data.get("bongo_line", 0)),
             crab_enabled=bool(data.get("crab_enabled", False)),
             crab_line=int(data.get("crab_line", 0)),
+            zmk_battery=ZmkBatteryWidget.from_dict(data.get("zmk_battery") or {}),
+            zmk_output=OledOverlayItem.from_dict(data.get("zmk_output") or {}),
+            zmk_layer=OledOverlayItem.from_dict(data.get("zmk_layer") or {}),
+            zmk_peripheral=OledOverlayItem.from_dict(data.get("zmk_peripheral") or {}),
         )
 
 
@@ -253,6 +332,13 @@ class OledConfig:
     anti_burnin: bool = False
     sleep_enabled: bool = False
     sleep_timeout_s: int = 240
+    use_builtin_screen: bool = False
+    # Si True (ZMK uniquement) : force STATUS_SCREEN_BUILT_IN, ignore images+widgets.
+    # Affiche le screen natif ZMK (layer + battery + output). L'éditeur canvas est
+    # désactivé dans l'UI tant que cette option est cochée.
+    show_battery_percentage: bool = False
+    # Si True (ZMK uniquement) : affiche le pourcentage en texte à côté de l'icône
+    # batterie. Active CONFIG_ZMK_WIDGET_BATTERY_STATUS_SHOW_PERCENTAGE=y.
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -261,6 +347,8 @@ class OledConfig:
             "anti_burnin": self.anti_burnin,
             "sleep_enabled": self.sleep_enabled,
             "sleep_timeout_s": self.sleep_timeout_s,
+            "use_builtin_screen": self.use_builtin_screen,
+            "show_battery_percentage": self.show_battery_percentage,
         }
 
     @classmethod
@@ -275,6 +363,8 @@ class OledConfig:
             anti_burnin=bool(data.get("anti_burnin", False)),
             sleep_enabled=bool(data.get("sleep_enabled", False)),
             sleep_timeout_s=int(data.get("sleep_timeout_s", 240)),
+            use_builtin_screen=bool(data.get("use_builtin_screen", False)),
+            show_battery_percentage=bool(data.get("show_battery_percentage", False)),
         )
 
 

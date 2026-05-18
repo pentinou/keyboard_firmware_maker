@@ -608,3 +608,351 @@ class TestOledSetActiveSides:
         widget.set_active_sides(["left", "right"])
         assert not widget._group_left.isHidden()
         assert not widget._group_right.isHidden()
+
+
+class TestZmkWidgetsUI:
+    """Phase 2 — section Widgets ZMK dans l'éditeur OLED."""
+
+    def test_left_has_battery_output_layer_widgets(self, qtbot, model):
+        from PySide6.QtWidgets import QCheckBox
+        model.keyboard.oled_sides = ["left", "right"]
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        assert w.findChild(QCheckBox, "left_zmk_battery_check") is not None
+        assert w.findChild(QCheckBox, "left_zmk_output_check") is not None
+        assert w.findChild(QCheckBox, "left_zmk_layer_check") is not None
+
+    def test_right_has_battery_and_peripheral_only(self, qtbot, model):
+        """Côté droit : battery + peripheral. Pas de layer/output (central-only)."""
+        from PySide6.QtWidgets import QCheckBox
+        model.keyboard.oled_sides = ["left", "right"]
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        assert w.findChild(QCheckBox, "right_zmk_battery_check") is not None
+        assert w.findChild(QCheckBox, "right_zmk_peripheral_check") is not None
+        assert w.findChild(QCheckBox, "right_zmk_layer_check") is None
+        assert w.findChild(QCheckBox, "right_zmk_output_check") is None
+
+    def test_left_no_peripheral_widget(self, qtbot, model):
+        from PySide6.QtWidgets import QCheckBox
+        model.keyboard.oled_sides = ["left", "right"]
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        assert w.findChild(QCheckBox, "left_zmk_peripheral_check") is None
+
+    def test_show_peer_only_on_left(self, qtbot, model):
+        from PySide6.QtWidgets import QCheckBox
+        model.keyboard.oled_sides = ["left", "right"]
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        assert w.findChild(QCheckBox, "left_zmk_battery_show_peer") is not None
+        assert w.findChild(QCheckBox, "right_zmk_battery_show_peer") is None
+
+    def test_col_line_spinboxes_present(self, qtbot, model):
+        from PySide6.QtWidgets import QSpinBox
+        model.keyboard.oled_sides = ["left"]
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        assert w.findChild(QSpinBox, "left_zmk_battery_col") is not None
+        assert w.findChild(QSpinBox, "left_zmk_battery_line") is not None
+
+    def test_zmk_widgets_hidden_in_qmk_mode(self, qtbot, model):
+        """Le wrapper de chaque widget ZMK est explicitement masqué en QMK."""
+        from PySide6.QtWidgets import QWidget
+        model.keyboard.oled_sides = ["left"]
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        w.set_firmware("qmk")
+        wrapper = w.findChild(QWidget, "left_zmk_battery_row")
+        assert wrapper is not None
+        assert wrapper.isHidden()
+
+    def test_qmk_widgets_hidden_in_zmk_mode(self, qtbot, model):
+        from PySide6.QtWidgets import QCheckBox
+        model.keyboard.oled_sides = ["left"]
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        w.set_firmware("zmk")
+        cb = w.findChild(QCheckBox, "left_layer_check")
+        assert cb is not None
+        assert cb.isHidden()
+
+    def test_zmk_widgets_visible_in_zmk_mode(self, qtbot, model):
+        from PySide6.QtWidgets import QWidget
+        model.keyboard.oled_sides = ["left"]
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        w.set_firmware("zmk")
+        wrapper = w.findChild(QWidget, "left_zmk_battery_row")
+        assert wrapper is not None
+        assert not wrapper.isHidden()
+
+    def test_image_canvas_visible_in_both_modes(self, qtbot, model):
+        """L'éditeur d'image (canvas) reste visible en ZMK pour Phase 1+ (image custom)."""
+        model.keyboard.oled_sides = ["left"]
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        w.set_firmware("zmk")
+        canvas = w._canvas_left
+        assert canvas is not None
+        assert not canvas.isHidden()
+
+    def test_check_zmk_battery_updates_model(self, qtbot, model):
+        from PySide6.QtWidgets import QCheckBox
+        model.keyboard.oled_sides = ["left"]
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        cb = w.findChild(QCheckBox, "left_zmk_battery_check")
+        cb.setChecked(True)
+        assert model.oled.left.zmk_battery.enabled is True
+
+    def test_change_zmk_widget_col_updates_model(self, qtbot, model):
+        from PySide6.QtWidgets import QSpinBox
+        model.keyboard.oled_sides = ["left"]
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        sp = w.findChild(QSpinBox, "left_zmk_output_col")
+        sp.setValue(3)
+        assert model.oled.left.zmk_output.col == 3
+
+    def test_show_peer_updates_model(self, qtbot, model):
+        from PySide6.QtWidgets import QCheckBox
+        model.keyboard.oled_sides = ["left"]
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        cb = w.findChild(QCheckBox, "left_zmk_battery_show_peer")
+        cb.setChecked(True)
+        assert model.oled.left.zmk_battery.show_peer is True
+
+
+class TestZmkImageLayerSpinbox:
+    """Phase 4 — spinbox layer per image."""
+
+    def test_layer_spinbox_present(self, qtbot, model):
+        from PySide6.QtWidgets import QSpinBox
+        model.keyboard.oled_sides = ["left"]
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        sp = w.findChild(QSpinBox, "image_layer_spin_left")
+        assert sp is not None
+        assert sp.minimum() == -1
+        assert sp.maximum() == 9
+
+    def test_layer_spinbox_hidden_in_qmk_mode(self, qtbot, model):
+        from PySide6.QtWidgets import QWidget
+        model.keyboard.oled_sides = ["left"]
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        w.set_firmware("qmk")
+        wrapper = w.findChild(QWidget, "image_layer_row_left")
+        assert wrapper is not None
+        assert wrapper.isHidden()
+
+    def test_layer_change_updates_selected_image(self, qtbot, model):
+        """Sélectionner une image puis modifier le spinbox doit mettre à jour image.layer."""
+        from PySide6.QtWidgets import QSpinBox
+        from models.project_model import OledImageItem
+        model.keyboard.oled_sides = ["left"]
+        # Image avec frame runtime
+        white = bytes([0xFF] * (32 * 128))
+        model.oled.left.images.append(OledImageItem(
+            image_path="img.png", frames=[white], natural_w=32, natural_h=128,
+        ))
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        # Simuler la sélection (équivalent à un click sur l'image)
+        w._canvas_left._selected_item = "image:0"
+        sp = w.findChild(QSpinBox, "image_layer_spin_left")
+        sp.setValue(2)
+        assert model.oled.left.images[0].layer == 2
+
+    def test_layer_change_without_selection_is_noop(self, qtbot, model):
+        """Modifier le spinbox sans image sélectionnée ne crash pas."""
+        from PySide6.QtWidgets import QSpinBox
+        model.keyboard.oled_sides = ["left"]
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        # Pas d'image sélectionnée
+        assert w._canvas_left._selected_item is None
+        sp = w.findChild(QSpinBox, "image_layer_spin_left")
+        sp.setValue(3)  # ne doit pas crasher
+        # Aucune image dans le modèle, rien à vérifier — l'absence d'exception suffit
+
+    def test_canvas_selection_emits_signal(self, qtbot, model):
+        """Le canvas émet selection_changed quand on simule un click sur une image."""
+        from PySide6.QtCore import QPoint
+        from PySide6.QtGui import QMouseEvent
+        from PySide6.QtCore import Qt
+        from models.project_model import OledImageItem
+        model.keyboard.oled_sides = ["left"]
+        white = bytes([0xFF] * (32 * 128))
+        model.oled.left.images.append(OledImageItem(
+            image_path="img.png", frames=[white],
+            natural_w=32, natural_h=128, col=0, line=0,
+        ))
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        canvas = w._canvas_left
+        # Synchroniser les pixmaps internes pour que _image_rect retourne un rect
+        canvas.sync_images(1)
+        from PySide6.QtGui import QPixmap
+        canvas.set_image_pixmap(0, QPixmap(32, 128))
+        # Capturer l'émission
+        with qtbot.waitSignal(canvas.selection_changed, timeout=500) as blocker:
+            # Click au centre du canvas (dans la zone de l'image plein-canvas)
+            from PySide6.QtCore import QPointF
+            ev = QMouseEvent(
+                QMouseEvent.Type.MouseButtonPress, QPointF(10, 10),
+                Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+            )
+            canvas.mousePressEvent(ev)
+        assert blocker.args[0] == "image:0"
+
+    def test_selection_sync_updates_spinbox_value(self, qtbot, model):
+        """Quand on sélectionne une image avec layer=2, le spinbox doit afficher 2."""
+        from PySide6.QtWidgets import QSpinBox
+        from models.project_model import OledImageItem
+        model.keyboard.oled_sides = ["left"]
+        white = bytes([0xFF] * (32 * 128))
+        model.oled.left.images.append(OledImageItem(
+            image_path="img.png", frames=[white], natural_w=32, natural_h=128, layer=2,
+        ))
+        w = OledWidget(model)
+        qtbot.addWidget(w)
+        # Simuler sélection
+        w._canvas_left._selected_item = "image:0"
+        # Déclencher le sync manuellement (en prod c'est le signal selection_changed)
+        w._sync_image_layer_spinbox("left")
+        sp = w.findChild(QSpinBox, "image_layer_spin_left")
+        assert sp.value() == 2
+
+
+# ─── Canvas overlays ZMK (battery / output / layer / peripheral) ──────────────
+
+class TestZmkCanvasOverlays:
+    def test_qmk_mode_no_zmk_overlays(self, widget, model):
+        """En mode QMK, les widgets ZMK activés n'apparaissent PAS dans les overlays."""
+        widget.set_firmware("qmk")
+        model.oled.left.zmk_battery.enabled = True
+        names = [name for name, *_ in widget._canvas_left._overlay_items()]
+        assert "zmk_battery" not in names
+
+    def test_zmk_mode_no_qmk_overlays(self, widget, model):
+        """En mode ZMK, les overlays QMK activés n'apparaissent PAS."""
+        widget.set_firmware("zmk")
+        model.oled.left.layer.enabled = True
+        names = [name for name, *_ in widget._canvas_left._overlay_items()]
+        assert "layer" not in names
+
+    def test_zmk_mode_renders_enabled_widgets(self, widget, model):
+        """En mode ZMK, chaque widget activé apparaît dans l'overlay."""
+        widget.set_firmware("zmk")
+        model.oled.left.zmk_battery.enabled = True
+        model.oled.left.zmk_output.enabled = True
+        model.oled.left.zmk_layer.enabled = True
+        names = [name for name, *_ in widget._canvas_left._overlay_items()]
+        assert "zmk_battery" in names
+        assert "zmk_output" in names
+        assert "zmk_layer" in names
+
+    def test_zmk_widget_rect_at_position(self, widget, model):
+        """`_item_rect('zmk_battery')` retourne le bon (x, y) selon col/line."""
+        widget.set_firmware("zmk")
+        model.oled.left.zmk_battery.enabled = True
+        model.oled.left.zmk_battery.col = 1
+        model.oled.left.zmk_battery.line = 3
+        canvas = widget._canvas_left
+        rect = canvas._item_rect("zmk_battery")
+        assert rect is not None
+        x, y, w, h = rect
+        assert x == 1 * canvas.CHAR_W
+        assert y == 3 * canvas.PAGE_H
+        # Largeur 4 cols × 6 px × SCALE
+        assert w == 4 * canvas.CHAR_W
+        assert h == 2 * canvas.PAGE_H
+
+    def test_zmk_widget_rect_none_when_disabled(self, widget, model):
+        """`_item_rect` retourne None quand le widget ZMK est désactivé."""
+        model.oled.left.zmk_battery.enabled = False
+        assert widget._canvas_left._item_rect("zmk_battery") is None
+
+    def test_drag_zmk_widget_updates_model_and_emits(self, qtbot, widget, model):
+        """Drag d'un widget ZMK met à jour col/line ET émet widget_position_changed."""
+        widget.set_firmware("zmk")
+        model.oled.left.zmk_battery.enabled = True
+        model.oled.left.zmk_battery.col = 0
+        model.oled.left.zmk_battery.line = 0
+        canvas = widget._canvas_left
+        canvas._dragging_item = "zmk_battery"
+        canvas._drag_offset_x = 0
+        canvas._drag_offset_y = 0
+
+        from PySide6.QtCore import QPointF
+        from PySide6.QtGui import QMouseEvent
+        from PySide6.QtCore import Qt
+        # Ciblage : 1 col vers la droite, 4 lignes plus bas
+        px = 1 * canvas.CHAR_W + 1
+        py = 4 * canvas.PAGE_H + 1
+        ev = QMouseEvent(
+            QMouseEvent.Type.MouseMove, QPointF(px, py),
+            Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+        )
+        with qtbot.waitSignal(canvas.widget_position_changed, timeout=500) as blocker:
+            canvas.mouseMoveEvent(ev)
+        # Le clamp horizontal pour battery (4 cols) limite max_col = (32-24)/6 = 1
+        assert model.oled.left.zmk_battery.col == 1
+        assert model.oled.left.zmk_battery.line == 4
+        assert blocker.args == ["zmk_battery", 1, 4]
+
+    def test_drag_syncs_spinbox(self, qtbot, widget, model):
+        """Après drag d'un widget ZMK, le QSpinBox col/line est mis à jour."""
+        from PySide6.QtWidgets import QSpinBox
+        widget.set_firmware("zmk")
+        model.oled.left.zmk_layer.enabled = True
+        # zmk_layer fait 5 cols → max_col = (32-30)/6 = 0, donc on ne teste que line
+        widget._sync_zmk_widget_spinbox("left", "zmk_layer", 0, 5)
+        col_sp = widget.findChild(QSpinBox, "left_zmk_layer_col")
+        line_sp = widget.findChild(QSpinBox, "left_zmk_layer_line")
+        assert col_sp.value() == 0
+        assert line_sp.value() == 5
+
+    def test_set_firmware_propagates_to_canvases(self, widget):
+        """`OledWidget.set_firmware()` met à jour _firmware sur les deux canvases."""
+        widget.set_firmware("zmk")
+        assert widget._canvas_left._firmware == "zmk"
+        assert widget._canvas_right._firmware == "zmk"
+        widget.set_firmware("qmk")
+        assert widget._canvas_left._firmware == "qmk"
+        assert widget._canvas_right._firmware == "qmk"
+
+    def test_change_spinbox_refreshes_canvas(self, widget, model):
+        """Modifier le QSpinBox col/line déclenche `canvas.update()`."""
+        from PySide6.QtWidgets import QSpinBox
+        widget.set_firmware("zmk")
+        model.oled.left.zmk_battery.enabled = True
+        # Patch update() pour vérifier qu'il est appelé
+        canvas = widget._canvas_left
+        calls = []
+        original_update = canvas.update
+        canvas.update = lambda: calls.append(True) or original_update()
+        col_sp = widget.findChild(QSpinBox, "left_zmk_battery_col")
+        col_sp.setValue(1)
+        assert calls, "canvas.update() doit être appelé après modif spinbox"
+
+    def test_paint_event_with_all_zmk_widgets_no_crash(self, qtbot, widget, model):
+        """paintEvent doit dessiner les 4 widgets ZMK sans exception."""
+        from PySide6.QtGui import QImage
+        widget.set_firmware("zmk")
+        # Activer tous les widgets ZMK avec des positions valides
+        model.oled.left.zmk_battery.enabled = True
+        model.oled.left.zmk_output.enabled = True
+        model.oled.left.zmk_output.line = 4
+        model.oled.left.zmk_layer.enabled = True
+        model.oled.left.zmk_layer.line = 8
+        canvas = widget._canvas_left
+        # Déclencher un repaint hors écran (image cible)
+        img = QImage(canvas.size(), QImage.Format.Format_ARGB32)
+        img.fill(0)
+        canvas.render(img)
+        # Si on arrive ici sans crash, le test passe
+        assert img.width() > 0

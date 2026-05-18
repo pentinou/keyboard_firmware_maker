@@ -27,19 +27,35 @@
     kscan0: kscan_0 {
         compatible = "zmk,kscan-gpio-matrix";
         diode-direction = "{{ diode_direction_zmk }}";
+        wakeup-source;
     };
 
 {% if has_encoder %}
+    /* Encodeurs : sur split, déclarés des deux côtés avec status="disabled" par
+     * défaut. Chaque overlay (left/right) active son encoder local via une
+     * surcharge status="okay". Permet d'avoir 2 sensors distincts dans le
+     * keymap (sensor 0 = left, sensor 1 = right) avec leurs propres bindings.
+     */
     left_encoder: encoder_left {
         compatible = "alps,ec11";
         a-gpios = <{{ encoder_a }} (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;
         b-gpios = <{{ encoder_b }} (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;
         steps = <80>;
+        status = "disabled";
     };
+{% if split %}
+    right_encoder: encoder_right {
+        compatible = "alps,ec11";
+        a-gpios = <{{ encoder_a }} (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;
+        b-gpios = <{{ encoder_b }} (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;
+        steps = <80>;
+        status = "disabled";
+    };
+{% endif %}
 
     sensors: sensors {
         compatible = "zmk,keymap-sensors";
-        sensors = <&left_encoder>;
+        sensors = <&left_encoder{% if split %} &right_encoder{% endif %}>;
         triggers-per-rotation = <20>;
     };
 {% endif %}
@@ -125,4 +141,35 @@
         color-mapping = <LED_COLOR_ID_GREEN LED_COLOR_ID_RED LED_COLOR_ID_BLUE>;
     };
 };
+{% endif %}
+
+{% if debug_logging %}
+/*
+ * Mode debug logging KFM : route le `zephyr,console` vers un port série USB
+ * CDC ACM virtuel. Sans ça, CONFIG_LOG_BACKEND_UART=y casse la compile car
+ * nice_nano n'a pas d'UART hardware exposé (erreur `__device_dts_ord_DT_CHOSEN_zephyr_console_ORD`).
+ *
+ * Côté hôte, capturer les logs avec :
+ *   screen /dev/ttyACM0 115200
+ */
+{% if studio_transport == "usb" %}
+/* Studio transport USB déjà actif → réutilise son node CDC ACM. */
+/ {
+    chosen {
+        zephyr,console = &snippet_studio_rpc_usb_uart;
+    };
+};
+{% else %}
+&zephyr_udc0 {
+    kfm_debug_console: kfm_debug_console {
+        compatible = "zephyr,cdc-acm-uart";
+    };
+};
+
+/ {
+    chosen {
+        zephyr,console = &kfm_debug_console;
+    };
+};
+{% endif %}
 {% endif %}

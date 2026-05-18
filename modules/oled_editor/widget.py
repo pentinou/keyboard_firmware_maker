@@ -48,6 +48,18 @@ class _OledCanvas(QWidget):
     La frame de sélection (jaune pointillée) s'ajuste à la taille réelle du contenu.
     """
 
+    # Émis quand la sélection change (mouse press / deselect). La valeur est le
+    # nom de l'item sélectionné (ex: "image:0", "layer") ou "" si aucun.
+    # Utilisé par le widget parent pour synchroniser des contrôles per-item
+    # (ex: Phase 4 OLED ZMK custom — spinbox layer suit l'image sélectionnée).
+    selection_changed = Signal(str)
+
+    # Émis quand un widget ZMK natif est déplacé par drag. Permet au parent
+    # OledWidget de re-synchroniser les QSpinBox col/line correspondants.
+    # Args : (widget_name, col, line). widget_name ∈ {zmk_battery, zmk_output,
+    # zmk_layer, zmk_peripheral}.
+    widget_position_changed = Signal(str, int, int)
+
     SCALE = 3
     CHAR_W = 6 * SCALE   # 18px par colonne curseur QMK
     PAGE_H = 8 * SCALE   # 24px par page QMK
@@ -60,11 +72,20 @@ class _OledCanvas(QWidget):
         self._drag_offset_x = 0
         self._drag_offset_y = 0
         self._selected_item: str | None = None
+        self._firmware: str = "qmk"  # défini par OledWidget.set_firmware()
         w = OLED_WIDTH * self.SCALE
         h = OLED_HEIGHT * self.SCALE
         self.setMinimumSize(w, h)
         self.setFixedSize(w, h)
         self.setMouseTracking(True)
+
+    def set_firmware(self, firmware: str) -> None:
+        """Choisit quel jeu d'overlays afficher (qmk ou zmk)."""
+        self._firmware = firmware
+        # Désélectionner si l'item courant n'existe plus dans le nouveau mode
+        if self._selected_item and not self._selected_item.startswith("image:"):
+            self._selected_item = None
+        self.update()
 
     def set_image_pixmap(self, idx: int, pixmap: QPixmap) -> None:
         """Met à jour le pixmap de l'image à l'index idx."""
@@ -129,41 +150,73 @@ class _OledCanvas(QWidget):
         if name == "crab" and s.crab_enabled:
             return (0, s.crab_line * self.PAGE_H,
                     OLED_WIDTH * self.SCALE, 4 * self.PAGE_H)
+        # ZMK widgets natifs — taille approximative du rendu LVGL
+        if name == "zmk_battery" and s.zmk_battery.enabled:
+            return (s.zmk_battery.col * self.CHAR_W, s.zmk_battery.line * self.PAGE_H,
+                    4 * self.CHAR_W, 2 * self.PAGE_H)
+        if name == "zmk_output" and s.zmk_output.enabled:
+            return (s.zmk_output.col * self.CHAR_W, s.zmk_output.line * self.PAGE_H,
+                    4 * self.CHAR_W, 2 * self.PAGE_H)
+        if name == "zmk_layer" and s.zmk_layer.enabled:
+            return (s.zmk_layer.col * self.CHAR_W, s.zmk_layer.line * self.PAGE_H,
+                    5 * self.CHAR_W, 2 * self.PAGE_H)
+        if name == "zmk_peripheral" and s.zmk_peripheral.enabled:
+            return (s.zmk_peripheral.col * self.CHAR_W, s.zmk_peripheral.line * self.PAGE_H,
+                    3 * self.CHAR_W, 2 * self.PAGE_H)
         return None
 
     def _overlay_items(self) -> list[tuple[str, tuple[int, int, int, int], QColor, str]]:
-        """Liste des overlays visibles (hors images) : (name, rect, color, label)."""
+        """Liste des overlays visibles (hors images) : (name, rect, color, label).
+
+        En mode QMK : layer/caps/wpm/rgb_mode/kfm + animations (luna, etc.).
+        En mode ZMK : widgets natifs battery/output/layer/peripheral.
+        Les images sont rendues séparément dans paintEvent quel que soit le mode.
+        """
         result = []
-        r = self._item_rect("layer")
-        if r:
-            result.append(("layer", r, QColor(0, 200, 0, 160), "LAYER"))
-        r = self._item_rect("caps_lock")
-        if r:
-            result.append(("caps_lock", r, QColor(220, 200, 0, 160), "CAPS"))
-        r = self._item_rect("wpm")
-        if r:
-            result.append(("wpm", r, QColor(0, 100, 220, 160), "WPM"))
-        r = self._item_rect("rgb_mode")
-        if r:
-            result.append(("rgb_mode", r, QColor(220, 50, 220, 160), "RGB"))
-        r = self._item_rect("kfm")
-        if r:
-            result.append(("kfm", r, QColor(160, 160, 160, 160), "<KFM>"))
-        r = self._item_rect("katawajojo")
-        if r:
-            result.append(("katawajojo", r, QColor(0, 200, 200, 160), "Ktw"))
-        r = self._item_rect("luna")
-        if r:
-            result.append(("luna", r, QColor(0, 180, 120, 160), "Luna"))
-        r = self._item_rect("ocean_dream")
-        if r:
-            result.append(("ocean_dream", r, QColor(30, 80, 220, 160), "Ocean"))
-        r = self._item_rect("bongo")
-        if r:
-            result.append(("bongo", r, QColor(220, 100, 0, 160), "BngoCat"))
-        r = self._item_rect("crab")
-        if r:
-            result.append(("crab", r, QColor(200, 60, 60, 160), "Crab"))
+        if self._firmware == "qmk":
+            r = self._item_rect("layer")
+            if r:
+                result.append(("layer", r, QColor(0, 200, 0, 160), "LAYER"))
+            r = self._item_rect("caps_lock")
+            if r:
+                result.append(("caps_lock", r, QColor(220, 200, 0, 160), "CAPS"))
+            r = self._item_rect("wpm")
+            if r:
+                result.append(("wpm", r, QColor(0, 100, 220, 160), "WPM"))
+            r = self._item_rect("rgb_mode")
+            if r:
+                result.append(("rgb_mode", r, QColor(220, 50, 220, 160), "RGB"))
+            r = self._item_rect("kfm")
+            if r:
+                result.append(("kfm", r, QColor(160, 160, 160, 160), "<KFM>"))
+            r = self._item_rect("katawajojo")
+            if r:
+                result.append(("katawajojo", r, QColor(0, 200, 200, 160), "Ktw"))
+            r = self._item_rect("luna")
+            if r:
+                result.append(("luna", r, QColor(0, 180, 120, 160), "Luna"))
+            r = self._item_rect("ocean_dream")
+            if r:
+                result.append(("ocean_dream", r, QColor(30, 80, 220, 160), "Ocean"))
+            r = self._item_rect("bongo")
+            if r:
+                result.append(("bongo", r, QColor(220, 100, 0, 160), "BngoCat"))
+            r = self._item_rect("crab")
+            if r:
+                result.append(("crab", r, QColor(200, 60, 60, 160), "Crab"))
+        elif self._firmware == "zmk":
+            r = self._item_rect("zmk_battery")
+            if r:
+                result.append(("zmk_battery", r, QColor(50, 130, 220, 160), "BAT"))
+            r = self._item_rect("zmk_output")
+            if r:
+                result.append(("zmk_output", r, QColor(150, 80, 220, 160), "OUT"))
+            r = self._item_rect("zmk_layer")
+            if r:
+                result.append(("zmk_layer", r, QColor(70, 200, 70, 160), "LAY"))
+            r = self._item_rect("zmk_peripheral")
+            if r:
+                result.append(("zmk_peripheral", r, QColor(220, 130, 50, 160), "PER"))
         return result
 
     def paintEvent(self, event) -> None:  # noqa: N802
@@ -194,12 +247,16 @@ class _OledCanvas(QWidget):
 
         # Draw overlays
         for name, (x, y, w, h), color, label in self._overlay_items():
-            painter.fillRect(x, y, w, h, color)
-            border_color = QColor(color.red(), color.green(), color.blue(), 255)
-            painter.setPen(QPen(border_color))
-            painter.drawRect(x, y, w - 1, h - 1)
-            painter.setPen(QPen(QColor(255, 255, 255)))
-            painter.drawText(x + 3, y + h // 2 + 4, label)
+            if name.startswith("zmk_"):
+                # Rendu fidèle au widget OLED ZMK natif (blanc sur noir)
+                self._paint_zmk_widget(painter, name, x, y, w, h)
+            else:
+                painter.fillRect(x, y, w, h, color)
+                border_color = QColor(color.red(), color.green(), color.blue(), 255)
+                painter.setPen(QPen(border_color))
+                painter.drawRect(x, y, w - 1, h - 1)
+                painter.setPen(QPen(QColor(255, 255, 255)))
+                painter.drawText(x + 3, y + h // 2 + 4, label)
 
         # Selection frame (yellow dashed) around selected item
         if self._selected_item:
@@ -223,6 +280,7 @@ class _OledCanvas(QWidget):
                 self._drag_offset_x = px - x
                 self._drag_offset_y = py - y
                 self._selected_item = name
+                self.selection_changed.emit(name)
                 self.update()
                 return
 
@@ -237,11 +295,13 @@ class _OledCanvas(QWidget):
                 self._drag_offset_x = px - x
                 self._drag_offset_y = py - y
                 self._selected_item = f"image:{i}"
+                self.selection_changed.emit(self._selected_item)
                 self.update()
                 return
 
         # Click on empty area → deselect
         self._selected_item = None
+        self.selection_changed.emit("")
         self.update()
 
     # Height in pages for each item type (for drag clamping)
@@ -249,6 +309,13 @@ class _OledCanvas(QWidget):
         "layer": 3, "caps_lock": 3, "rgb_mode": 4,
         "wpm": 1, "kfm": 1,
         "katawajojo": 3, "luna": 3, "ocean_dream": 16, "bongo": 4, "crab": 4,
+        "zmk_battery": 2, "zmk_output": 2, "zmk_layer": 2, "zmk_peripheral": 2,
+    }
+
+    # Width in cols (6 px) pour les items qui n'occupent PAS toute la largeur OLED.
+    # Absent → comportement legacy (max_col = 4, suffisant pour overlays QMK full-width).
+    _ITEM_COLS = {
+        "zmk_battery": 4, "zmk_output": 4, "zmk_layer": 5, "zmk_peripheral": 3,
     }
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
@@ -256,11 +323,17 @@ class _OledCanvas(QWidget):
             return
         px = int(event.position().x())
         py = int(event.position().y())
-        new_col = max(0, min((px - self._drag_offset_x) // self.CHAR_W, 4))
+        item_w = self._ITEM_COLS.get(self._dragging_item)
+        if item_w is not None:
+            max_col = max(0, (OLED_WIDTH - item_w * 6) // 6)
+        else:
+            max_col = 4
+        new_col = max(0, min((px - self._drag_offset_x) // self.CHAR_W, max_col))
         item_pages = self._ITEM_PAGES.get(self._dragging_item, 1)
         max_line = 16 - item_pages
         new_line = max(0, min((py - self._drag_offset_y) // self.PAGE_H, max_line))
         s = self._side
+        emit_zmk_pos = False
         if self._dragging_item.startswith("image:"):
             idx = int(self._dragging_item.split(":")[1])
             if idx < len(s.images):
@@ -291,10 +364,124 @@ class _OledCanvas(QWidget):
             s.bongo_line = new_line
         elif self._dragging_item == "crab":
             s.crab_line = new_line
+        elif self._dragging_item == "zmk_battery":
+            s.zmk_battery.col = new_col
+            s.zmk_battery.line = new_line
+            emit_zmk_pos = True
+        elif self._dragging_item == "zmk_output":
+            s.zmk_output.col = new_col
+            s.zmk_output.line = new_line
+            emit_zmk_pos = True
+        elif self._dragging_item == "zmk_layer":
+            s.zmk_layer.col = new_col
+            s.zmk_layer.line = new_line
+            emit_zmk_pos = True
+        elif self._dragging_item == "zmk_peripheral":
+            s.zmk_peripheral.col = new_col
+            s.zmk_peripheral.line = new_line
+            emit_zmk_pos = True
+        if emit_zmk_pos:
+            self.widget_position_changed.emit(self._dragging_item, new_col, new_line)
         self.update()
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
         self._dragging_item = None
+
+    # ─── Rendu fidèle des widgets ZMK natifs ──────────────────────────────────
+    # Style monochrome blanc sur noir, comme l'OLED réel. Les coordonnées sont
+    # en pixels widget (= pixels OLED × SCALE). Un "OLED pixel" virtuel est
+    # donc un carré de SCALE × SCALE pixels widget.
+
+    def _paint_zmk_widget(self, painter: QPainter, name: str, x: int, y: int, w: int, h: int) -> None:
+        """Dispatcher vers le rendu fidèle du widget ZMK donné."""
+        # Fond noir (OLED éteint)
+        painter.fillRect(x, y, w, h, QColor(0, 0, 0))
+        # Contour discret pour matérialiser la zone draggable (gris foncé,
+        # invisible si l'OLED est en pleine zone d'image)
+        painter.setPen(QPen(QColor(70, 70, 70)))
+        painter.drawRect(x, y, w - 1, h - 1)
+        # Le contenu se dessine en blanc (pixel OLED allumé)
+        painter.setPen(QPen(QColor(255, 255, 255)))
+        painter.setBrush(QColor(255, 255, 255))
+        if name == "zmk_battery":
+            self._paint_battery_icon(painter, x, y, w, h)
+        elif name == "zmk_output":
+            self._paint_output_icon(painter, x, y, w, h)
+        elif name == "zmk_layer":
+            self._paint_layer_text(painter, x, y, w, h)
+        elif name == "zmk_peripheral":
+            self._paint_peripheral_icon(painter, x, y, w, h)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+
+    def _paint_battery_icon(self, painter: QPainter, x: int, y: int, w: int, h: int) -> None:
+        """Icône batterie horizontale 14×8 px OLED, remplie à 70 % (valeur fictive)."""
+        s = self.SCALE
+        # Marge intérieure de 2 px OLED
+        bx = x + 2 * s
+        by = y + (h - 8 * s) // 2
+        bw = 14 * s
+        bh = 8 * s
+        # Contour batterie
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(bx, by, bw, bh)
+        # Tip à droite (2×4 px OLED)
+        tip_h = 4 * s
+        painter.fillRect(bx + bw, by + (bh - tip_h) // 2, 2 * s, tip_h, QColor(255, 255, 255))
+        # Remplissage à 70 % avec marge intérieure 1 px
+        fill_w = int((bw - 2 * s) * 0.7)
+        painter.fillRect(bx + 1 * s, by + 1 * s, fill_w, bh - 2 * s, QColor(255, 255, 255))
+        # Texte "70%" à droite si la place le permet
+        if w >= 22 * s:
+            font = painter.font()
+            font.setPixelSize(6 * s)
+            font.setFamily("monospace")
+            painter.setFont(font)
+            painter.setPen(QPen(QColor(255, 255, 255)))
+            painter.drawText(bx + bw + 4 * s, by + bh - 1, "70%")
+
+    def _paint_output_icon(self, painter: QPainter, x: int, y: int, w: int, h: int) -> None:
+        """Icône BLE + numéro de profil (style ZMK natif)."""
+        s = self.SCALE
+        # Petite icône Bluetooth stylisée à gauche (forme losange croisé)
+        cx = x + 4 * s
+        cy = y + h // 2
+        # Trait vertical principal
+        painter.setPen(QPen(QColor(255, 255, 255), s))
+        painter.drawLine(cx, cy - 4 * s, cx, cy + 4 * s)
+        # Triangles "supérieur" et "inférieur" du B Bluetooth
+        painter.drawLine(cx, cy - 4 * s, cx + 3 * s, cy - 1 * s)
+        painter.drawLine(cx + 3 * s, cy - 1 * s, cx, cy + 2 * s)
+        painter.drawLine(cx, cy + 4 * s, cx + 3 * s, cy + 1 * s)
+        painter.drawLine(cx + 3 * s, cy + 1 * s, cx, cy - 2 * s)
+        # Texte "BLE 1" à droite
+        font = painter.font()
+        font.setPixelSize(6 * s)
+        font.setFamily("monospace")
+        painter.setFont(font)
+        painter.drawText(x + 9 * s, cy + 2 * s, "BLE 1")
+
+    def _paint_layer_text(self, painter: QPainter, x: int, y: int, w: int, h: int) -> None:
+        """Affichage couche active — texte 'Layer 0' (style ZMK natif)."""
+        s = self.SCALE
+        font = painter.font()
+        font.setPixelSize(6 * s)
+        font.setFamily("monospace")
+        painter.setFont(font)
+        # 2 lignes : "LAYER" puis "  0"
+        painter.drawText(x + 2 * s, y + 7 * s, "LAYER")
+        painter.drawText(x + 2 * s, y + 14 * s, "  0")
+
+    def _paint_peripheral_icon(self, painter: QPainter, x: int, y: int, w: int, h: int) -> None:
+        """Icône lien split — 2 carrés reliés par une ligne (état connecté)."""
+        s = self.SCALE
+        cy = y + h // 2
+        # Carré gauche
+        painter.fillRect(x + 2 * s, cy - 2 * s, 4 * s, 4 * s, QColor(255, 255, 255))
+        # Carré droit
+        painter.fillRect(x + w - 6 * s, cy - 2 * s, 4 * s, 4 * s, QColor(255, 255, 255))
+        # Ligne de connexion entre les deux
+        painter.setPen(QPen(QColor(255, 255, 255), s))
+        painter.drawLine(x + 6 * s, cy, x + w - 6 * s, cy)
 
 
 class _ConversionWorker(QThread):
@@ -341,9 +528,12 @@ class OledWidget(QWidget):
         self._canvas_right: _OledCanvas | None = None
         self._group_left: QGroupBox | None = None
         self._group_right: QGroupBox | None = None
-        # Widgets désactivés en mode ZMK (overlays QMK, boutons image, canvas, anti-burnin).
-        # ZMK affiche uniquement le status screen built-in, aucune de ces features ne se compile.
+        # Widgets cachés en mode ZMK (overlays QMK, anti-burnin) — non compilables côté ZMK.
+        # En revanche image + canvas restent visibles : Phase 1 ZMK custom OLED réutilise
+        # le pipeline d'images. Anti-burnin reste QMK-only car ZMK gère le sleep différemment.
         self._qmk_only_widgets: list[QWidget] = []
+        # Widgets visibles uniquement en mode ZMK (Phase 2 — widgets natifs ZMK).
+        self._zmk_only_widgets: list[QWidget] = []
         self._setup_ui()
         self.set_active_sides(model.keyboard.oled_sides)
         self._sync_from_model()
@@ -364,6 +554,27 @@ class OledWidget(QWidget):
         )
         self._zmk_info_banner.hide()
         main.addWidget(self._zmk_info_banner)
+
+        # ZMK uniquement : toggle "utiliser le status screen built-in ZMK"
+        # Coche pour forcer STATUS_SCREEN_BUILT_IN (layer + battery + output natifs)
+        # et désactiver l'éditeur canvas. Visible seulement en mode ZMK.
+        self._zmk_builtin_screen_check = QCheckBox(tr("oled.zmk.use_builtin_screen"))
+        self._zmk_builtin_screen_check.setObjectName("zmk_builtin_screen_check")
+        self._zmk_builtin_screen_check.setChecked(bool(self._model.oled.use_builtin_screen))
+        self._zmk_builtin_screen_check.stateChanged.connect(self._on_use_builtin_screen_changed)
+        self._zmk_builtin_screen_check.hide()
+        main.addWidget(self._zmk_builtin_screen_check)
+        self._zmk_only_widgets.append(self._zmk_builtin_screen_check)
+
+        # ZMK uniquement : affiche le % de batterie en texte à côté de l'icône
+        # (CONFIG_ZMK_WIDGET_BATTERY_STATUS_SHOW_PERCENTAGE=y)
+        self._zmk_battery_pct_check = QCheckBox(tr("oled.zmk.show_battery_percentage"))
+        self._zmk_battery_pct_check.setObjectName("zmk_battery_pct_check")
+        self._zmk_battery_pct_check.setChecked(bool(self._model.oled.show_battery_percentage))
+        self._zmk_battery_pct_check.stateChanged.connect(self._on_show_battery_pct_changed)
+        self._zmk_battery_pct_check.hide()
+        main.addWidget(self._zmk_battery_pct_check)
+        self._zmk_only_widgets.append(self._zmk_battery_pct_check)
 
         self._anti_burnin_check = QCheckBox(tr("oled.anti_burnin"))
         self._anti_burnin_check.setObjectName("anti_burnin_check")
@@ -399,11 +610,12 @@ class OledWidget(QWidget):
         group = QGroupBox(title)
         vl = QVBoxLayout(group)
 
+        # Import image — partagé QMK / ZMK (le pipeline ZMK custom OLED utilise
+        # les mêmes images que QMK).
         btn = QPushButton(tr("oled.import_btn"))
         btn.setObjectName(f"import_btn_{side}")
         btn.clicked.connect(lambda _=None, s=side: self._on_import_clicked(s))
         vl.addWidget(btn)
-        self._qmk_only_widgets.append(btn)
 
         utils_label = QLabel(f"<b>{tr('oled.group.utils')}</b>")
         vl.addWidget(utils_label)
@@ -441,29 +653,109 @@ class OledWidget(QWidget):
             vl.addWidget(cb)
             self._qmk_only_widgets.append(cb)
 
+        # Widgets ZMK natifs (Phase 2) — uniquement visibles en mode ZMK.
+        zmk_label = QLabel(f"<b>{tr('oled.group.zmk_widgets')}</b>")
+        vl.addWidget(zmk_label)
+        self._zmk_only_widgets.append(zmk_label)
+        # Battery + show_peer dans une même ligne pour économiser l'espace.
+        # Layer / output uniquement côté gauche (central). Peripheral uniquement côté droit.
+        zmk_widget_specs: list[tuple[str, str]] = [("zmk_battery", tr("oled.zmk_widget.battery"))]
+        if side == "left":
+            zmk_widget_specs += [
+                ("zmk_output", tr("oled.zmk_widget.output")),
+                ("zmk_layer", tr("oled.zmk_widget.layer")),
+            ]
+        if side == "right":
+            zmk_widget_specs.append(("zmk_peripheral", tr("oled.zmk_widget.peripheral")))
+        for name, label in zmk_widget_specs:
+            row = QHBoxLayout()
+            cb = QCheckBox(label)
+            cb.setObjectName(f"{side}_{name}_check")
+            cb.stateChanged.connect(
+                lambda state, s=side, n=name: self._on_check_changed(s, n, bool(state))
+            )
+            row.addWidget(cb)
+            col_spin = QSpinBox()
+            col_spin.setObjectName(f"{side}_{name}_col")
+            col_spin.setPrefix("col ")
+            col_spin.setRange(0, 5)
+            col_spin.valueChanged.connect(
+                lambda v, s=side, n=name: self._on_zmk_widget_pos_changed(s, n, "col", v)
+            )
+            row.addWidget(col_spin)
+            line_spin = QSpinBox()
+            line_spin.setObjectName(f"{side}_{name}_line")
+            line_spin.setPrefix("line ")
+            line_spin.setRange(0, 15)
+            line_spin.valueChanged.connect(
+                lambda v, s=side, n=name: self._on_zmk_widget_pos_changed(s, n, "line", v)
+            )
+            row.addWidget(line_spin)
+            row.addStretch()
+            wrapper = QWidget()
+            wrapper.setLayout(row)
+            wrapper.setObjectName(f"{side}_{name}_row")
+            vl.addWidget(wrapper)
+            self._zmk_only_widgets.append(wrapper)
+        # show_peer pour battery (central only)
+        if side == "left":
+            peer_cb = QCheckBox(tr("oled.zmk_widget.battery_show_peer"))
+            peer_cb.setObjectName(f"{side}_zmk_battery_show_peer")
+            peer_cb.stateChanged.connect(
+                lambda state, s=side: self._on_zmk_battery_show_peer_changed(s, bool(state))
+            )
+            vl.addWidget(peer_cb)
+            self._zmk_only_widgets.append(peer_cb)
+
         btn_neg = QPushButton(tr("oled.btn.negative"))
         btn_neg.setObjectName(f"negative_btn_{side}")
         btn_neg.clicked.connect(lambda _=None, s=side: self._on_negative_clicked(s))
         vl.addWidget(btn_neg)
-        self._qmk_only_widgets.append(btn_neg)
 
         btn_rot = QPushButton(tr("oled.btn.rotate"))
         btn_rot.setObjectName(f"rotate_btn_{side}")
         btn_rot.clicked.connect(lambda _=None, s=side: self._on_rotate_clicked(s))
         vl.addWidget(btn_rot)
-        self._qmk_only_widgets.append(btn_rot)
+
+        # Phase 4 OLED ZMK custom — spinbox couche pour l'image sélectionnée.
+        # -1 = toutes couches (image globale). 0/1/.../9 = image visible
+        # uniquement quand cette couche est la plus haute active.
+        layer_row = QHBoxLayout()
+        layer_label = QLabel(tr("oled.zmk_image.layer_label"))
+        layer_row.addWidget(layer_label)
+        layer_spin = QSpinBox()
+        layer_spin.setObjectName(f"image_layer_spin_{side}")
+        layer_spin.setRange(-1, 9)
+        layer_spin.setSpecialValueText(tr("oled.zmk_image.layer_all"))
+        layer_spin.setValue(-1)
+        layer_spin.valueChanged.connect(
+            lambda v, s=side: self._on_image_layer_changed(s, v)
+        )
+        layer_row.addWidget(layer_spin)
+        layer_row.addStretch()
+        layer_wrapper = QWidget()
+        layer_wrapper.setLayout(layer_row)
+        layer_wrapper.setObjectName(f"image_layer_row_{side}")
+        vl.addWidget(layer_wrapper)
+        self._zmk_only_widgets.append(layer_wrapper)
 
         btn_reset = QPushButton(tr("oled.btn.reset"))
         btn_reset.setObjectName(f"reset_btn_{side}")
         btn_reset.clicked.connect(lambda _=None, s=side: self._on_reset_clicked(s))
         vl.addWidget(btn_reset)
-        self._qmk_only_widgets.append(btn_reset)
 
         side_config = self._model.oled.left if side == "left" else self._model.oled.right
         canvas = _OledCanvas(side_config)
         canvas.setObjectName(f"canvas_{side}")
+        # Phase 4 — sync spinbox layer avec l'image sélectionnée sur le canvas.
+        canvas.selection_changed.connect(
+            lambda _name, s=side: self._sync_image_layer_spinbox(s)
+        )
+        # Drag d'un widget ZMK natif → re-sync les QSpinBox col/line correspondants.
+        canvas.widget_position_changed.connect(
+            lambda n, c, l, s=side: self._sync_zmk_widget_spinbox(s, n, c, l)
+        )
         vl.addWidget(canvas)
-        self._qmk_only_widgets.append(canvas)
 
         if side == "left":
             self._canvas_left = canvas
@@ -564,6 +856,26 @@ class OledWidget(QWidget):
         self._model.oled.anti_burnin = bool(state)
         logger.info("Anti burn-in : %s", bool(state))
 
+    def _on_use_builtin_screen_changed(self, state: int) -> None:
+        """Toggle ZMK built-in screen : force STATUS_SCREEN_BUILT_IN.
+
+        Quand activé, l'éditeur canvas (images + widgets ZMK) est désactivé
+        car le firmware ignorera ces éléments — il utilisera le screen natif
+        ZMK (layer + battery + output).
+        """
+        enabled = bool(state)
+        self._model.oled.use_builtin_screen = enabled
+        # Désactive / réactive les contrôles de l'éditeur custom
+        for canvas in (self._canvas_left, self._canvas_right):
+            if canvas is not None:
+                canvas.setEnabled(not enabled)
+        logger.info("OLED ZMK : built-in screen = %s", enabled)
+
+    def _on_show_battery_pct_changed(self, state: int) -> None:
+        """Toggle pourcentage batterie texte dans le widget natif."""
+        self._model.oled.show_battery_percentage = bool(state)
+        logger.info("OLED ZMK : show battery %% = %s", bool(state))
+
     def _on_sleep_changed(self, state: int) -> None:
         enabled = bool(state)
         self._model.oled.sleep_enabled = enabled
@@ -600,10 +912,103 @@ class OledWidget(QWidget):
             side_config.bongo_enabled = checked
         elif name == "crab":
             side_config.crab_enabled = checked
+        elif name == "zmk_battery":
+            side_config.zmk_battery.enabled = checked
+        elif name == "zmk_output":
+            side_config.zmk_output.enabled = checked
+        elif name == "zmk_layer":
+            side_config.zmk_layer.enabled = checked
+        elif name == "zmk_peripheral":
+            side_config.zmk_peripheral.enabled = checked
         canvas = self._canvas_left if side == "left" else self._canvas_right
         if canvas:
             canvas.update()
         logger.info("Overlay %s.%s : %s", side, name, checked)
+
+    def _on_zmk_widget_pos_changed(self, side: str, name: str, axis: str, value: int) -> None:
+        """Met à jour la position (col ou line) d'un widget ZMK dans le modèle."""
+        side_config = self._model.oled.left if side == "left" else self._model.oled.right
+        widget = {
+            "zmk_battery": side_config.zmk_battery,
+            "zmk_output": side_config.zmk_output,
+            "zmk_layer": side_config.zmk_layer,
+            "zmk_peripheral": side_config.zmk_peripheral,
+        }.get(name)
+        if widget is None:
+            return
+        if axis == "col":
+            widget.col = value
+        elif axis == "line":
+            widget.line = value
+        canvas = self._canvas_left if side == "left" else self._canvas_right
+        if canvas:
+            canvas.update()
+        logger.info("ZMK widget %s.%s.%s = %d", side, name, axis, value)
+
+    def _sync_zmk_widget_spinbox(self, side: str, name: str, col: int, line: int) -> None:
+        """Synchronise les QSpinBox col/line après un drag canvas du widget ZMK.
+
+        blockSignals évite de réémettre `_on_zmk_widget_pos_changed` (loop).
+        """
+        col_sp = self.findChild(QSpinBox, f"{side}_{name}_col")
+        if col_sp:
+            col_sp.blockSignals(True)
+            col_sp.setValue(col)
+            col_sp.blockSignals(False)
+        line_sp = self.findChild(QSpinBox, f"{side}_{name}_line")
+        if line_sp:
+            line_sp.blockSignals(True)
+            line_sp.setValue(line)
+            line_sp.blockSignals(False)
+
+    def _on_zmk_battery_show_peer_changed(self, side: str, checked: bool) -> None:
+        side_config = self._model.oled.left if side == "left" else self._model.oled.right
+        side_config.zmk_battery.show_peer = checked
+        logger.info("ZMK widget %s.zmk_battery.show_peer = %s", side, checked)
+
+    def _on_image_layer_changed(self, side: str, value: int) -> None:
+        """Met à jour le champ `layer` de l'image sélectionnée sur ce côté.
+
+        Si aucune image n'est sélectionnée, ignore l'événement avec un log.
+        Phase 4 — assignation per-image d'une couche keymap pour le pipeline
+        layer-aware ZMK. -1 = toutes couches, 0..9 = couche spécifique.
+        """
+        canvas = self._canvas_left if side == "left" else self._canvas_right
+        if canvas is None:
+            return
+        selected = canvas._selected_item
+        if selected is None or not selected.startswith("image:"):
+            logger.debug("Layer change %s = %d ignoré : pas d'image sélectionnée", side, value)
+            return
+        idx = int(selected.split(":")[1])
+        side_config = self._model.oled.left if side == "left" else self._model.oled.right
+        if idx >= len(side_config.images):
+            return
+        side_config.images[idx].layer = value
+        logger.info("Image %s[%d] layer = %d", side, idx, value)
+
+    def _sync_image_layer_spinbox(self, side: str) -> None:
+        """Met à jour le spinbox `layer` selon l'image actuellement sélectionnée.
+
+        Appelé après changement de sélection canvas (mouse press) pour refléter
+        la couche assignée à l'image que l'utilisateur vient de cliquer.
+        """
+        canvas = self._canvas_left if side == "left" else self._canvas_right
+        if canvas is None:
+            return
+        sp = self.findChild(QSpinBox, f"image_layer_spin_{side}")
+        if sp is None:
+            return
+        selected = canvas._selected_item
+        if selected is None or not selected.startswith("image:"):
+            return
+        idx = int(selected.split(":")[1])
+        side_config = self._model.oled.left if side == "left" else self._model.oled.right
+        if idx >= len(side_config.images):
+            return
+        sp.blockSignals(True)
+        sp.setValue(side_config.images[idx].layer)
+        sp.blockSignals(False)
 
     def _on_negative_clicked(self, side: str) -> None:
         """Bascule l'inversion de l'image sélectionnée sur ce côté."""
@@ -681,16 +1086,22 @@ class OledWidget(QWidget):
     def set_firmware(self, firmware: str) -> None:
         """Adapte l'UI au firmware cible (qmk/zmk).
 
-        En ZMK, l'OLED affiche uniquement le status screen built-in (layer, batterie,
-        USB/BLE) — aucune animation custom, overlay ou image n'est compilable. On masque
-        donc tous les widgets QMK-only (overlays, boutons image, canvas, anti-burnin) et
-        on affiche le bandeau d'info. Les contrôles de sleep restent disponibles car
-        ZMK les utilise via CONFIG_ZMK_IDLE_SLEEP_TIMEOUT.
+        Phase 2 (2026-05-03) : ZMK custom OLED supporte image plein écran + widgets
+        natifs ZMK (battery / output / layer / peripheral). L'image et le canvas
+        restent visibles dans les deux modes. Les overlays QMK (layer/caps/wpm/etc.
+        et animations) sont masqués en ZMK car ils dépendent de code C QMK qui
+        n'a pas d'équivalent ZMK natif. Les widgets ZMK sont masqués en QMK.
         """
         is_zmk = firmware == "zmk"
         self._zmk_info_banner.setVisible(is_zmk)
         for w in self._qmk_only_widgets:
             w.setVisible(not is_zmk)
+        for w in self._zmk_only_widgets:
+            w.setVisible(is_zmk)
+        # Propagation aux canvases : ils décident quels overlays rendre.
+        for canvas in (self._canvas_left, self._canvas_right):
+            if canvas is not None:
+                canvas.set_firmware(firmware)
 
     def _sync_from_model(self) -> None:
         """Synchronise les checkboxes et le canvas depuis le modèle (ex : après chargement projet)."""
@@ -698,6 +1109,23 @@ class OledWidget(QWidget):
         if cb:
             cb.blockSignals(True)
             cb.setChecked(self._model.oled.anti_burnin)
+            cb.blockSignals(False)
+        # ZMK built-in screen toggle
+        builtin_enabled = bool(self._model.oled.use_builtin_screen)
+        cb = self.findChild(QCheckBox, "zmk_builtin_screen_check")
+        if cb:
+            cb.blockSignals(True)
+            cb.setChecked(builtin_enabled)
+            cb.blockSignals(False)
+        # Grise les canvas selon l'état builtin
+        for canvas in (self._canvas_left, self._canvas_right):
+            if canvas is not None:
+                canvas.setEnabled(not builtin_enabled)
+        # ZMK show_battery_percentage
+        cb = self.findChild(QCheckBox, "zmk_battery_pct_check")
+        if cb:
+            cb.blockSignals(True)
+            cb.setChecked(bool(self._model.oled.show_battery_percentage))
             cb.blockSignals(False)
         sleep_enabled = self._model.oled.sleep_enabled
         cb = self.findChild(QCheckBox, "sleep_check")
@@ -727,6 +1155,10 @@ class OledWidget(QWidget):
                 (f"{side}_ocean_dream_check", side_config.ocean_dream_enabled),
                 (f"{side}_bongo_check", side_config.bongo_enabled),
                 (f"{side}_crab_check", side_config.crab_enabled),
+                (f"{side}_zmk_battery_check", side_config.zmk_battery.enabled),
+                (f"{side}_zmk_output_check", side_config.zmk_output.enabled),
+                (f"{side}_zmk_layer_check", side_config.zmk_layer.enabled),
+                (f"{side}_zmk_peripheral_check", side_config.zmk_peripheral.enabled),
             ]
             for obj_name, value in mapping:
                 cb = self.findChild(QCheckBox, obj_name)
@@ -734,6 +1166,31 @@ class OledWidget(QWidget):
                     cb.blockSignals(True)
                     cb.setChecked(value)
                     cb.blockSignals(False)
+            # Sync ZMK widget positions (col/line spinboxes)
+            zmk_pos_mapping = [
+                (f"{side}_zmk_battery", side_config.zmk_battery.col, side_config.zmk_battery.line),
+                (f"{side}_zmk_output", side_config.zmk_output.col, side_config.zmk_output.line),
+                (f"{side}_zmk_layer", side_config.zmk_layer.col, side_config.zmk_layer.line),
+                (f"{side}_zmk_peripheral", side_config.zmk_peripheral.col, side_config.zmk_peripheral.line),
+            ]
+            for prefix, col, line in zmk_pos_mapping:
+                col_sp = self.findChild(QSpinBox, f"{prefix}_col")
+                if col_sp:
+                    col_sp.blockSignals(True)
+                    col_sp.setValue(col)
+                    col_sp.blockSignals(False)
+                line_sp = self.findChild(QSpinBox, f"{prefix}_line")
+                if line_sp:
+                    line_sp.blockSignals(True)
+                    line_sp.setValue(line)
+                    line_sp.blockSignals(False)
+            # show_peer (left only)
+            if side == "left":
+                peer_cb = self.findChild(QCheckBox, "left_zmk_battery_show_peer")
+                if peer_cb:
+                    peer_cb.blockSignals(True)
+                    peer_cb.setChecked(side_config.zmk_battery.show_peer)
+                    peer_cb.blockSignals(False)
 
             # Re-sync canvas images from model (handles project load)
             canvas = self._canvas_left if side == "left" else self._canvas_right
