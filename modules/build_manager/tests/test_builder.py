@@ -185,8 +185,9 @@ class TestBuildWorker:
         from modules.build_manager.builder import BuildWorker
         from modules.build_manager.template_generator import TemplateGenerator
 
-        # Create a fake valid .uf2 file
-        uf2_path = tmp_path / "test.uf2"
+        # Create a fake valid .uf2 file là où make l'écrit (.build/)
+        (tmp_path / ".build").mkdir()
+        uf2_path = tmp_path / ".build" / "keyboard_firmware_maker_default.uf2"
         uf2_path.write_bytes(_make_valid_uf2_block() * 2)
 
         successes: list[str] = []
@@ -212,6 +213,41 @@ class TestBuildWorker:
 
         assert len(successes) == 1
         assert successes[0].endswith(".uf2")
+
+    def test_stale_uf2_outside_build_dir_not_picked(self, qtbot, tmp_path):
+        """Un .uf2 périmé ailleurs dans vial-qmk ne doit pas être pris pour
+        le résultat du build (régression : ancien rglob global par mtime)."""
+        from modules.build_manager.builder import BuildWorker
+        from modules.build_manager.template_generator import TemplateGenerator
+
+        # Artefact périmé à la racine (ex: copie d'un build précédent)
+        stale = tmp_path / "old_other_keyboard.uf2"
+        stale.write_bytes(_make_valid_uf2_block() * 2)
+
+        errors: list[str] = []
+        gen = MagicMock(spec=TemplateGenerator)
+        gen.generate.return_value = {}
+
+        mock_proc = MagicMock()
+        mock_proc.stdout = iter(["[100%] Done\n"])
+        mock_proc.returncode = 0
+        mock_proc.wait.return_value = None
+
+        worker = BuildWorker(
+            model=self._model(),
+            vial_qmk_dir=tmp_path,
+            gcc_path=None,
+            generator=gen,
+        )
+        worker.error.connect(errors.append)
+        worker.success.connect(lambda _: None)
+
+        with patch("subprocess.Popen", return_value=mock_proc):
+            worker.run()
+
+        # Pas de .uf2 dans .build/ → erreur "introuvable", pas le stale
+        assert len(errors) == 1
+        assert "introuvable" in errors[0].lower()
 
     def test_stop_kills_active_process(self, tmp_path):
         """stop() doit tuer le sous-processus make en cours (parité ZmkBuildWorker)."""

@@ -213,12 +213,19 @@ class BuildWorker(QThread):
             self.error.emit(f"{diag.message}\n\n{diag.diagnosis}")
             return None
 
-        # M2 : chercher le .uf2 le plus récent (tri par mtime décroissant)
+        # M2 : le Makefile QMK écrit .build/<keyboard>_<keymap>.uf2. On cible
+        # ce fichier exact — l'ancien rglob sur tout vial-qmk pouvait ramasser
+        # un artefact périmé d'un autre build et le présenter comme le résultat.
+        build_dir = self._vial_qmk_dir / ".build"
+        uf2_path = build_dir / f"{_QMK_KEYBOARD_NAME}_{_QMK_KEYMAP_NAME}.uf2"
+        if uf2_path.is_file():
+            return uf2_path
+        # Fallback si QMK change le nommage : le plus récent de .build/ uniquement
         candidates = sorted(
-            self._vial_qmk_dir.rglob("*.uf2"),
+            build_dir.glob("*.uf2"),
             key=lambda p: p.stat().st_mtime,
             reverse=True,
-        )
+        ) if build_dir.is_dir() else []
         if candidates:
             return candidates[0]
 
