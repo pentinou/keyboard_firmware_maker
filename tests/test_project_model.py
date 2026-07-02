@@ -525,3 +525,53 @@ def test_rgb_effect_serialization():
     assert effect_data["color_secondary"] == "#FF8800"
     assert effect_data["fade_ms"] == 750
     assert effect_data["trigger_key"] == "KEY_A"
+
+
+# ─────────────────────────── Désérialisation défensive (2026-07-02) ──
+
+def test_from_dict_survives_corrupted_int_values():
+    """Un projet JSON corrompu (ints remplacés par des strings/None/listes)
+    doit charger avec les défauts, pas échouer en bloc."""
+    data = {
+        "version": "1.0",
+        "keyboard": {"model": "sofle-v2", "mcu": "rp2040"},
+        "oled": {
+            "left": {
+                "images": [{"image_path": "x.png", "col": "abc", "line": None}],
+                "layer": {"enabled": True, "col": [], "line": "12"},
+                "katawajojo_enabled": True,
+                "katawajojo_line": "pas-un-nombre",
+                "bongo_line": None,
+                "zmk_battery": {"enabled": True, "col": "oops", "line": 2},
+            },
+            "sleep_timeout_s": "beaucoup",
+        },
+        "rgb": {
+            "effects": [{"type": "static", "fade_ms": "vite", "speed": "999"}],
+            "custom_effects": [{
+                "name": "Vague",
+                "tracks": [{
+                    "keys_offset": [{"dr": "1", "dc": None}],
+                    "steps": [{"time_ms": "0", "hold_ms": [], "fade_ms": "200"}],
+                }],
+            }],
+        },
+        "advanced": {"tapping_term_ms": "abc", "mousekey_max_speed": None},
+    }
+    model = ProjectModel.from_dict(data)
+    # Valeurs corrompues → défauts
+    assert model.oled.left.images[0].col == 0
+    assert model.oled.left.layer.line == 12          # "12" numérique converti
+    assert model.oled.left.katawajojo_line == 13
+    assert model.oled.left.bongo_line == 0
+    assert model.oled.left.zmk_battery.col == 0
+    assert model.oled.sleep_timeout_s == 240
+    assert model.rgb.effects[0].fade_ms == 500
+    assert model.rgb.effects[0].speed == 255          # "999" converti puis clampé
+    assert model.advanced.tapping_term_ms == 200
+    assert model.advanced.mousekey_max_speed == 10
+    # Les offsets/steps produisent des ints (sinon C invalide à la génération)
+    off = model.rgb.custom_effects[0].tracks[0].keys_offset[0]
+    assert off.dr == 1 and off.dc == 0
+    step = model.rgb.custom_effects[0].tracks[0].steps[0]
+    assert step.hold_ms == 0 and step.fade_ms == 200

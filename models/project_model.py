@@ -13,6 +13,18 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 
+def _as_int(data: dict[str, Any], key: str, default: int) -> int:
+    """Lit un entier de manière défensive depuis un dict JSON.
+
+    Une valeur corrompue (string non numérique, None, liste…) retourne le
+    défaut au lieu de faire échouer le chargement du projet entier.
+    """
+    try:
+        return int(data.get(key, default))
+    except (ValueError, TypeError):
+        return default
+
+
 @dataclass
 class KeyboardConfig:
     """Configuration du matériel sélectionné."""
@@ -117,17 +129,10 @@ class ZmkBatteryWidget:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ZmkBatteryWidget":
-        try:
-            col = int(data.get("col", 0))
-        except (ValueError, TypeError):
-            col = 0
-        try:
-            line = int(data.get("line", 0))
-        except (ValueError, TypeError):
-            line = 0
         return cls(
             enabled=bool(data.get("enabled", False)),
-            col=col, line=line,
+            col=_as_int(data, "col", 0),
+            line=_as_int(data, "line", 0),
             show_peer=bool(data.get("show_peer", False)),
         )
 
@@ -149,18 +154,10 @@ class OledOverlayItem:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "OledOverlayItem":
-        try:
-            col = int(data.get("col", 0))
-        except (ValueError, TypeError):
-            col = 0
-        try:
-            line = int(data.get("line", 0))
-        except (ValueError, TypeError):
-            line = 0
         return cls(
             enabled=bool(data.get("enabled", False)),
-            col=col,
-            line=line,
+            col=_as_int(data, "col", 0),
+            line=_as_int(data, "line", 0),
         )
 
 
@@ -199,19 +196,14 @@ class OledImageItem:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "OledImageItem":
-        def _int(key: str, default: int) -> int:
-            try:
-                return int(data.get(key, default))
-            except (ValueError, TypeError):
-                return default
         return cls(
             image_path=data.get("image_path", ""),
-            natural_w=_int("natural_w", 32),
-            natural_h=_int("natural_h", 128),
-            col=_int("col", 0),
-            line=_int("line", 0),
+            natural_w=_as_int(data, "natural_w", 32),
+            natural_h=_as_int(data, "natural_h", 128),
+            col=_as_int(data, "col", 0),
+            line=_as_int(data, "line", 0),
             inverted=bool(data.get("inverted", False)),
-            layer=_int("layer", -1),
+            layer=_as_int(data, "layer", -1),
         )
 
 
@@ -278,8 +270,8 @@ class OledSideConfig:
         elif data.get("image_path"):
             images = [OledImageItem.from_dict({
                 "image_path": data["image_path"],
-                "col": int(data.get("image_col", 0)),
-                "line": int(data.get("image_line", 0)),
+                "col": _as_int(data, "image_col", 0),
+                "line": _as_int(data, "image_line", 0),
                 "inverted": bool(data.get("image_inverted", False)),
             })]
         else:
@@ -287,12 +279,12 @@ class OledSideConfig:
         # Migration: old "luna_enabled" was actually katawajojo
         if "katawajojo_enabled" in data:
             katawajojo_enabled = bool(data.get("katawajojo_enabled", False))
-            katawajojo_line = int(data.get("katawajojo_line", 13))
+            katawajojo_line = _as_int(data, "katawajojo_line", 13)
             luna_enabled = bool(data.get("luna_enabled", False))
-            luna_line = int(data.get("luna_line", 13))
+            luna_line = _as_int(data, "luna_line", 13)
         else:
             katawajojo_enabled = bool(data.get("luna_enabled", False))
-            katawajojo_line = int(data.get("luna_line", 13))
+            katawajojo_line = _as_int(data, "luna_line", 13)
             luna_enabled = False
             luna_line = 13
         return cls(
@@ -307,11 +299,11 @@ class OledSideConfig:
             luna_enabled=luna_enabled,
             luna_line=luna_line,
             ocean_dream_enabled=bool(data.get("ocean_dream_enabled", False)),
-            ocean_dream_line=int(data.get("ocean_dream_line", 0)),
+            ocean_dream_line=_as_int(data, "ocean_dream_line", 0),
             bongo_enabled=bool(data.get("bongo_enabled", False)),
-            bongo_line=int(data.get("bongo_line", 0)),
+            bongo_line=_as_int(data, "bongo_line", 0),
             crab_enabled=bool(data.get("crab_enabled", False)),
-            crab_line=int(data.get("crab_line", 0)),
+            crab_line=_as_int(data, "crab_line", 0),
             zmk_battery=ZmkBatteryWidget.from_dict(data.get("zmk_battery") or {}),
             zmk_output=OledOverlayItem.from_dict(data.get("zmk_output") or {}),
             zmk_layer=OledOverlayItem.from_dict(data.get("zmk_layer") or {}),
@@ -362,7 +354,7 @@ class OledConfig:
             right=OledSideConfig.from_dict(right_data),
             anti_burnin=bool(data.get("anti_burnin", False)),
             sleep_enabled=bool(data.get("sleep_enabled", False)),
-            sleep_timeout_s=int(data.get("sleep_timeout_s", 240)),
+            sleep_timeout_s=_as_int(data, "sleep_timeout_s", 240),
             use_builtin_screen=bool(data.get("use_builtin_screen", False)),
             show_battery_percentage=bool(data.get("show_battery_percentage", False)),
         )
@@ -380,7 +372,7 @@ class KeyOffset:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "KeyOffset":
-        return cls(dr=data.get("dr", 0), dc=data.get("dc", 0))
+        return cls(dr=_as_int(data, "dr", 0), dc=_as_int(data, "dc", 0))
 
 
 @dataclass
@@ -413,11 +405,11 @@ class EffectStep:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "EffectStep":
         return cls(
-            time_ms=data.get("time_ms", 0),
-            color=data.get("color", "#FFFFFF"),
-            hold_ms=data.get("hold_ms", 0),
-            fade_ms=data.get("fade_ms", 0),
-            color_to=data.get("color_to", ""),
+            time_ms=_as_int(data, "time_ms", 0),
+            color=str(data.get("color", "#FFFFFF")),
+            hold_ms=_as_int(data, "hold_ms", 0),
+            fade_ms=_as_int(data, "fade_ms", 0),
+            color_to=str(data.get("color_to", "") or ""),
         )
 
 
@@ -534,18 +526,13 @@ class RgbEffect:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "RgbEffect":
-        def _int(key: str, default: int) -> int:
-            try:
-                return int(data.get(key, default))
-            except (ValueError, TypeError):
-                return default
         return cls(
             type=str(data.get("type", "static")),
             color_primary=str(data.get("color_primary", "#FFFFFF")),
             color_secondary=str(data.get("color_secondary", "#888888")),
-            fade_ms=_int("fade_ms", 500),
-            speed=max(0, min(255, _int("speed", 128))),
-            brightness=max(0, min(255, _int("brightness", 128))),
+            fade_ms=_as_int(data, "fade_ms", 500),
+            speed=max(0, min(255, _as_int(data, "speed", 128))),
+            brightness=max(0, min(255, _as_int(data, "brightness", 128))),
             trigger_key=data.get("trigger_key"),
         )
 
@@ -700,26 +687,26 @@ class AdvancedOptionsConfig:
             hid_indicators_enabled=bool(data.get("hid_indicators_enabled", True)),
             usb_boot_protocol=bool(data.get("usb_boot_protocol", False)),
             auto_shift_enabled=bool(data.get("auto_shift_enabled", False)),
-            auto_shift_timeout_ms=max(50, int(data.get("auto_shift_timeout_ms", 175))),
+            auto_shift_timeout_ms=max(50, _as_int(data, "auto_shift_timeout_ms", 175)),
             ble_passkey_entry=bool(data.get("ble_passkey_entry", False)),
-            deep_sleep_timeout_min=max(1, int(data.get("deep_sleep_timeout_min", 4))),
-            battery_report_interval_s=max(10, int(data.get("battery_report_interval_s", 60))),
+            deep_sleep_timeout_min=max(1, _as_int(data, "deep_sleep_timeout_min", 4)),
+            battery_report_interval_s=max(10, _as_int(data, "battery_report_interval_s", 60)),
             soft_off_enabled=bool(data.get("soft_off_enabled", False)),
             tap_dance_enabled=bool(data.get("tap_dance_enabled", False)),
             sticky_key_enabled=bool(data.get("sticky_key_enabled", False)),
-            tapping_term_ms=max(50, int(data.get("tapping_term_ms", 200))),
-            combo_term_ms=max(10, int(data.get("combo_term_ms", 50))),
+            tapping_term_ms=max(50, _as_int(data, "tapping_term_ms", 200)),
+            combo_term_ms=max(10, _as_int(data, "combo_term_ms", 50)),
             permissive_hold=bool(data.get("permissive_hold", False)),
-            rgb_hue_start=max(0, min(359, int(data.get("rgb_hue_start", 0)))),
+            rgb_hue_start=max(0, min(359, _as_int(data, "rgb_hue_start", 0))),
             rgb_on_start=bool(data.get("rgb_on_start", True)),
             rgb_auto_off_idle=bool(data.get("rgb_auto_off_idle", False)),
             rgb_auto_off_usb=bool(data.get("rgb_auto_off_usb", False)),
             pointing_enabled=bool(data.get("pointing_enabled", False)),
             pointing_smooth_scroll=bool(data.get("pointing_smooth_scroll", False)),
             mousekey_enabled=bool(data.get("mousekey_enabled", False)),
-            mousekey_delay_ms=max(1, int(data.get("mousekey_delay_ms", 10))),
-            mousekey_interval_ms=max(1, int(data.get("mousekey_interval_ms", 20))),
-            mousekey_max_speed=max(1, int(data.get("mousekey_max_speed", 10))),
+            mousekey_delay_ms=max(1, _as_int(data, "mousekey_delay_ms", 10)),
+            mousekey_interval_ms=max(1, _as_int(data, "mousekey_interval_ms", 20)),
+            mousekey_max_speed=max(1, _as_int(data, "mousekey_max_speed", 10)),
         )
 
 
