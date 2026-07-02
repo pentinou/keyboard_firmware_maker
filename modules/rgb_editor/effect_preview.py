@@ -66,6 +66,10 @@ class EffectPreview:
         self._key_buttons = key_buttons
         self._timer = QTimer()
         self._timer.timeout.connect(self._tick)
+        # Slot actuellement connecté au timer (_tick ou _tick_custom).
+        # Permet de basculer sans disconnect à l'aveugle (RuntimeWarning
+        # "Failed to disconnect" quand le slot n'était pas connecté).
+        self._connected_slot = self._tick
         self._effect: RgbEffect | None = None
         self._custom_effect: CustomEffect | None = None
         self._step = 0
@@ -107,19 +111,18 @@ class EffectPreview:
             self._timer.setInterval(RIPPLE_INTERVAL_MS)
             self._timer.start()
 
+    def _set_timer_slot(self, slot) -> None:
+        """Bascule le slot connecté au timer (une seule connexion à la fois)."""
+        if self._connected_slot is slot:
+            return
+        self._timer.timeout.disconnect(self._connected_slot)
+        self._timer.timeout.connect(slot)
+        self._connected_slot = slot
+
     def stop(self) -> None:
         """Arrête le timer et réinitialise les couleurs des touches."""
         self._timer.stop()
-        # S'assurer que le slot normal est connecté
-        try:
-            self._timer.timeout.disconnect(self._tick_custom)
-        except RuntimeError:
-            pass
-        try:
-            self._timer.timeout.disconnect(self._tick)
-        except RuntimeError:
-            pass
-        self._timer.timeout.connect(self._tick)
+        self._set_timer_slot(self._tick)
         self._custom_effect = None
         self._reset_keys()
 
@@ -433,19 +436,13 @@ class EffectPreview:
         self._reset_keys()
         self._render_custom_frame()
         self._timer.setInterval(SMOOTH_INTERVAL_MS)
-        self._timer.timeout.disconnect(self._tick)
-        self._timer.timeout.connect(self._tick_custom)
+        self._set_timer_slot(self._tick_custom)
         self._timer.start()
 
     def stop_custom(self) -> None:
         """Arrête le preview custom et restaure le tick normal."""
         self._timer.stop()
-        try:
-            self._timer.timeout.disconnect(self._tick_custom)
-        except RuntimeError:
-            pass
-        if self._timer.receivers("timeout()") == 0:
-            self._timer.timeout.connect(self._tick)
+        self._set_timer_slot(self._tick)
         self._custom_effect = None
         self._reset_keys()
 
