@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from config import KEYBOARDS_DIR
 from i18n import tr
 from models.project_model import ProjectModel
 from modules.build_manager.builder import MCU_FLASH, BuildWorker
@@ -51,8 +52,6 @@ from modules.hardware.keyboard_loader import load_keyboard, get_firmware_type
 
 logger = logging.getLogger(__name__)
 
-BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).parent.parent.parent))
-KEYBOARDS_DIR = BASE_DIR / "keyboards"
 
 
 class BuildWidget(QWidget):

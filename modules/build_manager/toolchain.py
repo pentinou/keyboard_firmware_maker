@@ -17,11 +17,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from config import TOOLCHAIN_DIR
 
-# Résolution du répertoire racine : compatible PyInstaller (_MEIPASS) et dev
-BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).parent.parent.parent))
-TOOLCHAIN_DIR = BASE_DIR / "toolchain"
+logger = logging.getLogger(__name__)
 
 INSTALL_GUIDE_MSG = (
     "La toolchain ARM est introuvable.\n"

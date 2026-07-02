@@ -15,11 +15,12 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import sys
 from pathlib import Path
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
+
+from config import TEMPLATES_DIR
 
 from models.project_model import CustomEffect, OledSideConfig, ProjectModel
 from modules.oled_editor.processor import frame_to_qmk_bytes
@@ -27,7 +28,6 @@ from modules.hardware.keyboard_loader import KeyboardDefinition, McuPins, load_k
 
 logger = logging.getLogger(__name__)
 
-BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).parent.parent.parent))
 
 _CUSTOM_EFFECT_TYPES: frozenset[str] = frozenset()
 
@@ -37,7 +37,6 @@ _BOOTLOADER_MAP: dict[str, str] = {
     "pro_micro": "caterina",
     "elite_c":   "atmel-dfu",
 }
-TEMPLATES_DIR = BASE_DIR / "templates"
 
 # (template_filename, output_path_relative_to_output_dir)
 TEMPLATE_FILES: list[tuple[str, str]] = [

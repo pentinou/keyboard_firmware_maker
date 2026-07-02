@@ -21,12 +21,13 @@ from __future__ import annotations
 import json
 import logging
 import re
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
+
+from config import KEYBOARDS_DIR, TEMPLATES_DIR
 
 from models.project_model import OledSideConfig, ProjectModel
 from modules.hardware.keyboard_loader import KeyboardDefinition, McuPins, load_keyboard
@@ -39,9 +40,7 @@ from modules.oled_editor.processor import (
 
 logger = logging.getLogger(__name__)
 
-BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).parent.parent.parent))
-ZMK_TEMPLATES_DIR = BASE_DIR / "templates" / "zmk"
-KEYBOARDS_DIR = BASE_DIR / "keyboards"
+ZMK_TEMPLATES_DIR = TEMPLATES_DIR / "zmk"
 
 # Mapping MCU id → ZMK board name (HWMv2 qualifier form).
 # Les variantes `//zmk` / `/<soc>/zmk` sélectionnent le defconfig ZMK

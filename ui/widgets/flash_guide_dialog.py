@@ -4,7 +4,6 @@ Chargement des images depuis les assets locaux uniquement — aucun appel résea
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import TypedDict
 
@@ -21,11 +20,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from config import ASSETS_DIR as _KFM_ASSETS_DIR
 from i18n import tr
 
 # ── Assets path (compatible PyInstaller) ───────────────────────────────────
-_BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).parent.parent.parent))
-ASSETS_DIR = _BASE_DIR / "assets" / "flash_guide"
+ASSETS_DIR = _KFM_ASSETS_DIR / "flash_guide"
 
 
 class _FlashStep(TypedDict):
