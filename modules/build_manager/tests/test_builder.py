@@ -213,6 +213,31 @@ class TestBuildWorker:
         assert len(successes) == 1
         assert successes[0].endswith(".uf2")
 
+    def test_stop_kills_active_process(self, tmp_path):
+        """stop() doit tuer le sous-processus make en cours (parité ZmkBuildWorker)."""
+        from modules.build_manager.builder import BuildWorker
+
+        worker = BuildWorker(
+            model=self._model(),
+            vial_qmk_dir=tmp_path,
+            gcc_path=None,
+        )
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = None
+        worker._proc = mock_proc
+        worker.stop()
+        mock_proc.kill.assert_called_once()
+
+    def test_stop_skips_kill_if_no_process(self, tmp_path):
+        from modules.build_manager.builder import BuildWorker
+
+        worker = BuildWorker(
+            model=self._model(),
+            vial_qmk_dir=tmp_path,
+            gcc_path=None,
+        )
+        worker.stop()  # ne doit pas lever
+
 
 # ─────────────────────────────────────────── Tests BuildWidget ──
 

@@ -530,6 +530,9 @@ class BuildWidget(QWidget):
 
     def cleanup(self) -> None:
         """Tue les builds en cours. Appelé à la fermeture de l'application."""
+        if self._worker and self._worker.isRunning():
+            self._worker.stop()
+            self._worker.wait(5000)
         if self._zmk_worker and self._zmk_worker.isRunning():
             self._zmk_worker.stop()
             self._zmk_worker.wait(5000)

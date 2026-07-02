@@ -27,10 +27,19 @@ from PySide6.QtCore import QThread, Signal
 from models.project_model import ProjectModel
 from modules.build_manager.error_classifier import classify_build_error
 from modules.build_manager.msys2_manager import is_windows, resolve_make_env
+from modules.build_manager.proc_stream import (
+    ProcInterruptedError,
+    ProcTimeoutError,
+    iter_lines_with_timeout,
+)
 from modules.build_manager.template_generator import TemplateGenerator
 from modules.build_manager.uf2_validator import validate_uf2
 
 logger = logging.getLogger(__name__)
+
+# Timeout global du make : un build QMK complet prend quelques minutes,
+# 30 min couvre le pire cas (premier build MSYS2 sous Windows).
+_MAKE_TIMEOUT_S = 1800
 
 # Capacités flash par MCU (en octets)
 MCU_FLASH: dict[str, int] = {
@@ -68,6 +77,14 @@ class BuildWorker(QThread):
         self._gcc_path = gcc_path
         self._generator = generator or TemplateGenerator()
         self._log_lines: list[str] = []  # accumulé pour classify_build_error
+        self._proc: subprocess.Popen | None = None
+
+    def stop(self) -> None:
+        """Demande l'arrêt du build et tue le sous-processus make en cours."""
+        self.requestInterruption()
+        proc = self._proc
+        if proc and proc.poll() is None:
+            proc.kill()
 
     def run(self) -> None:
         self._log_lines = []
@@ -161,15 +178,33 @@ class BuildWorker(QThread):
             )
             return None
 
-        for line in proc.stdout:  # type: ignore[union-attr]
-            stripped = line.rstrip()
-            self._log_lines.append(stripped)
-            self.log_line.emit(stripped)
-            pct = _parse_progress(stripped)
-            if pct is not None:
-                # Remap [0-100] make → [15-95] total
-                remapped = 15 + int(pct * 0.80)
-                self.progress.emit(remapped)
+        self._proc = proc
+        try:
+            # Lecture via thread + queue : annulation (stop()) et timeout
+            # restent effectifs même si make se fige sans émettre de sortie.
+            for line in iter_lines_with_timeout(
+                proc, _MAKE_TIMEOUT_S, self.isInterruptionRequested
+            ):
+                stripped = line.rstrip()
+                self._log_lines.append(stripped)
+                self.log_line.emit(stripped)
+                pct = _parse_progress(stripped)
+                if pct is not None:
+                    # Remap [0-100] make → [15-95] total
+                    remapped = 15 + int(pct * 0.80)
+                    self.progress.emit(remapped)
+        except ProcInterruptedError:
+            self.log_line.emit("[INFO] Compilation annulée.")
+            self.error.emit("Compilation annulée par l'utilisateur.")
+            return None
+        except ProcTimeoutError:
+            self.error.emit(
+                f"Compilation interrompue : make sans réponse après "
+                f"{_MAKE_TIMEOUT_S // 60} minutes. Réessayez."
+            )
+            return None
+        finally:
+            self._proc = None
 
         proc.wait()
 

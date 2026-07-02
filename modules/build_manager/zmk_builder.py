@@ -20,13 +20,17 @@ import re
 import shutil
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import yaml
 from PySide6.QtCore import QThread, Signal
 
 from models.project_model import ProjectModel
+from modules.build_manager.proc_stream import (
+    ProcInterruptedError,
+    ProcTimeoutError,
+    iter_lines_with_timeout,
+)
 from modules.build_manager.zmk_template_generator import ZmkTemplateGenerator
 
 logger = logging.getLogger(__name__)
@@ -275,32 +279,33 @@ class ZmkBuildWorker(QThread):
             env=env,
         )
         self._proc = proc
-        deadline = time.monotonic() + timeout
         line_count = 0
 
         try:
-            for line in proc.stdout:  # type: ignore[union-attr]
-                if self.isInterruptionRequested():
-                    proc.kill()
-                    raise _InterruptedError
+            try:
+                # Lecture via thread + queue : timeout et annulation restent
+                # effectifs même si west se fige sans émettre de sortie
+                # (hang réseau pendant west update par exemple).
+                for line in iter_lines_with_timeout(
+                    proc, timeout, self.isInterruptionRequested
+                ):
+                    stripped = line.rstrip()
+                    self.log_line.emit(stripped)
+                    line_count += 1
 
-                if time.monotonic() > deadline:
-                    proc.kill()
-                    self.log_line.emit(f"[ERREUR] {step} — timeout ({timeout}s) dépassé.")
-                    return -1
-
-                stripped = line.rstrip()
-                self.log_line.emit(stripped)
-                line_count += 1
-
-                if progress_range is not None:
-                    lo, hi = progress_range
-                    pct = _parse_ninja_progress(stripped)
-                    if pct is not None:
-                        self.progress.emit(lo + int(pct / 100 * (hi - lo)))
-                    else:
-                        fallback = min(95, int(line_count / _WEST_UPDATE_EXPECTED_LINES * 100))
-                        self.progress.emit(lo + int(fallback / 100 * (hi - lo)))
+                    if progress_range is not None:
+                        lo, hi = progress_range
+                        pct = _parse_ninja_progress(stripped)
+                        if pct is not None:
+                            self.progress.emit(lo + int(pct / 100 * (hi - lo)))
+                        else:
+                            fallback = min(95, int(line_count / _WEST_UPDATE_EXPECTED_LINES * 100))
+                            self.progress.emit(lo + int(fallback / 100 * (hi - lo)))
+            except ProcInterruptedError:
+                raise _InterruptedError from None
+            except ProcTimeoutError:
+                self.log_line.emit(f"[ERREUR] {step} — timeout ({timeout}s) dépassé.")
+                return -1
 
             proc.wait()
         finally:
