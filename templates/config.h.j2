@@ -72,4 +72,40 @@
 {% endif %}
 {% endif %}
 
+{% if adv_nkro_enabled %}
+/* N-Key Rollover (Options avancées KFM) */
+#define FORCE_NKRO
+{% endif %}
+
+{% if adv_tapping_term_ms and adv_tapping_term_ms != 200 %}
+/* Hold-tap timing (Options avancées KFM) */
+#define TAPPING_TERM {{ adv_tapping_term_ms }}
+{% endif %}
+{% if adv_permissive_hold %}
+#define PERMISSIVE_HOLD
+{% endif %}
+
+{% if adv_combo_term_ms and adv_combo_term_ms != 50 %}
+/* Combos timing (Options avancées KFM) */
+#define COMBO_TERM {{ adv_combo_term_ms }}
+{% endif %}
+
+{% if adv_auto_shift_enabled %}
+/* Auto-shift : maintenir une touche → version shiftée (Options avancées) */
+#define AUTO_SHIFT_TIMEOUT {{ adv_auto_shift_timeout_ms | default(175) }}
+{% endif %}
+
+{% if adv_mousekey_enabled %}
+/* Mouse keys (Options avancées KFM) */
+{% if adv_mousekey_delay_ms %}
+#define MOUSEKEY_DELAY {{ adv_mousekey_delay_ms }}
+{% endif %}
+{% if adv_mousekey_interval_ms %}
+#define MOUSEKEY_INTERVAL {{ adv_mousekey_interval_ms }}
+{% endif %}
+{% if adv_mousekey_max_speed %}
+#define MOUSEKEY_MAX_SPEED {{ adv_mousekey_max_speed }}
+{% endif %}
+{% endif %}
+
 /* Vial — UID and unlock auto-generated from vial.json */

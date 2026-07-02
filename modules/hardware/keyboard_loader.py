@@ -83,6 +83,13 @@ class RgbHardwareConfig:
     led_count: int = 0
     """Longueur de la chaîne WS2812 (par moitié pour split, total sinon).
     0 = pas de RGB ZMK ; le pipeline QMK utilise vial-qmk info.json séparément."""
+    oled_shares_ext_power: bool = False
+    """True si l'OLED et la chaîne LED partagent la rail VCC commutée par
+    ext_power (P0.13 sur nice_nano v2). Dans ce cas, `RGB_TOG OFF` coupe aussi
+    l'OLED qui ne se réinitialise pas au retour → on désactive
+    `CONFIG_ZMK_RGB_UNDERGLOW_EXT_POWER` pour préserver l'OLED. Coût :
+    les LEDs gardent leur VDD en quiescent (~1 mA par LED) quand RGB est OFF.
+    Par défaut False : on garde l'économie ext_power du défaut ZMK."""
 
 
 @dataclass
@@ -245,6 +252,9 @@ def load_keyboard(path: Path) -> KeyboardDefinition:
     rgb_hw = RgbHardwareConfig(
         max_brightness=raw_rgb.get("max_brightness", 200) if isinstance(raw_rgb, dict) else 200,
         led_count=raw_rgb.get("led_count", 0) if isinstance(raw_rgb, dict) else 0,
+        oled_shares_ext_power=bool(raw_rgb.get("oled_shares_ext_power", False))
+        if isinstance(raw_rgb, dict)
+        else False,
     )
 
     raw_keymap = data.get("default_keymap_zmk", {}) or {}

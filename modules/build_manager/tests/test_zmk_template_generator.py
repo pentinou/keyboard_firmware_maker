@@ -660,6 +660,60 @@ class TestZmkRgbUnderglowGuards:
         conf = (tmp_path / "config" / "sofle_v2.conf").read_text()
         assert "CONFIG_ZMK_RGB_UNDERGLOW" not in conf
 
+    def test_sofle_v2_ext_power_disabled_for_oled_share(self, zmk_gen, sofle_model, tmp_path):
+        # sofle-v2.yaml a oled_shares_ext_power=true → EXT_POWER=n dans la conf
+        zmk_gen.generate(sofle_model, tmp_path)
+        conf = (tmp_path / "config" / "sofle_v2.conf").read_text()
+        assert "CONFIG_ZMK_RGB_UNDERGLOW_EXT_POWER=n" in conf
+
+    def test_corne_no_ext_power_override(self, zmk_gen, corne_model, tmp_path):
+        # Corne sans RGB → pas de bloc RGB du tout, donc pas de EXT_POWER override
+        zmk_gen.generate(corne_model, tmp_path)
+        conf = (tmp_path / "config" / "corne.conf").read_text()
+        assert "CONFIG_ZMK_RGB_UNDERGLOW_EXT_POWER" not in conf
+
+
+class TestZmkAntiBurnin:
+    """Anti-marquage OLED ZMK : inversion 1 s/min via commande SSD1306 hardware."""
+
+    def test_anti_burnin_off_no_file_generated(self, zmk_gen, sofle_model, tmp_path):
+        # Défaut : anti_burnin=False → pas de kfm_anti_burnin.c, pas de bloc CMakeLists
+        sofle_model.oled.anti_burnin = False
+        zmk_gen.generate(sofle_model, tmp_path)
+        c_file = tmp_path / "config" / "boards" / "shields" / "sofle_v2" / "kfm_anti_burnin.c"
+        assert not c_file.exists()
+
+    def test_anti_burnin_on_generates_c_file(self, zmk_gen, sofle_model, tmp_path):
+        sofle_model.oled.anti_burnin = True
+        zmk_gen.generate(sofle_model, tmp_path)
+        c_file = tmp_path / "config" / "boards" / "shields" / "sofle_v2" / "kfm_anti_burnin.c"
+        assert c_file.exists()
+        content = c_file.read_text()
+        # Vérifie les constantes clés du protocole SSD1306
+        assert "SSD1306_CMD_INVERT" in content and "0xA7" in content
+        assert "SSD1306_CMD_NORMAL" in content and "0xA6" in content
+        assert "K_SECONDS(59)" in content  # cycle 60s (1s invert + 59s normal)
+        assert "K_MSEC(1000)" in content  # durée d'inversion
+        assert "SYS_INIT(kfm_anti_burnin_init" in content
+
+    def test_anti_burnin_on_includes_in_cmakelists(self, zmk_gen, sofle_model, tmp_path):
+        sofle_model.oled.anti_burnin = True
+        zmk_gen.generate(sofle_model, tmp_path)
+        cmake = (
+            tmp_path / "config" / "boards" / "shields" / "sofle_v2" / "CMakeLists.txt"
+        ).read_text()
+        assert "kfm_anti_burnin.c" in cmake
+        assert "CONFIG_ZMK_DISPLAY" in cmake  # garde-fou : compilation conditionnelle
+
+    def test_anti_burnin_works_without_custom_screen(self, zmk_gen, sofle_model, tmp_path):
+        # Activer anti_burnin sans oled_custom_screen → CMakeLists doit quand même
+        # être généré pour pouvoir compiler le kfm_anti_burnin.c.
+        sofle_model.oled.anti_burnin = True
+        # Ne pas activer custom_screen
+        zmk_gen.generate(sofle_model, tmp_path)
+        cmake = tmp_path / "config" / "boards" / "shields" / "sofle_v2" / "CMakeLists.txt"
+        assert cmake.exists()
+
 
 class TestZmkOledCustomScreen:
     """Phase 1 ZMK custom OLED — image-only status screen."""

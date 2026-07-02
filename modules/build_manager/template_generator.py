@@ -564,6 +564,28 @@ class TemplateGenerator:
             "oled_sleep": model.oled.sleep_enabled and oled_enabled,
             "oled_sleep_timeout_ms": model.oled.sleep_timeout_s * 1000,
             "rgb_sleep": model.oled.sleep_enabled and rgb_enabled,
+            # ── Options avancées (onglet KFM "Options avancées") ──────────────
+            "adv_nkro_enabled": bool(model.advanced.nkro_enabled),
+            "adv_tap_dance_enabled": bool(model.advanced.tap_dance_enabled),
+            "adv_sticky_key_enabled": bool(model.advanced.sticky_key_enabled),
+            "adv_auto_shift_enabled": bool(model.advanced.auto_shift_enabled),
+            "adv_auto_shift_timeout_ms": int(model.advanced.auto_shift_timeout_ms),
+            "adv_tapping_term_ms": int(model.advanced.tapping_term_ms),
+            "adv_permissive_hold": bool(model.advanced.permissive_hold),
+            "adv_combo_term_ms": int(model.advanced.combo_term_ms),
+            "adv_mousekey_enabled": bool(model.advanced.mousekey_enabled),
+            "adv_mousekey_delay_ms": (
+                int(model.advanced.mousekey_delay_ms)
+                if model.advanced.mousekey_delay_ms != 10 else 0
+            ),
+            "adv_mousekey_interval_ms": (
+                int(model.advanced.mousekey_interval_ms)
+                if model.advanced.mousekey_interval_ms != 20 else 0
+            ),
+            "adv_mousekey_max_speed": (
+                int(model.advanced.mousekey_max_speed)
+                if model.advanced.mousekey_max_speed != 10 else 0
+            ),
         }
 
 

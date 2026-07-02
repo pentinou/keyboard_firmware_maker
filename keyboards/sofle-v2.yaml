@@ -92,6 +92,12 @@ rgb:
   # 1 status LED (près OLED) + underglow + per-key. Valeur typique 35-36.
   # Ajuster si build échoue ou si LEDs s'éteignent au-delà d'un index.
   led_count: 36
+  # OLED câblé sur la rail VCC commutée par P0.13 (ext_power) — partagée
+  # avec la chaîne LED. Sans cette ligne, RGB_TOG couperait aussi l'OLED
+  # qui ne se réinitialiserait pas au retour. Active désactive
+  # CONFIG_ZMK_RGB_UNDERGLOW_EXT_POWER : LEDs gardent VDD en quiescent
+  # (~1 mA × 36 = 36 mA par moitié quand "off") mais OLED préservé.
+  oled_shares_ext_power: true
 # Physical key positions (x, y in key units). Source: QMK info.json sofle/rev1
 # Right side positions are normalized relative to left (x_min subtracted = 9.5)
 layout:

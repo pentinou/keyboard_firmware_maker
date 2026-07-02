@@ -16,3 +16,11 @@ if(CONFIG_ZMK_DISPLAY_STATUS_SCREEN_CUSTOM)
     target_sources(app PRIVATE status_screen.c)
 {% endif %}
 endif()
+
+{% if anti_burnin %}
+# Anti-marquage OLED activé via case KFM. Le fichier inverse périodiquement
+# l'écran via commande SSD1306 hardware (0xA7 / 0xA6) sur le bus I2C.
+if(CONFIG_ZMK_DISPLAY)
+    target_sources(app PRIVATE kfm_anti_burnin.c)
+endif()
+{% endif %}

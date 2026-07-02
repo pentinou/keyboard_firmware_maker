@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from i18n import AVAILABLE_LANGUAGES, get_language, set_language, tr
 from models.project_model import ProjectModel
+from modules.advanced_options.widget import AdvancedOptionsWidget
 from modules.hardware.widget import HardwareWidget
 from modules.oled_editor.widget import OledWidget
 from modules.build_manager.vial_qmk_manager import VialQmkManager, VialQmkSetupDialog
@@ -65,11 +66,15 @@ class MainWindow(QMainWindow):
         self._tab_hardware = HardwareWidget(self._model)
         self._tab_oled = OledWidget(self._model)
         self._tab_rgb = RgbWidget(self._model)
+        self._tab_advanced = AdvancedOptionsWidget(self._model)
         self._tab_build = BuildWidget(self._model)
 
+        # Ordre : Hardware, OLED, RGB, Options avancées, Build (Options avancées
+        # placé juste avant Build comme demandé par l'utilisateur)
         self._tabs.addTab(self._tab_hardware, tr("tab.hardware"))
         self._tabs.addTab(self._tab_oled,     tr("tab.oled"))
         self._tabs.addTab(self._tab_rgb,      tr("tab.rgb"))
+        self._tabs.addTab(self._tab_advanced, tr("tab.advanced"))
         self._tabs.addTab(self._tab_build,    tr("tab.build"))
 
         # Désactivés par défaut — activés selon les capacités du clavier (FR3, FR4)
@@ -102,6 +107,7 @@ class MainWindow(QMainWindow):
         self._tab_hardware.set_firmware(firmware)
         self._tab_oled.set_firmware(firmware)
         self._tab_rgb.set_firmware(firmware)
+        self._tab_advanced.set_firmware(firmware)
         # Adapter l'onglet Build au firmware (QMK vs ZMK)
         self._tab_build.refresh_for_firmware()
         logger.info(
@@ -196,12 +202,14 @@ class MainWindow(QMainWindow):
         self._model.keyboard = loaded.keyboard
         self._model.oled = loaded.oled
         self._model.rgb = loaded.rgb
+        self._model.advanced = loaded.advanced
         self._model.build = loaded.build
 
         self._sync_hardware_widget()
-        # Resynchroniser les widgets OLED et RGB avec les nouvelles données
+        # Resynchroniser les widgets OLED, RGB et Options avancées avec les nouvelles données
         self._tab_oled._sync_from_model()
         self._tab_rgb._sync_from_model()
+        self._tab_advanced.reload_from_model()
         logger.info("Projet ouvert : %s", path)
 
     def _sync_hardware_widget(self) -> None:

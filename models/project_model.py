@@ -581,6 +581,149 @@ class RgbConfig:
 
 
 @dataclass
+class AdvancedOptionsConfig:
+    """Options avancées de firmware exposées via l'onglet "Options avancées".
+
+    Une seule classe pour QMK + ZMK : chaque option a un commentaire indiquant
+    sur quel firmware elle s'applique. Les options "non concernées" sont
+    visibles dans l'UI mais grisées avec un tooltip explicatif.
+
+    Mapping vers les Kconfig / #define se fait dans les template generators
+    (ZMK : `shield.conf.j2`, QMK : `config.h.j2`).
+    Voir `~/.claude/projects/.../memory/firmware_options_catalog.md` pour la
+    référence complète des options et leur effet détaillé.
+    """
+
+    # ── Identification (commun) ──────────────────────────────────────────────
+    keyboard_name: str = ""
+    """Nom BLE/USB affiché par l'OS. Vide = laisser le défaut firmware."""
+
+    # ── Comportement clavier (commun) ────────────────────────────────────────
+    nkro_enabled: bool = False
+    """N-Key Rollover. QMK : `NKRO_ENABLE` + `FORCE_NKRO`. ZMK : `ZMK_HID_REPORT_TYPE_NKRO`."""
+    hid_indicators_enabled: bool = True
+    """Reçoit CapsLock/NumLock/ScrollLock de l'OS. ZMK : `ZMK_HID_INDICATORS=y` (défaut ON
+    car utile pour afficher CapsLock sur OLED). QMK : disponible nativement."""
+    usb_boot_protocol: bool = False
+    """Compat BIOS (HID Boot Protocol supplémentaire). ZMK : `ZMK_USB_BOOT=y`. QMK : -."""
+    auto_shift_enabled: bool = False  # QMK uniquement
+    """Maintenir une touche → version shiftée. QMK : `AUTO_SHIFT_ENABLE`."""
+    auto_shift_timeout_ms: int = 175  # QMK uniquement
+    """Délai auto-shift. QMK : `AUTO_SHIFT_TIMEOUT`."""
+
+    # ── Bluetooth (ZMK uniquement) ───────────────────────────────────────────
+    ble_passkey_entry: bool = False
+    """Code à 6 chiffres lors du pairing. ZMK : `ZMK_BLE_PASSKEY_ENTRY=y`."""
+
+    # ── Énergie ──────────────────────────────────────────────────────────────
+    deep_sleep_timeout_min: int = 4
+    """Délai avant deep sleep (ZMK). Mappé à `ZMK_IDLE_SLEEP_TIMEOUT` en ms."""
+    battery_report_interval_s: int = 60
+    """Fréquence de rapport batterie. ZMK : `ZMK_BATTERY_REPORT_INTERVAL` (s)."""
+    soft_off_enabled: bool = False
+    """Touche `&soft_off` propre. ZMK : `ZMK_PM_SOFT_OFF=y` + `ZMK_BEHAVIOR_SOFT_OFF=y`."""
+
+    # ── Behaviors ergo ───────────────────────────────────────────────────────
+    tap_dance_enabled: bool = False
+    """Multi-tap behaviors. ZMK : `ZMK_BEHAVIOR_TAP_DANCE=y`. QMK : `TAP_DANCE_ENABLE`."""
+    sticky_key_enabled: bool = False
+    """One-shot modifiers. ZMK : `ZMK_BEHAVIOR_STICKY_KEY=y`. QMK : `STICKY_KEYS`."""
+    tapping_term_ms: int = 200  # QMK uniquement (équivalent par-binding en ZMK)
+    """Durée tap avant hold. QMK : `TAPPING_TERM`."""
+    combo_term_ms: int = 50  # QMK uniquement
+    """Durée max entre touches d'un combo. QMK : `COMBO_TERM`."""
+    permissive_hold: bool = False  # QMK uniquement
+    """Hold même si autre touche pressée pendant le tap. QMK : `PERMISSIVE_HOLD`."""
+
+    # ── RGB avancé ───────────────────────────────────────────────────────────
+    rgb_hue_start: int = 0
+    """Couleur de démarrage en HUE 0-359 (0=rouge, 120=vert, 240=bleu).
+    ZMK : `ZMK_RGB_UNDERGLOW_HUE_START`. QMK : startup color via custom code."""
+    rgb_on_start: bool = True
+    """RGB allumé au boot (par défaut True). ZMK : `ZMK_RGB_UNDERGLOW_ON_START`."""
+    rgb_auto_off_idle: bool = False
+    """Éteint RGB en idle (économie batterie). ZMK : `ZMK_RGB_UNDERGLOW_AUTO_OFF_IDLE`."""
+    rgb_auto_off_usb: bool = False
+    """Éteint RGB quand USB débranché. ZMK : `ZMK_RGB_UNDERGLOW_AUTO_OFF_USB`."""
+
+    # ── Pointing (ZMK uniquement) ────────────────────────────────────────────
+    pointing_enabled: bool = False
+    """Support trackball/touchpad/trackpoint. ZMK : `ZMK_POINTING=y`."""
+    pointing_smooth_scroll: bool = False
+    """Scroll high-res. ZMK : `ZMK_POINTING_SMOOTH_SCROLLING=y`."""
+
+    # ── Mouse keys (QMK uniquement) ──────────────────────────────────────────
+    mousekey_enabled: bool = False
+    """Active la fonctionnalité Mouse Keys ; sinon les réglages ci-dessous sont
+    ignorés. QMK : `MOUSEKEY_ENABLE`."""
+    mousekey_delay_ms: int = 10
+    """Délai initial mouvement. QMK : `MOUSEKEY_DELAY`."""
+    mousekey_interval_ms: int = 20
+    """Intervalle entre mouvements. QMK : `MOUSEKEY_INTERVAL`."""
+    mousekey_max_speed: int = 10
+    """Vitesse max curseur. QMK : `MOUSEKEY_MAX_SPEED`."""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "keyboard_name": self.keyboard_name,
+            "nkro_enabled": self.nkro_enabled,
+            "hid_indicators_enabled": self.hid_indicators_enabled,
+            "usb_boot_protocol": self.usb_boot_protocol,
+            "auto_shift_enabled": self.auto_shift_enabled,
+            "auto_shift_timeout_ms": self.auto_shift_timeout_ms,
+            "ble_passkey_entry": self.ble_passkey_entry,
+            "deep_sleep_timeout_min": self.deep_sleep_timeout_min,
+            "battery_report_interval_s": self.battery_report_interval_s,
+            "soft_off_enabled": self.soft_off_enabled,
+            "tap_dance_enabled": self.tap_dance_enabled,
+            "sticky_key_enabled": self.sticky_key_enabled,
+            "tapping_term_ms": self.tapping_term_ms,
+            "combo_term_ms": self.combo_term_ms,
+            "permissive_hold": self.permissive_hold,
+            "rgb_hue_start": self.rgb_hue_start,
+            "rgb_on_start": self.rgb_on_start,
+            "rgb_auto_off_idle": self.rgb_auto_off_idle,
+            "rgb_auto_off_usb": self.rgb_auto_off_usb,
+            "pointing_enabled": self.pointing_enabled,
+            "pointing_smooth_scroll": self.pointing_smooth_scroll,
+            "mousekey_enabled": self.mousekey_enabled,
+            "mousekey_delay_ms": self.mousekey_delay_ms,
+            "mousekey_interval_ms": self.mousekey_interval_ms,
+            "mousekey_max_speed": self.mousekey_max_speed,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "AdvancedOptionsConfig":
+        return cls(
+            keyboard_name=str(data.get("keyboard_name", "")),
+            nkro_enabled=bool(data.get("nkro_enabled", False)),
+            hid_indicators_enabled=bool(data.get("hid_indicators_enabled", True)),
+            usb_boot_protocol=bool(data.get("usb_boot_protocol", False)),
+            auto_shift_enabled=bool(data.get("auto_shift_enabled", False)),
+            auto_shift_timeout_ms=max(50, int(data.get("auto_shift_timeout_ms", 175))),
+            ble_passkey_entry=bool(data.get("ble_passkey_entry", False)),
+            deep_sleep_timeout_min=max(1, int(data.get("deep_sleep_timeout_min", 4))),
+            battery_report_interval_s=max(10, int(data.get("battery_report_interval_s", 60))),
+            soft_off_enabled=bool(data.get("soft_off_enabled", False)),
+            tap_dance_enabled=bool(data.get("tap_dance_enabled", False)),
+            sticky_key_enabled=bool(data.get("sticky_key_enabled", False)),
+            tapping_term_ms=max(50, int(data.get("tapping_term_ms", 200))),
+            combo_term_ms=max(10, int(data.get("combo_term_ms", 50))),
+            permissive_hold=bool(data.get("permissive_hold", False)),
+            rgb_hue_start=max(0, min(359, int(data.get("rgb_hue_start", 0)))),
+            rgb_on_start=bool(data.get("rgb_on_start", True)),
+            rgb_auto_off_idle=bool(data.get("rgb_auto_off_idle", False)),
+            rgb_auto_off_usb=bool(data.get("rgb_auto_off_usb", False)),
+            pointing_enabled=bool(data.get("pointing_enabled", False)),
+            pointing_smooth_scroll=bool(data.get("pointing_smooth_scroll", False)),
+            mousekey_enabled=bool(data.get("mousekey_enabled", False)),
+            mousekey_delay_ms=max(1, int(data.get("mousekey_delay_ms", 10))),
+            mousekey_interval_ms=max(1, int(data.get("mousekey_interval_ms", 20))),
+            mousekey_max_speed=max(1, int(data.get("mousekey_max_speed", 10))),
+        )
+
+
+@dataclass
 class BuildConfig:
     """Versions de la toolchain verrouillées pour la reproductibilité."""
 
@@ -625,6 +768,7 @@ class ProjectModel:
     keyboard: KeyboardConfig = field(default_factory=KeyboardConfig)
     oled: OledConfig = field(default_factory=OledConfig)
     rgb: RgbConfig = field(default_factory=RgbConfig)
+    advanced: AdvancedOptionsConfig = field(default_factory=AdvancedOptionsConfig)
     build: BuildConfig = field(default_factory=BuildConfig)
 
     def to_dict(self) -> dict[str, Any]:
@@ -637,6 +781,7 @@ class ProjectModel:
             "keyboard": self.keyboard.to_dict(),
             "oled": self.oled.to_dict(),
             "rgb": self.rgb.to_dict(),
+            "advanced": self.advanced.to_dict(),
             "build": self.build.to_dict(),
         }
 
@@ -651,5 +796,6 @@ class ProjectModel:
             keyboard=KeyboardConfig.from_dict(data.get("keyboard") or {}),
             oled=OledConfig.from_dict(data.get("oled") or {}),
             rgb=RgbConfig.from_dict(data.get("rgb") or {}),
+            advanced=AdvancedOptionsConfig.from_dict(data.get("advanced") or {}),
             build=BuildConfig.from_dict(data.get("build") or {}),
         )

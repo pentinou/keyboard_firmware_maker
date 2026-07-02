@@ -62,6 +62,29 @@ class TestTemplateGeneratorGenerate:
         content = (tmp_path / "rules.mk").read_text()
         assert "OLED_ENABLE = yes" not in content
 
+    def test_rules_mk_mousekey_enabled(self, generator, basic_model, tmp_path):
+        basic_model.advanced.mousekey_enabled = True
+        generator.generate(basic_model, tmp_path)
+        content = (tmp_path / "rules.mk").read_text()
+        assert "MOUSEKEY_ENABLE = yes" in content
+
+    def test_rules_mk_mousekey_disabled_by_default(self, generator, basic_model, tmp_path):
+        generator.generate(basic_model, tmp_path)
+        content = (tmp_path / "rules.mk").read_text()
+        assert "MOUSEKEY_ENABLE" not in content
+
+    def test_config_h_mousekey_define_gated_on_enable(self, generator, basic_model, tmp_path):
+        # Bug #2 : régler un timing sans activer la feature ne doit RIEN émettre.
+        basic_model.advanced.mousekey_delay_ms = 5
+        generator.generate(basic_model, tmp_path)
+        content = (tmp_path / "config.h").read_text()
+        assert "MOUSEKEY_DELAY" not in content
+        # Une fois la feature activée, le #define apparaît.
+        basic_model.advanced.mousekey_enabled = True
+        generator.generate(basic_model, tmp_path)
+        content = (tmp_path / "config.h").read_text()
+        assert "#define MOUSEKEY_DELAY 5" in content
+
     def test_config_h_contains_keyboard_model(self, generator, basic_model, tmp_path):
         generator.generate(basic_model, tmp_path)
         content = (tmp_path / "config.h").read_text()

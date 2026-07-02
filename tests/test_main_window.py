@@ -7,15 +7,18 @@ from models.project_model import ProjectModel
 from ui.main_window import MainWindow
 
 
-def test_main_window_has_four_tabs(qtbot):
-    """MainWindow doit avoir exactement 4 onglets dans l'ordre attendu."""
+def test_main_window_has_five_tabs(qtbot):
+    """MainWindow doit avoir exactement 5 onglets dans l'ordre attendu :
+    Hardware, OLED, RGB, Options avancées, Build."""
     model = ProjectModel()
     window = MainWindow(model)
     qtbot.addWidget(window)
 
     tab_widget = window.findChild(QTabWidget)
     assert tab_widget is not None
-    assert tab_widget.count() == 4
+    assert tab_widget.count() == 5
+    # L'onglet "Options avancées" est en position 3 (avant Build = 4)
+    assert "avanc" in tab_widget.tabText(3).lower() or "advanced" in tab_widget.tabText(3).lower()
 
 
 def test_main_window_title(qtbot):

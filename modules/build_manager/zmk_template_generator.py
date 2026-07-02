@@ -623,11 +623,22 @@ class ZmkTemplateGenerator:
 
         # OLED custom status screen (Phase 1) — image plein écran générée par KFM.
         # CMakeLists.txt du shield + status_screen[_left|_right].c selon split.
-        if context["oled_custom_screen"]:
+        # Le CMakeLists est aussi requis quand `anti_burnin` est actif (compile
+        # kfm_anti_burnin.c indépendamment du custom_screen).
+        needs_cmakelists = bool(context["oled_custom_screen"] or context["anti_burnin"])
+        if needs_cmakelists:
             cmake_path = shield_dir / "CMakeLists.txt"
             cmake_path.write_text(env.get_template("CMakeLists.txt.j2").render(context), encoding="utf-8")
             generated["CMakeLists.txt"] = cmake_path
 
+        if context["anti_burnin"] and context["has_display"]:
+            anti_burnin_path = shield_dir / "kfm_anti_burnin.c"
+            anti_burnin_path.write_text(
+                env.get_template("kfm_anti_burnin.c.j2").render(context), encoding="utf-8"
+            )
+            generated["kfm_anti_burnin.c"] = anti_burnin_path
+
+        if context["oled_custom_screen"]:
             screen_template = env.get_template("status_screen.c.j2")
             if split:
                 if context["oled_custom_left"]:
@@ -863,14 +874,14 @@ class ZmkTemplateGenerator:
         encoder_a = pins.encoder_a[0] if pins.encoder_a else ""
         encoder_b = pins.encoder_b[0] if pins.encoder_b else ""
 
-        # Idle sleep timeout (en ms). Si l'utilisateur a activé sleep_enabled,
-        # on prend sleep_timeout_s × 1000. Sinon valeur par défaut 15 min (cohérente
-        # avec l'ancien hardcode 900000). Cap à 1 min minimum pour éviter un
-        # clavier qui dort instantanément.
+        # Idle sleep timeout (en ms). Priorité :
+        # 1. OledConfig.sleep_enabled + sleep_timeout_s (legacy, override explicite)
+        # 2. AdvancedOptionsConfig.deep_sleep_timeout_min (Options avancées, défaut 4 min)
+        # Cap à 1 min minimum pour éviter un clavier qui dort instantanément.
         if model.oled.sleep_enabled and model.oled.sleep_timeout_s > 0:
             idle_sleep_ms = max(60_000, model.oled.sleep_timeout_s * 1000)
         else:
-            idle_sleep_ms = 900_000
+            idle_sleep_ms = max(60_000, model.advanced.deep_sleep_timeout_min * 60_000)
 
         return {
             "shield_name": shield_name,
@@ -938,6 +949,27 @@ class ZmkTemplateGenerator:
             "ws2812_chain_length": ws2812_chain_length,
             # ZMK cappe ZMK_RGB_UNDERGLOW_BRT_MAX à [0, 100] (pourcent), pas 0-255 comme QMK
             "rgb_max_brightness": min(max(kb_def.rgb_hw.max_brightness, 0), 100),
+            "oled_shares_ext_power": bool(kb_def.rgb_hw.oled_shares_ext_power),
+            "anti_burnin": bool(model.oled.anti_burnin),
+            # ── Options avancées (onglet KFM "Options avancées") ──────────────
+            "adv_keyboard_name": str(model.advanced.keyboard_name).strip(),
+            "adv_nkro_enabled": bool(model.advanced.nkro_enabled),
+            "adv_hid_indicators_enabled": bool(model.advanced.hid_indicators_enabled),
+            "adv_usb_boot_protocol": bool(model.advanced.usb_boot_protocol),
+            "adv_ble_passkey_entry": bool(model.advanced.ble_passkey_entry),
+            "adv_battery_report_interval_s": (
+                int(model.advanced.battery_report_interval_s)
+                if model.advanced.battery_report_interval_s != 60 else 0
+            ),
+            "adv_soft_off_enabled": bool(model.advanced.soft_off_enabled),
+            "adv_tap_dance_enabled": bool(model.advanced.tap_dance_enabled),
+            "adv_sticky_key_enabled": bool(model.advanced.sticky_key_enabled),
+            "adv_rgb_hue_start": int(model.advanced.rgb_hue_start),
+            "adv_rgb_on_start": bool(model.advanced.rgb_on_start),
+            "adv_rgb_auto_off_idle": bool(model.advanced.rgb_auto_off_idle),
+            "adv_rgb_auto_off_usb": bool(model.advanced.rgb_auto_off_usb),
+            "adv_pointing_enabled": bool(model.advanced.pointing_enabled),
+            "adv_pointing_smooth_scroll": bool(model.advanced.pointing_smooth_scroll),
             "physical_layout_keys": physical_layout_keys,
             "idle_sleep_ms": idle_sleep_ms,
             "studio_transport": (

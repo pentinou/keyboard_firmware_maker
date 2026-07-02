@@ -576,11 +576,15 @@ class OledWidget(QWidget):
         main.addWidget(self._zmk_battery_pct_check)
         self._zmk_only_widgets.append(self._zmk_battery_pct_check)
 
+        # Anti-marquage écran : commun QMK + ZMK.
+        # - QMK : inversion 1s/min directement dans keymap.c (timer_read32 + invert).
+        # - ZMK : fichier kfm_anti_burnin.c compilé, envoie la commande hardware
+        #   SSD1306 0xA7 (invert) / 0xA6 (normal) via I2C raw.
+        # Identique côté utilisateur, mécanique interne différente selon firmware.
         self._anti_burnin_check = QCheckBox(tr("oled.anti_burnin"))
         self._anti_burnin_check.setObjectName("anti_burnin_check")
         self._anti_burnin_check.stateChanged.connect(self._on_anti_burnin_changed)
         main.addWidget(self._anti_burnin_check)
-        self._qmk_only_widgets.append(self._anti_burnin_check)
 
         sleep_row = QHBoxLayout()
         self._sleep_check = QCheckBox(tr("oled.sleep"))

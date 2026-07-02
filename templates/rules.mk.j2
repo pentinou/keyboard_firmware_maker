@@ -29,4 +29,20 @@ RGB_MATRIX_CUSTOM_USER = yes
 SERIAL_DRIVER = {{ pins.serial_driver }}
 {% endif %}
 
+{% if adv_nkro_enabled %}
+NKRO_ENABLE = yes
+{% endif %}
+{% if adv_tap_dance_enabled %}
+TAP_DANCE_ENABLE = yes
+{% endif %}
+{% if adv_sticky_key_enabled %}
+STICKY_KEYS = yes
+{% endif %}
+{% if adv_auto_shift_enabled %}
+AUTO_SHIFT_ENABLE = yes
+{% endif %}
+{% if adv_mousekey_enabled %}
+MOUSEKEY_ENABLE = yes
+{% endif %}
+
 LTO_ENABLE = yes
