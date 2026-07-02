@@ -1,16 +1,16 @@
 [project]
 name = "keyboard_firmware_maker"
 dynamic = ["version"]
-description = "Desktop app to create and customize QMK/Vial-QMK firmware for split mechanical keyboards"
+description = "Desktop app to create and customize QMK/Vial-QMK and ZMK firmware for split mechanical keyboards"
 authors = [{ name = "Pentinou" }]
 readme = "README.md"
 requires-python = ">=3.11"
+# Doit rester aligné avec requirements.txt (source utilisée par start.sh et la CI)
 dependencies = [
     "PySide6>=6.10.2",
     "Pillow>=10.0",
     "numpy>=1.26",
     "jinja2>=3.1",
-    "pyinstaller>=6.0",
     "PyYAML>=6.0",
 ]
 
@@ -20,6 +20,10 @@ dev = [
     "pytest-qt>=4.0",
     "ruff>=0.3",
     "black>=24.0",
+]
+# Outil de packaging uniquement (CI build-windows.yml) — pas une dépendance runtime
+build = [
+    "pyinstaller>=6.0",
 ]
 
 [project.scripts]
