@@ -136,7 +136,16 @@ bool {{ te.name }}(effect_params_t* params) {
 {% endif %}
 {% endfor %}
 
-        rgb_matrix_set_color(i, _r, _g, _b);
+        // Mise à l'échelle par la luminosité courante (touches RGB_VAI/VAD),
+        // elle-même plafonnée par RGB_MATRIX_MAXIMUM_BRIGHTNESS. Sans ce
+        // scaling, les couleurs brutes (jusqu'à 255) contournent le budget
+        // courant du clavier : une animation qui allume plusieurs rangées
+        // simultanément dépasse ce que l'USB peut fournir → chute du rail 5V,
+        // LEDs figées et firmware qui gèle en pleine vague.
+        uint8_t _v = rgb_matrix_config.hsv.v;
+        rgb_matrix_set_color(i, (uint8_t)((uint16_t)_r * _v / 255),
+                                (uint8_t)((uint16_t)_g * _v / 255),
+                                (uint8_t)((uint16_t)_b * _v / 255));
     }
     return rgb_matrix_check_finished_leds(led_max);
 }

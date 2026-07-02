@@ -564,3 +564,47 @@ class TestImageInversion:
         generator.generate(basic_model, tmp_path)
         content = (tmp_path / "keymaps" / "default" / "keymap.c").read_text()
         assert "0x00" in content
+
+
+class TestTimelineEffectBrightnessScaling:
+    """Les effets custom doivent respecter la luminosité utilisateur.
+
+    Bug 2026-07-02 : les couleurs brutes (255) envoyées à rgb_matrix_set_color
+    contournaient RGB_MATRIX_MAXIMUM_BRIGHTNESS et les touches RGB_VAI/VAD.
+    Une vague multi-rangées à pleine puissance dépassait le budget courant
+    USB → chute du rail 5V → firmware gelé en pleine animation.
+    """
+
+    def _model_with_wave_effect(self) -> ProjectModel:
+        from models.project_model import CustomEffect, EffectStep, EffectTrack, KeyOffset
+
+        m = ProjectModel()
+        m.keyboard.model = "sofle-v2"
+        m.keyboard.mcu = "rp2040"
+        m.rgb.custom_effects = [CustomEffect(
+            name="Vague nettoyage",
+            effect_type="reactive",
+            tracks=[EffectTrack(
+                name="Rangée -1",
+                target_mode="relative",
+                keys_offset=[KeyOffset(dr=-1, dc=0)],
+                steps=[EffectStep(time_ms=200, color="#FFFFFF",
+                                  hold_ms=100, fade_ms=400, color_to="#000000")],
+            )],
+        )]
+        return m
+
+    def test_set_color_scaled_by_current_brightness(self, generator, tmp_path):
+        generator.generate(self._model_with_wave_effect(), tmp_path)
+        inc = (tmp_path / "keymaps" / "default" / "rgb_matrix_user.inc").read_text()
+        assert "rgb_matrix_config.hsv.v" in inc
+        # Plus aucun envoi de couleur brute non mise à l'échelle
+        assert "rgb_matrix_set_color(i, _r, _g, _b);" not in inc
+        assert "(uint16_t)_r * _v / 255" in inc
+
+    def test_config_h_still_caps_max_brightness(self, generator, tmp_path):
+        model = self._model_with_wave_effect()
+        model.rgb.effects = [RgbEffect(type="static")]
+        generator.generate(model, tmp_path)
+        config = (tmp_path / "config.h").read_text()
+        assert "#define RGB_MATRIX_MAXIMUM_BRIGHTNESS 200" in config
