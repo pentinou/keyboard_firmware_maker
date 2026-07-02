@@ -524,7 +524,7 @@ class HardwareWidget(QWidget):
         self.capabilities_changed.emit(caps)
         self.oled_sides_changed.emit(list(self._model.keyboard.oled_sides))
 
-    # Alias pour compatibilité avec MainWindow._sync_hardware_widget
+    # Alias pour compatibilité avec la sélection par index (cf. sync_from_model)
     def _on_model_changed(self, index: int) -> None:
         """Compatibilité : sélectionne le clavier bundled par index direct."""
         if index < 0 or index >= len(self._keyboards):
@@ -590,6 +590,60 @@ class HardwareWidget(QWidget):
         self._switch_to_page(1)  # Retour à la page Compatible pour voir le nouveau clavier
 
     # ── API publique ─────────────────────────────────────────────────────────
+
+    def sync_from_model(self) -> None:
+        """Synchronise tous les contrôles avec self._model.keyboard.
+
+        Appelé par MainWindow après le chargement d'un projet. Les valeurs
+        cibles sont capturées AVANT la sélection du clavier : changer le combo
+        déclenche des signaux qui réécrivent model.keyboard (MCU, OLED, RGB).
+        """
+        target_kb_model = self._model.keyboard.model
+        target_mcu = self._model.keyboard.mcu
+        target_oled_sides = list(self._model.keyboard.oled_sides)
+        target_variant = self._model.keyboard.layout_variant
+        target_rgb = self._model.keyboard.rgb_enabled
+
+        if not self._select_keyboard_in_combo(target_kb_model):
+            logger.warning(
+                "Modèle de clavier '%s' introuvable dans la liste — widget non synchronisé",
+                target_kb_model,
+            )
+            return
+
+        # Restaurer le MCU sauvegardé
+        kb = getattr(self, "_current_kb", None)
+        if kb:
+            for i, mcu_opt in enumerate(kb.mcu_options):
+                if mcu_opt.id == target_mcu:
+                    self._mcu_combo.setCurrentIndex(i)
+                    break
+
+        self.set_layout_variant(target_variant)
+        self.set_oled_sides(target_oled_sides)
+        self.set_rgb_enabled(target_rgb)
+
+    def _select_keyboard_in_combo(self, model_name: str) -> bool:
+        """Sélectionne model_name dans le combo clavier.
+
+        Si le clavier n'est pas visible avec le filtre de catégorie courant,
+        bascule sur la catégorie "all" et réessaie.
+        """
+        if self._try_select_keyboard(model_name):
+            return True
+        self._category_combo.setCurrentIndex(0)
+        return self._try_select_keyboard(model_name)
+
+    def _try_select_keyboard(self, model_name: str) -> bool:
+        for i in range(self._keyboard_combo.count()):
+            entry_idx = self._filtered_entries[i] if i < len(self._filtered_entries) else -1
+            if entry_idx < 0:
+                continue
+            kb, _, _ = self._all_keyboard_entries[entry_idx]
+            if kb and kb.model == model_name:
+                self._keyboard_combo.setCurrentIndex(i)
+                return True
+        return False
 
     def set_layout_variant(self, variant_slug: str) -> None:
         """Restaure la variante depuis un projet sauvegardé."""

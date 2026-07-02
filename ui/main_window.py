@@ -205,67 +205,12 @@ class MainWindow(QMainWindow):
         self._model.advanced = loaded.advanced
         self._model.build = loaded.build
 
-        self._sync_hardware_widget()
+        self._tab_hardware.sync_from_model()
         # Resynchroniser les widgets OLED, RGB et Options avancées avec les nouvelles données
         self._tab_oled._sync_from_model()
         self._tab_rgb._sync_from_model()
         self._tab_advanced.reload_from_model()
         logger.info("Projet ouvert : %s", path)
-
-    def _sync_hardware_widget(self) -> None:
-        """Synchronise les combos clavier, MCU et OLED avec model.keyboard après un chargement."""
-        target_kb_model = self._model.keyboard.model
-        target_mcu = self._model.keyboard.mcu
-        target_oled_sides = list(self._model.keyboard.oled_sides)
-
-        # Trouver le clavier dans la liste et le sélectionner
-        combo = self._tab_hardware._keyboard_combo
-        found = False
-        for i in range(combo.count()):
-            entry_idx = self._tab_hardware._filtered_entries[i] if i < len(self._tab_hardware._filtered_entries) else -1
-            if entry_idx < 0:
-                continue
-            kb, _, _ = self._tab_hardware._all_keyboard_entries[entry_idx]
-            if kb and kb.model == target_kb_model:
-                combo.setCurrentIndex(i)
-                found = True
-                break
-
-        if not found:
-            # Essayer avec catégorie "all"
-            self._tab_hardware._category_combo.setCurrentIndex(0)
-            for i in range(combo.count()):
-                entry_idx = self._tab_hardware._filtered_entries[i] if i < len(self._tab_hardware._filtered_entries) else -1
-                if entry_idx < 0:
-                    continue
-                kb, _, _ = self._tab_hardware._all_keyboard_entries[entry_idx]
-                if kb and kb.model == target_kb_model:
-                    combo.setCurrentIndex(i)
-                    found = True
-                    break
-
-        if not found:
-            logger.warning(
-                "Modèle de clavier '%s' introuvable dans la liste — widget non synchronisé",
-                target_kb_model,
-            )
-            return
-
-        # Restaurer le MCU sauvegardé
-        kb = getattr(self._tab_hardware, "_current_kb", None)
-        if kb:
-            mcu_combo = self._tab_hardware._mcu_combo
-            for i, mcu_opt in enumerate(kb.mcu_options):
-                if mcu_opt.id == target_mcu:
-                    mcu_combo.setCurrentIndex(i)
-                    break
-
-        # Restaurer la variante layout sauvegardée
-        self._tab_hardware.set_layout_variant(self._model.keyboard.layout_variant)
-        # Restaurer oled_sides sauvegardé
-        self._tab_hardware.set_oled_sides(target_oled_sides)
-        # Restaurer rgb_enabled sauvegardé
-        self._tab_hardware.set_rgb_enabled(self._model.keyboard.rgb_enabled)
 
     def _check_vial_qmk(self) -> None:
         """Lance le dialogue de setup si le cache Vial-QMK est absent (AC: 1, 3)."""
