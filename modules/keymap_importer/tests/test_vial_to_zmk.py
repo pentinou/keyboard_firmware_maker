@@ -271,3 +271,44 @@ class TestFullVialKeymapConversion:
         assert row4[8] == "&mo 2"
         # SPACE doit être présent !
         assert row4[9] == "&kp SPACE"
+
+
+class TestOutOfRangeLayerRefs:
+    """Neutralisation des références vers des couches non générées.
+
+    Le keymap ZMK produit par KFM a exactement 4 couches (0-3, la 3 étant
+    la couche Bluetooth KFM). Toute référence au-delà serait un no-op
+    silencieux au runtime ZMK — elle doit devenir &none (ou &kp pour LT).
+    """
+
+    def _vial_with_row0(self, row0: list[str]) -> dict:
+        rows = [row0 + ["KC_NO"] * (6 - len(row0))] + [["KC_NO"] * 6] * 9
+        return {"layout": [rows]}
+
+    def test_mo_beyond_generated_layers_neutralized(self):
+        result = convert_vial_to_zmk_keymap(self._vial_with_row0(["MO(4)", "MO(7)"]))
+        assert result["default"][0][0] == "&none"
+        assert result["default"][0][1] == "&none"
+
+    def test_mo_within_generated_layers_kept(self):
+        result = convert_vial_to_zmk_keymap(self._vial_with_row0(["MO(1)", "MO(3)"]))
+        assert result["default"][0][0] == "&mo 1"
+        # La couche 3 existe (Bluetooth KFM) : la référence reste valide.
+        assert result["default"][0][1] == "&mo 3"
+
+    def test_lt_beyond_generated_layers_degrades_to_kp(self):
+        result = convert_vial_to_zmk_keymap(self._vial_with_row0(["LT(5,KC_SPACE)"]))
+        # Le hold pointait vers une couche absente : on préserve le tap.
+        assert result["default"][0][0] == "&kp SPACE"
+
+    def test_tg_and_to_beyond_generated_layers_neutralized(self):
+        result = convert_vial_to_zmk_keymap(self._vial_with_row0(["TG(6)", "TO(9)"]))
+        assert result["default"][0][0] == "&none"
+        assert result["default"][0][1] == "&none"
+
+    def test_extra_vial_layers_dropped_without_error(self):
+        """Un keymap Vial à 6 layers ne doit convertir que les 4 premiers noms."""
+        layer = [["KC_A"] * 6] * 10
+        vial = {"layout": [layer] * 6}
+        result = convert_vial_to_zmk_keymap(vial)
+        assert set(result.keys()) == {"default", "lower", "raise", "bluetooth"}

@@ -17,9 +17,14 @@ Limitations :
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Références de couche produites par la conversion (MO/TG/TO et LT).
+_LAYER_REF_RE = re.compile(r"^&(?:mo|tog|to) (\d+)$")
+_LAYER_TAP_RE = re.compile(r"^&lt (\d+) (.+)$")
 
 
 # Mapping direct QMK keycode → ZMK keycode (sans préfixe).
@@ -310,4 +315,47 @@ def convert_vial_to_zmk_keymap(
         for row in rows_combined:
             zmk_rows.append([convert_qmk_keycode_to_zmk(kc) for kc in row])
         result[name] = zmk_rows
+
+    # Le keymap ZMK généré a exactement len(layer_names) couches (0..N-1).
+    # Les layers Vial au-delà sont perdus, et toute référence MO/LT/TG/TO
+    # vers une couche non générée serait un no-op silencieux au runtime —
+    # on la neutralise explicitement pour que le comportement soit prévisible.
+    dropped_layers = len(qmk_layers) - len(layer_names)
+    if dropped_layers > 0:
+        logger.warning(
+            "Import Vial : %d layer(s) au-delà de la couche %d ignoré(s) "
+            "(le keymap ZMK généré n'a que %d couches).",
+            dropped_layers, len(layer_names) - 1, len(layer_names),
+        )
+    neutralized = _neutralize_out_of_range_layer_refs(result, max_layer=len(layer_names) - 1)
+    if neutralized:
+        logger.warning(
+            "Import Vial : %d binding(s) référençant une couche inexistante "
+            "neutralisé(s) (MO/TG/TO → &none, LT → &kp).", neutralized,
+        )
     return result
+
+
+def _neutralize_out_of_range_layer_refs(
+    keymap: dict[str, list[list[str]]],
+    max_layer: int,
+) -> int:
+    """Neutralise les bindings pointant vers une couche > max_layer.
+
+    `&mo/&tog/&to N` → `&none` ; `&lt N X` → `&kp X` (le tap est préservé).
+    Retourne le nombre de bindings modifiés.
+    """
+    count = 0
+    for rows in keymap.values():
+        for row in rows:
+            for i, binding in enumerate(row):
+                m = _LAYER_REF_RE.match(binding)
+                if m and int(m.group(1)) > max_layer:
+                    row[i] = "&none"
+                    count += 1
+                    continue
+                m = _LAYER_TAP_RE.match(binding)
+                if m and int(m.group(1)) > max_layer:
+                    row[i] = f"&kp {m.group(2)}"
+                    count += 1
+    return count

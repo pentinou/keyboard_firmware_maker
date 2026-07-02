@@ -723,6 +723,15 @@ class HardwareWidget(QWidget):
             return
         self._model.keyboard.custom_keymap = data
         self._custom_keymap_label.setText(self._custom_keymap_status_text())
+        # Le keymap ZMK généré n'a que 4 couches (default/lower/raise +
+        # Bluetooth KFM) : avertir dès l'import si des layers Vial seront perdus.
+        n_layers = len(data.get("layout", []))
+        if n_layers > 3:
+            QMessageBox.warning(
+                self,
+                tr("hardware.zmk_custom_keymap.layers_warning_title"),
+                tr("hardware.zmk_custom_keymap.layers_warning_msg").format(n=n_layers),
+            )
 
     def _reload_keyboards(self, select_model: str = "") -> None:
         """Recharge la liste des claviers (prédéfinis + custom) et sélectionne select_model."""
