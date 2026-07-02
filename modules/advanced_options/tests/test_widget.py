@@ -215,6 +215,38 @@ class TestAdvancedOptionsTemplateInjection:
         conf = (tmp_path / "config" / "sofle_v2.conf").read_text()
         assert 'CONFIG_ZMK_KEYBOARD_NAME="Sofle Boulot"' in conf
 
+    def test_zmk_keyboard_name_quotes_and_backslashes_stripped(self, tmp_path):
+        """Un guillemet ou antislash dans le nom casserait la syntaxe Kconfig."""
+        from modules.build_manager.zmk_template_generator import ZmkTemplateGenerator
+
+        model = ProjectModel()
+        model.keyboard.model = "sofle-v2"
+        model.keyboard.mcu = "nice_nano_v2"
+        model.advanced.keyboard_name = 'So"fle\\ KB'
+        ZmkTemplateGenerator().generate(model, tmp_path)
+        conf = (tmp_path / "config" / "sofle_v2.conf").read_text()
+        assert 'CONFIG_ZMK_KEYBOARD_NAME="Sofle KB"' in conf
+
+    def test_zmk_keyboard_name_truncated_to_16_chars(self, tmp_path):
+        """ZMK limite le nom d'advertising BLE à 16 caractères."""
+        from modules.build_manager.zmk_template_generator import ZmkTemplateGenerator
+
+        model = ProjectModel()
+        model.keyboard.model = "sofle-v2"
+        model.keyboard.mcu = "nice_nano_v2"
+        model.advanced.keyboard_name = "A" * 30  # projet ancien / JSON édité à la main
+        ZmkTemplateGenerator().generate(model, tmp_path)
+        conf = (tmp_path / "config" / "sofle_v2.conf").read_text()
+        assert f'CONFIG_ZMK_KEYBOARD_NAME="{"A" * 16}"' in conf
+
+    def test_keyboard_name_field_limited_to_16_chars(self, qtbot):
+        """La QLineEdit doit refléter la limite BLE ZMK de 16 caractères."""
+        model = ProjectModel()
+        widget = AdvancedOptionsWidget(model)
+        qtbot.addWidget(widget)
+        line = widget.findChild(QLineEdit, "adv_keyboard_name")
+        assert line.maxLength() == 16
+
     def test_zmk_deep_sleep_min_to_ms(self, tmp_path):
         from modules.build_manager.zmk_template_generator import ZmkTemplateGenerator
 

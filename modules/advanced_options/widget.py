@@ -83,7 +83,8 @@ class AdvancedOptionsWidget(QWidget):
 
         self._keyboard_name = QLineEdit()
         self._keyboard_name.setObjectName("adv_keyboard_name")
-        self._keyboard_name.setMaxLength(32)
+        # 16 max : limite ZMK pour le nom d'advertising BLE (build cassé au-delà)
+        self._keyboard_name.setMaxLength(16)
         self._keyboard_name.setPlaceholderText(tr("adv.keyboard_name.placeholder"))
         self._keyboard_name.textChanged.connect(self._on_keyboard_name_changed)
         form.addRow(QLabel(tr("adv.keyboard_name.label")), self._keyboard_name)

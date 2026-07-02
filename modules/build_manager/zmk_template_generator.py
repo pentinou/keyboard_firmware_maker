@@ -535,6 +535,18 @@ def _build_sensor_bindings_for_layer(
     return defaults[0] + (" " + defaults[1] if split else "")
 
 
+# CONFIG_ZMK_KEYBOARD_NAME sert de nom d'advertising BLE : ZMK exige ≤ 16
+# caractères (build cassé au-delà sur les versions récentes). La valeur est
+# insérée entre guillemets dans shield.conf — un `"` ou `\` casserait la
+# syntaxe Kconfig avec une erreur incompréhensible pour l'utilisateur.
+_KEYBOARD_NAME_MAX_LEN = 16
+
+
+def _sanitize_keyboard_name(name: str) -> str:
+    cleaned = name.replace('"', "").replace("\\", "").strip()
+    return cleaned[:_KEYBOARD_NAME_MAX_LEN]
+
+
 def _kfm_version() -> str:
     """Lit la version KFM depuis _version.py (source de vérité), sinon 'dev'."""
     try:
@@ -952,7 +964,7 @@ class ZmkTemplateGenerator:
             "oled_shares_ext_power": bool(kb_def.rgb_hw.oled_shares_ext_power),
             "anti_burnin": bool(model.oled.anti_burnin),
             # ── Options avancées (onglet KFM "Options avancées") ──────────────
-            "adv_keyboard_name": str(model.advanced.keyboard_name).strip(),
+            "adv_keyboard_name": _sanitize_keyboard_name(str(model.advanced.keyboard_name)),
             "adv_nkro_enabled": bool(model.advanced.nkro_enabled),
             "adv_hid_indicators_enabled": bool(model.advanced.hid_indicators_enabled),
             "adv_usb_boot_protocol": bool(model.advanced.usb_boot_protocol),
