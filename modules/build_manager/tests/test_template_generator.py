@@ -608,3 +608,77 @@ class TestTimelineEffectBrightnessScaling:
         generator.generate(model, tmp_path)
         config = (tmp_path / "config.h").read_text()
         assert "#define RGB_MATRIX_MAXIMUM_BRIGHTNESS 200" in config
+
+
+class TestImportedKeymapInKeymapC:
+    """Le keymap importé alimente keymap.c au lieu du KC_TRNS générique.
+
+    Sans ça, le firmware QMK généré ne tape rien tant qu'un .vil n'a pas été
+    chargé dans Vial après le flash.
+    """
+
+    @staticmethod
+    def _base_layer(text: str) -> str:
+        return next(line for line in text.splitlines() if line.strip().startswith("[_BASE]"))
+
+    def test_without_import_layers_stay_transparent(self, generator, basic_model, tmp_path):
+        generator.generate(basic_model, tmp_path)
+
+        keymap = (tmp_path / "keymaps" / "default" / "keymap.c").read_text(encoding="utf-8")
+
+        assert "KC_TRNS" in self._base_layer(keymap)
+
+    def test_vial_keymap_fills_base_layer(self, generator, basic_model, tmp_path):
+        basic_model.keyboard.use_custom_keymap = True
+        basic_model.keyboard.custom_keymap = {
+            "layout": [[["KC_ESC"] + ["KC_A"] * 5 for _ in range(10)]]
+        }
+
+        generator.generate(basic_model, tmp_path)
+
+        base = self._base_layer((tmp_path / "keymaps" / "default" / "keymap.c").read_text(encoding="utf-8"))
+        assert "KC_ESC" in base
+        assert "KC_A" in base
+
+    def test_missing_layers_fall_back_to_transparent(self, generator, basic_model, tmp_path):
+        """Un keymap d'une seule couche laisse _LOWER et _RAISE transparents."""
+        basic_model.keyboard.use_custom_keymap = True
+        basic_model.keyboard.custom_keymap = {
+            "layout": [[["KC_ESC"] + ["KC_A"] * 5 for _ in range(10)]]
+        }
+
+        generator.generate(basic_model, tmp_path)
+
+        text = (tmp_path / "keymaps" / "default" / "keymap.c").read_text(encoding="utf-8")
+        lower = next(line for line in text.splitlines() if line.strip().startswith("[_LOWER]"))
+        assert "KC_TRNS" in lower
+
+    def test_disabled_flag_ignores_the_keymap(self, generator, basic_model, tmp_path):
+        basic_model.keyboard.use_custom_keymap = False
+        basic_model.keyboard.custom_keymap = {"layout": [[["KC_ESC"] * 6 for _ in range(10)]]}
+
+        generator.generate(basic_model, tmp_path)
+
+        keymap = (tmp_path / "keymaps" / "default" / "keymap.c").read_text(encoding="utf-8")
+        assert "KC_ESC" not in self._base_layer(keymap)
+
+    def test_zmk_keymap_is_converted_to_qmk_keycodes(self, generator, basic_model, tmp_path):
+        basic_model.keyboard.use_custom_keymap = True
+        basic_model.keyboard.custom_keymap = {
+            "zmk_layers": [{"name": "default", "bindings": ["&kp ESC", "&kp A", "&bt BT_SEL 0"]}]
+        }
+
+        generator.generate(basic_model, tmp_path)
+
+        base = self._base_layer((tmp_path / "keymaps" / "default" / "keymap.c").read_text(encoding="utf-8"))
+        assert "KC_ESC" in base
+        assert "KC_NO" in base  # &bt sans équivalent QMK
+
+    def test_unusable_keymap_falls_back_instead_of_failing(self, generator, basic_model, tmp_path):
+        basic_model.keyboard.use_custom_keymap = True
+        basic_model.keyboard.custom_keymap = {"layout": "pas une matrice"}
+
+        generator.generate(basic_model, tmp_path)
+
+        keymap = (tmp_path / "keymaps" / "default" / "keymap.c").read_text(encoding="utf-8")
+        assert "KC_TRNS" in self._base_layer(keymap)

@@ -10,15 +10,20 @@ Voir le catalogue complet :
 """
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 
 from PySide6.QtWidgets import (
     QCheckBox,
+    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
+    QPushButton,
     QScrollArea,
     QSpinBox,
     QVBoxLayout,
@@ -27,8 +32,32 @@ from PySide6.QtWidgets import (
 
 from i18n import tr
 from models.project_model import ProjectModel
+from modules.keymap_importer.common import (
+    FORMAT_UNKNOWN,
+    FORMAT_VIAL,
+    FORMAT_ZMK,
+    ConversionReport,
+    detect_format,
+)
+from ui.tooltips import apply_tooltips, tooltip_for
 
 logger = logging.getLogger(__name__)
+
+# Champs documentés par une infobulle (clé i18n `tip.<objectName>`).
+ADVANCED_TOOLTIP_FIELDS = [
+    "adv_use_custom_keymap", "adv_keymap_import_btn",
+    "adv_keyboard_name",
+    "adv_nkro_enabled", "adv_hid_indicators_enabled", "adv_usb_boot_protocol",
+    "adv_auto_shift_enabled", "adv_auto_shift_timeout_ms",
+    "adv_ble_passkey_entry",
+    "adv_deep_sleep_timeout_min", "adv_battery_report_interval_s", "adv_soft_off_enabled",
+    "adv_tap_dance_enabled", "adv_sticky_key_enabled", "adv_tapping_term_ms",
+    "adv_combo_term_ms", "adv_permissive_hold",
+    "adv_rgb_hue_start", "adv_rgb_on_start", "adv_rgb_auto_off_idle", "adv_rgb_auto_off_usb",
+    "adv_pointing_enabled", "adv_pointing_smooth_scroll",
+    "adv_mousekey_enabled", "adv_mousekey_delay_ms", "adv_mousekey_interval_ms",
+    "adv_mousekey_max_speed",
+]
 
 
 class AdvancedOptionsWidget(QWidget):
@@ -59,6 +88,7 @@ class AdvancedOptionsWidget(QWidget):
         self._container_layout = QVBoxLayout(container)
         self._container_layout.setSpacing(12)
 
+        self._build_section_keymap_import()
         self._build_section_identification()
         self._build_section_keyboard_behavior()
         self._build_section_bluetooth()
@@ -72,9 +102,46 @@ class AdvancedOptionsWidget(QWidget):
         scroll.setWidget(container)
         root.addWidget(scroll)
 
+        apply_tooltips(self, ADVANCED_TOOLTIP_FIELDS)
         self._sync_from_model()
 
     # ── Sections ─────────────────────────────────────────────────────────────
+
+    def _build_section_keymap_import(self) -> None:
+        """Import d'un keymap existant — première section de l'onglet.
+
+        Accepte un export vial.rocks (.vil/.json) ou un keymap ZMK (.keymap),
+        quel que soit le firmware cible : la conversion croisée est faite à
+        l'import et ce qui n'est pas transposable est signalé.
+        """
+        group = QGroupBox(tr("adv.section.keymap_import"))
+        v = QVBoxLayout(group)
+
+        self._keymap_use = QCheckBox(tr("adv.keymap.use"))
+        self._keymap_use.setObjectName("adv_use_custom_keymap")
+        self._keymap_use.setChecked(bool(self._model.keyboard.use_custom_keymap))
+        self._keymap_use.stateChanged.connect(self._on_use_keymap_changed)
+        v.addWidget(self._keymap_use)
+
+        row = QHBoxLayout()
+        self._keymap_btn = QPushButton(tr("adv.keymap.import_btn"))
+        self._keymap_btn.setObjectName("adv_keymap_import_btn")
+        self._keymap_btn.setEnabled(bool(self._model.keyboard.use_custom_keymap))
+        self._keymap_btn.clicked.connect(self._on_import_keymap_clicked)
+        row.addWidget(self._keymap_btn)
+
+        self._keymap_status = QLabel(self._keymap_status_text())
+        self._keymap_status.setObjectName("adv_keymap_status")
+        self._keymap_status.setStyleSheet("color: #888; font-size: 11px;")
+        row.addWidget(self._keymap_status, 1)
+        v.addLayout(row)
+
+        info = QLabel(tr("adv.keymap.help"))
+        info.setWordWrap(True)
+        info.setStyleSheet("color: gray; font-size: 10px;")
+        v.addWidget(info)
+
+        self._container_layout.addWidget(group)
 
     def _build_section_identification(self) -> None:
         group = QGroupBox(tr("adv.section.identification"))
@@ -342,6 +409,135 @@ class AdvancedOptionsWidget(QWidget):
             self._firmware_compat.append((cb, firmware_only))
         return cb
 
+    # ── Import de keymap ─────────────────────────────────────────────────────
+
+    def _keymap_status_text(self) -> str:
+        """Décrit le keymap actuellement chargé (origine + nombre de couches)."""
+        keymap = self._model.keyboard.custom_keymap
+        if not keymap:
+            return tr("adv.keymap.no_file")
+        if isinstance(keymap.get("zmk_layers"), list):
+            return tr("adv.keymap.loaded_zmk").format(n=len(keymap["zmk_layers"]))
+        return tr("adv.keymap.loaded_vial").format(n=len(keymap.get("layout") or []))
+
+    def _on_use_keymap_changed(self, state: int) -> None:
+        enabled = bool(state)
+        self._model.keyboard.use_custom_keymap = enabled
+        self._keymap_btn.setEnabled(enabled)
+
+    def _on_import_keymap_clicked(self) -> None:
+        """Charge un keymap, avertit si son origine diffère du firmware cible."""
+        path_str, _ = QFileDialog.getOpenFileName(
+            self, tr("adv.keymap.dialog_title"), "", tr("adv.keymap.filter"),
+        )
+        if not path_str:
+            return
+        path = Path(path_str)
+
+        try:
+            content = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            QMessageBox.critical(
+                self, tr("adv.keymap.error_title"), tr("adv.keymap.error_msg").format(exc=exc),
+            )
+            return
+
+        fmt = detect_format(path, content)
+        if fmt == FORMAT_UNKNOWN:
+            QMessageBox.warning(
+                self, tr("adv.keymap.unknown_title"), tr("adv.keymap.unknown_msg"),
+            )
+            return
+
+        # Origine ≠ firmware cible : prévenir avant de convertir, la conversion
+        # est nécessairement partielle.
+        if not self._confirm_cross_format(fmt):
+            return
+
+        keymap, report = self._load_keymap(path, content, fmt)
+        if keymap is None:
+            return
+
+        self._model.keyboard.custom_keymap = keymap
+        self._model.keyboard.use_custom_keymap = True
+        self._keymap_use.setChecked(True)
+        self._keymap_btn.setEnabled(True)
+        self._keymap_status.setText(self._keymap_status_text())
+        logger.info("Keymap importé (%s) : %s", fmt, path.name)
+        self._show_report(fmt, report)
+
+    def _confirm_cross_format(self, fmt: str) -> bool:
+        """Demande confirmation quand le fichier ne vient pas du firmware cible."""
+        if fmt == FORMAT_ZMK and self._firmware == "qmk":
+            message = tr("adv.keymap.cross_zmk_to_qmk")
+        elif fmt == FORMAT_VIAL and self._firmware == "zmk":
+            message = tr("adv.keymap.cross_vial_to_zmk")
+        else:
+            return True
+        reply = QMessageBox.question(
+            self,
+            tr("adv.keymap.cross_title"),
+            message,
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+        )
+        return reply == QMessageBox.StandardButton.Ok
+
+    def _load_keymap(
+        self, path: Path, content: str, fmt: str,
+    ) -> tuple[dict | None, ConversionReport]:
+        """Transforme le fichier en structure stockable dans le ProjectModel."""
+        report = ConversionReport()
+        if fmt == FORMAT_VIAL:
+            try:
+                return json.loads(content), report
+            except json.JSONDecodeError as exc:
+                QMessageBox.critical(
+                    self, tr("adv.keymap.error_title"), tr("adv.keymap.error_msg").format(exc=exc),
+                )
+                return None, report
+
+        from modules.keymap_importer.zmk_to_qmk import convert_zmk_layers_to_qmk, parse_zmk_keymap
+
+        layers = parse_zmk_keymap(content)
+        if not layers:
+            QMessageBox.warning(
+                self, tr("adv.keymap.unknown_title"), tr("adv.keymap.zmk_no_layer"),
+            )
+            return None, report
+        # La conversion vers QMK n'est utile que pour une cible QMK, mais on la
+        # joue dans tous les cas : elle produit le rapport des pertes.
+        if self._firmware == "qmk":
+            _, report = convert_zmk_layers_to_qmk(layers)
+        return {"zmk_layers": layers}, report
+
+    def _show_report(self, fmt: str, report: ConversionReport) -> None:
+        """Affiche le bilan de conversion (silencieux si rien n'a été perdu)."""
+        if not report.has_losses:
+            QMessageBox.information(
+                self,
+                tr("adv.keymap.report_title"),
+                tr("adv.keymap.report_ok").format(n=report.converted),
+            )
+            return
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(tr("adv.keymap.report_title"))
+        box.setText(
+            tr("adv.keymap.report_partial").format(
+                converted=report.converted, dropped=len(report.dropped),
+            )
+        )
+        details = list(report.warnings)
+        details += [
+            tr("adv.keymap.report_line").format(
+                layer=d.layer, position=d.position, source=d.source, reason=d.reason,
+            )
+            for d in report.dropped
+        ]
+        box.setDetailedText("\n".join(details))
+        box.exec()
+
     # ── Handlers ─────────────────────────────────────────────────────────────
 
     def _on_check_changed(self, attr_name: str, state: bool) -> None:
@@ -386,6 +582,15 @@ class AdvancedOptionsWidget(QWidget):
     def _sync_from_model(self) -> None:
         """Rafraîchit l'UI depuis le modèle (chargement projet, etc.)."""
         adv = self._model.advanced
+
+        # Keymap importé (porté par model.keyboard, pas model.advanced)
+        use_keymap = bool(self._model.keyboard.use_custom_keymap)
+        self._keymap_use.blockSignals(True)
+        self._keymap_use.setChecked(use_keymap)
+        self._keymap_use.blockSignals(False)
+        self._keymap_btn.setEnabled(use_keymap)
+        self._keymap_status.setText(self._keymap_status_text())
+
         # Texte
         self._keyboard_name.blockSignals(True)
         self._keyboard_name.setText(adv.keyboard_name)
@@ -438,15 +643,18 @@ class AdvancedOptionsWidget(QWidget):
     def set_firmware(self, firmware: str) -> None:
         """Grise les options non applicables au firmware courant.
 
-        Les widgets restent visibles (choix UX du user) mais désactivés et
-        avec un tooltip explicatif.
+        Les widgets restent visibles (choix UX du user) mais désactivés. Leur
+        infobulle explicative est conservée : la mention « ZMK uniquement »
+        s'ajoute en tête plutôt que de remplacer l'explication.
         """
         self._firmware = firmware
         for widget, compat in self._firmware_compat:
             enabled = firmware in compat
             widget.setEnabled(enabled)
-            if not enabled:
-                only = "QMK" if "qmk" in compat else "ZMK"
-                widget.setToolTip(tr("adv.tooltip.firmware_only").format(firmware=only))
-            else:
-                widget.setToolTip("")
+            explanation = tooltip_for(widget.objectName())
+            if enabled:
+                widget.setToolTip(explanation)
+                continue
+            only = "QMK" if "qmk" in compat else "ZMK"
+            notice = tr("adv.tooltip.firmware_only").format(firmware=only)
+            widget.setToolTip(f"{notice}\n\n{explanation}" if explanation else notice)

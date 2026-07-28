@@ -27,6 +27,9 @@ from modules.oled_editor.processor import frame_to_qmk_bytes
 
 logger = logging.getLogger(__name__)
 
+# Nombre de couches déclarées dans keymap.c.j2 (_BASE / _LOWER / _RAISE).
+QMK_KEYMAP_LAYERS = 3
+
 
 _CUSTOM_EFFECT_TYPES: frozenset[str] = frozenset()
 
@@ -381,6 +384,11 @@ class TemplateGenerator:
                 deduped.append(k)
         vial_keys = deduped
 
+        # Keymap importé (vial.rocks ou .keymap ZMK) → couches de keymap.c.
+        # Sans lui, keymap.c est rempli de KC_TRNS et le clavier ne tape rien
+        # tant qu'un .vil n'a pas été chargé dans Vial après le flash.
+        keymap_layers = _build_qmk_keymap_layers(model, vial_keys)
+
         def _build_images(side: OledSideConfig) -> list[dict]:
             result = []
             for i, img in enumerate(side.images):
@@ -562,6 +570,7 @@ class TemplateGenerator:
             "matrix_rows": matrix_rows,
             "matrix_cols": matrix_cols,
             "vial_keys": vial_keys,
+            "keymap_layers": keymap_layers,
             "anti_burnin": model.oled.anti_burnin and oled_enabled,
             "oled_sleep": model.oled.sleep_enabled and oled_enabled,
             "oled_sleep_timeout_ms": model.oled.sleep_timeout_s * 1000,
@@ -589,6 +598,49 @@ class TemplateGenerator:
                 if model.advanced.mousekey_max_speed != 10 else 0
             ),
         }
+
+
+def _build_qmk_keymap_layers(model: ProjectModel, vial_keys: list[dict]) -> list[list[str]]:
+    """Construit les couches de `keymap.c` depuis le keymap importé par l'utilisateur.
+
+    Accepte les deux origines stockées dans `model.keyboard.custom_keymap` :
+    un keymap Vial (matrice de keycodes QMK) ou un keymap ZMK déjà parsé
+    (`zmk_layers`, listes plates de bindings).
+
+    Retourne [] quand aucun keymap n'est importé ou que la conversion échoue :
+    le template retombe alors sur KC_TRNS, le comportement historique.
+    """
+    if not (model.keyboard.use_custom_keymap and model.keyboard.custom_keymap):
+        return []
+
+    source = model.keyboard.custom_keymap
+    try:
+        if isinstance(source.get("zmk_layers"), list):
+            from modules.keymap_importer.zmk_to_qmk import convert_zmk_layers_to_qmk
+            layers, report = convert_zmk_layers_to_qmk(source["zmk_layers"])
+            # L'ordre des bindings ZMK suit le layout du shield, pas forcément
+            # celui du LAYOUT() QMK : on tronque/complète sur la longueur cible.
+            layers = [_fit_layer(layer, len(vial_keys)) for layer in layers[:QMK_KEYMAP_LAYERS]]
+        else:
+            from modules.keymap_importer.vial_to_qmk import convert_vial_to_qmk_layers
+            layers, report = convert_vial_to_qmk_layers(
+                source, vial_keys, max_layers=QMK_KEYMAP_LAYERS,
+            )
+    except Exception as exc:  # noqa: BLE001 — un keymap illisible ne doit pas casser le build
+        logger.warning("Keymap importé inutilisable, retour à KC_TRNS : %s", exc)
+        return []
+
+    if report.dropped or report.warnings:
+        logger.info(
+            "Keymap importé : %d touches converties, %d abandonnées, %d avertissement(s)",
+            report.converted, len(report.dropped), len(report.warnings),
+        )
+    return layers
+
+
+def _fit_layer(layer: list[str], size: int) -> list[str]:
+    """Ajuste une couche à la taille du layout cible (troncature ou KC_TRNS)."""
+    return (layer + ["KC_TRNS"] * size)[:size]
 
 
 def _resolve_active_layout(kb_def: KeyboardDefinition, variant_slug: str) -> list:

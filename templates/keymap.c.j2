@@ -8,12 +8,21 @@
 #define _LOWER 1
 #define _RAISE 2
 
+{% if keymap_layers %}
+/* {{ layout_macro }} : {{ vial_keys | length }} keys — imported keymap, editable in Vial */
+const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
+{% for layer in ["_BASE", "_LOWER", "_RAISE"] %}
+    [{{ layer }}] = {{ layout_macro }}({% if loop.index0 < keymap_layers | length %}{% for kc in keymap_layers[loop.index0] %}{{ kc }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}{% for k in vial_keys %}KC_TRNS{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}),
+{% endfor %}
+};
+{% else %}
 /* {{ layout_macro }} : {{ vial_keys | length }} keys — configure via Vial */
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [_BASE]  = {{ layout_macro }}({% for k in vial_keys %}KC_TRNS{% if not loop.last %}, {% endif %}{% endfor %}),
     [_LOWER] = {{ layout_macro }}({% for k in vial_keys %}KC_TRNS{% if not loop.last %}, {% endif %}{% endfor %}),
     [_RAISE] = {{ layout_macro }}({% for k in vial_keys %}KC_TRNS{% if not loop.last %}, {% endif %}{% endfor %}),
 };
+{% endif %}
 
 {% if has_encoder and pins.encoder_a %}
 /* Encoder map — configurable via Vial */

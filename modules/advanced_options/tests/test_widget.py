@@ -1,7 +1,9 @@
 """Tests du widget AdvancedOptionsWidget."""
 from __future__ import annotations
 
-from PySide6.QtWidgets import QCheckBox, QLineEdit, QSpinBox
+from unittest.mock import patch
+
+from PySide6.QtWidgets import QCheckBox, QLabel, QLineEdit, QPushButton, QSpinBox
 
 from models.project_model import ProjectModel
 from modules.advanced_options.widget import AdvancedOptionsWidget
@@ -295,3 +297,190 @@ class TestAdvancedOptionsTemplateInjection:
         ZmkTemplateGenerator().generate(model, tmp_path)
         conf = (tmp_path / "config" / "sofle_v2.conf").read_text()
         assert "CONFIG_ZMK_RGB_UNDERGLOW_HUE_START=120" in conf
+
+
+class TestKeymapImportSection:
+    """Import d'un keymap vial.rocks ou ZMK — première section de l'onglet.
+
+    Le bloc vivait dans l'onglet Matériel et n'était visible qu'en ZMK ; il est
+    désormais unique, ici, et fonctionne pour les deux firmwares.
+    """
+
+    @staticmethod
+    def _vial_file(tmp_path, layers=1):
+        import json
+        path = tmp_path / "penti.vil"
+        path.write_text(json.dumps({"layout": [[["KC_A", "KC_B"]]] * layers}), encoding="utf-8")
+        return path
+
+    @staticmethod
+    def _zmk_file(tmp_path):
+        path = tmp_path / "sofle.keymap"
+        path.write_text(
+            '/ { keymap { compatible = "zmk,keymap";\n'
+            '  default_layer { bindings = < &kp ESC &kp A &bt BT_SEL 0 >; };\n'
+            '}; };\n',
+            encoding="utf-8",
+        )
+        return path
+
+    @staticmethod
+    def _import(widget, path, confirm=True):
+        from PySide6.QtWidgets import QMessageBox
+        answer = QMessageBox.StandardButton.Ok if confirm else QMessageBox.StandardButton.Cancel
+        with patch("modules.advanced_options.widget.QFileDialog.getOpenFileName",
+                   return_value=(str(path), "")), \
+             patch("modules.advanced_options.widget.QMessageBox.question", return_value=answer) as question, \
+             patch("modules.advanced_options.widget.QMessageBox.information"), \
+             patch("modules.advanced_options.widget.QMessageBox.warning") as warning, \
+             patch("modules.advanced_options.widget.QMessageBox.critical") as critical, \
+             patch.object(QMessageBox, "exec", return_value=0):
+            widget._on_import_keymap_clicked()
+        return question, warning, critical
+
+    def test_section_is_present(self, qtbot):
+        widget = AdvancedOptionsWidget(ProjectModel())
+        qtbot.addWidget(widget)
+
+        assert widget.findChild(QCheckBox, "adv_use_custom_keymap") is not None
+        assert widget.findChild(QPushButton, "adv_keymap_import_btn") is not None
+
+    def test_import_button_follows_checkbox(self, qtbot):
+        model = ProjectModel()
+        widget = AdvancedOptionsWidget(model)
+        qtbot.addWidget(widget)
+        btn = widget.findChild(QPushButton, "adv_keymap_import_btn")
+        assert btn.isEnabled() is False
+
+        widget.findChild(QCheckBox, "adv_use_custom_keymap").setChecked(True)
+
+        assert btn.isEnabled() is True
+        assert model.keyboard.use_custom_keymap is True
+
+    def test_vial_import_on_qmk_needs_no_warning(self, qtbot, tmp_path):
+        model = ProjectModel()
+        widget = AdvancedOptionsWidget(model)
+        qtbot.addWidget(widget)
+        widget.set_firmware("qmk")
+
+        question, _, _ = self._import(widget, self._vial_file(tmp_path))
+
+        question.assert_not_called()
+        assert model.keyboard.custom_keymap["layout"]
+        assert model.keyboard.use_custom_keymap is True
+
+    def test_vial_import_on_zmk_warns_about_cross_format(self, qtbot, tmp_path):
+        model = ProjectModel()
+        widget = AdvancedOptionsWidget(model)
+        qtbot.addWidget(widget)
+        widget.set_firmware("zmk")
+
+        question, _, _ = self._import(widget, self._vial_file(tmp_path))
+
+        question.assert_called_once()
+
+    def test_zmk_import_on_qmk_warns_and_stores_layers(self, qtbot, tmp_path):
+        model = ProjectModel()
+        widget = AdvancedOptionsWidget(model)
+        qtbot.addWidget(widget)
+        widget.set_firmware("qmk")
+
+        question, _, _ = self._import(widget, self._zmk_file(tmp_path))
+
+        question.assert_called_once()
+        assert model.keyboard.custom_keymap["zmk_layers"][0]["bindings"][0] == "&kp ESC"
+
+    def test_cancelling_the_warning_leaves_model_untouched(self, qtbot, tmp_path):
+        model = ProjectModel()
+        widget = AdvancedOptionsWidget(model)
+        qtbot.addWidget(widget)
+        widget.set_firmware("qmk")
+
+        self._import(widget, self._zmk_file(tmp_path), confirm=False)
+
+        assert model.keyboard.custom_keymap is None
+        assert model.keyboard.use_custom_keymap is False
+
+    def test_unknown_format_is_rejected(self, qtbot, tmp_path):
+        model = ProjectModel()
+        widget = AdvancedOptionsWidget(model)
+        qtbot.addWidget(widget)
+        path = tmp_path / "notes.txt"
+        path.write_text("juste du texte", encoding="utf-8")
+
+        _, warning, _ = self._import(widget, path)
+
+        warning.assert_called_once()
+        assert model.keyboard.custom_keymap is None
+
+    def test_status_label_reports_source_and_layers(self, qtbot, tmp_path):
+        model = ProjectModel()
+        widget = AdvancedOptionsWidget(model)
+        qtbot.addWidget(widget)
+        widget.set_firmware("qmk")
+
+        self._import(widget, self._vial_file(tmp_path, layers=3))
+
+        status = widget.findChild(QLabel, "adv_keymap_status").text()
+        assert "3" in status
+
+    def test_reload_from_model_restores_status(self, qtbot, tmp_path):
+        model = ProjectModel()
+        model.keyboard.use_custom_keymap = True
+        model.keyboard.custom_keymap = {"layout": [[["KC_A"]]] * 2}
+        widget = AdvancedOptionsWidget(model)
+        qtbot.addWidget(widget)
+
+        widget.reload_from_model()
+
+        assert widget.findChild(QCheckBox, "adv_use_custom_keymap").isChecked() is True
+        assert "2" in widget.findChild(QLabel, "adv_keymap_status").text()
+
+
+class TestTooltips:
+    """Chaque option porte une explication avec un exemple concret."""
+
+    def test_every_declared_field_has_a_tooltip(self, qtbot):
+        from PySide6.QtWidgets import QWidget
+
+        from modules.advanced_options.widget import ADVANCED_TOOLTIP_FIELDS
+        widget = AdvancedOptionsWidget(ProjectModel())
+        qtbot.addWidget(widget)
+
+        missing = [
+            name for name in ADVANCED_TOOLTIP_FIELDS
+            if not (widget.findChild(QWidget, name) or QWidget()).toolTip()
+        ]
+
+        assert not missing, f"champs sans infobulle : {missing}"
+
+    def test_tooltip_contains_an_example(self, qtbot):
+        widget = AdvancedOptionsWidget(ProjectModel())
+        qtbot.addWidget(widget)
+
+        tip = widget.findChild(QCheckBox, "adv_nkro_enabled").toolTip()
+
+        assert "Exemple" in tip
+
+    def test_greying_prepends_notice_without_losing_explanation(self, qtbot):
+        widget = AdvancedOptionsWidget(ProjectModel())
+        qtbot.addWidget(widget)
+        passkey = widget.findChild(QCheckBox, "adv_ble_passkey_entry")
+
+        widget.set_firmware("qmk")
+        tip = passkey.toolTip()
+
+        assert tip.startswith("ZMK")
+        assert "Exemple" in tip
+
+    def test_explanation_restored_when_option_applies(self, qtbot):
+        widget = AdvancedOptionsWidget(ProjectModel())
+        qtbot.addWidget(widget)
+        passkey = widget.findChild(QCheckBox, "adv_ble_passkey_entry")
+
+        widget.set_firmware("qmk")
+        widget.set_firmware("zmk")
+        tip = passkey.toolTip()
+
+        assert not tip.startswith("ZMK uniquement")
+        assert "Exemple" in tip

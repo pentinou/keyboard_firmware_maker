@@ -544,6 +544,24 @@ def _sanitize_keyboard_name(name: str) -> str:
     return cleaned[:_KEYBOARD_NAME_MAX_LEN]
 
 
+_ZMK_OVERRIDE_LAYER_NAMES = ("default", "lower", "raise")
+
+
+def _zmk_layers_to_override(zmk_layers: list[dict]) -> dict[str, list[list[str]]]:
+    """Adapte des couches ZMK importées au format attendu par le template.
+
+    Le fichier source donne une liste plate de bindings par couche ; le template
+    attend des lignes. Une ligne unique par couche produit un devicetree valide
+    (le formatage visuel du .keymap généré est simplement moins aéré).
+    """
+    override: dict[str, list[list[str]]] = {}
+    for name, layer in zip(_ZMK_OVERRIDE_LAYER_NAMES, zmk_layers):
+        bindings = [b for b in layer.get("bindings", []) if isinstance(b, str)]
+        if bindings:
+            override[name] = [bindings]
+    return override
+
+
 def _kfm_version() -> str:
     """Lit la version KFM depuis _version.py (source de vérité), sinon 'dev'."""
     try:
@@ -779,7 +797,14 @@ class ZmkTemplateGenerator:
         # JSON Vial → bindings ZMK et on l'utilise comme override des layers
         # default/lower/raise (le bluetooth_layer reste généré à part).
         keymap_override = None
-        if model.keyboard.use_custom_keymap and model.keyboard.custom_keymap:
+        if model.keyboard.use_custom_keymap and isinstance(
+            (model.keyboard.custom_keymap or {}).get("zmk_layers"), list
+        ):
+            # Keymap déjà en bindings ZMK (fichier .keymap importé) : aucune
+            # conversion, on remappe seulement les couches sur les noms attendus
+            # par le template.
+            keymap_override = _zmk_layers_to_override(model.keyboard.custom_keymap["zmk_layers"])
+        elif model.keyboard.use_custom_keymap and model.keyboard.custom_keymap:
             try:
                 from modules.keymap_importer.vial_to_zmk import convert_vial_to_zmk_keymap
                 # Construire les positions encodeur par row pour que le converter

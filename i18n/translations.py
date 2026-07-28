@@ -241,17 +241,6 @@ STRINGS: dict[str, dict[str, str]] = {
         "hardware.zmk_studio.help": "Bluetooth = pratique sans câble ; USB = utile si l'appairage BLE est instable.",
         "hardware.zmk_debug_logging.label": "Mode debug (logs Zephyr/ZMK sur USB)",
         "hardware.zmk_debug_logging.help": "Active les logs de boot/runtime sur le port série USB CDC. Capturer avec `screen /dev/ttyACM0 115200` ou `picocom`. Augmente la taille flash et la conso BLE — à désactiver pour la prod.",
-        "hardware.zmk_custom_keymap.label": "Importer un keymap personnel (Vial JSON)",
-        "hardware.zmk_custom_keymap.import_btn": "Choisir fichier…",
-        "hardware.zmk_custom_keymap.no_file": "Aucun fichier importé",
-        "hardware.zmk_custom_keymap.loaded": "Keymap chargé ({n} layers)",
-        "hardware.zmk_custom_keymap.help": "Importer un keymap exporté depuis Vial-QMK (.json). KFM convertit en ZMK best-effort : la plupart des touches sont préservées, certaines (BL_TOGG, QK_CLEAR_EEPROM, modes RGB spécifiques) deviennent &none.",
-        "hardware.zmk_custom_keymap.dialog_title": "Choisir un fichier .json Vial-QMK",
-        "hardware.zmk_custom_keymap.error_title": "Erreur d'import keymap",
-        "hardware.zmk_custom_keymap.error_msg": "Impossible de lire le fichier : {exc}",
-        "hardware.zmk_custom_keymap.invalid_format": "Le fichier n'est pas un export Vial valide (clé 'layout' manquante).",
-        "hardware.zmk_custom_keymap.layers_warning_title": "Import keymap : couches ignorées",
-        "hardware.zmk_custom_keymap.layers_warning_msg": "Ce keymap contient {n} couches, mais le firmware ZMK généré n'en a que 4 (default, lower, raise + couche Bluetooth KFM). Seules les 3 premières couches sont importées. Les touches MO/LT/TG/TO pointant vers une couche absente seront neutralisées à la génération.",
         "hardware.choice.custom": "Clavier custom",
         "hardware.choice.custom_desc": "Importer un layout depuis keyboard-layout-editor.com",
         "hardware.choice.back": "\u2190 Retour au choix",
@@ -418,6 +407,238 @@ STRINGS: dict[str, dict[str, str]] = {
         "rgb.custom.multi_press": "Appuis multiples simultanés",
         "rgb.custom.color_bg": "Couleur de fond :",
         # Onglet "Options avancées"
+        # Infobulles — Options avancées
+        "tip.adv_use_custom_keymap": (
+            "Remplace le keymap par défaut du clavier par celui que vous importez.\n\n"
+            "Exemple : vous avez passé une heure à régler vos couches sur vial.rocks — "
+            "exportez-les, importez le fichier ici, et le firmware généré démarre "
+            "directement avec vos touches.\n\n"
+            "Décoché : le clavier utilise le keymap par défaut de sa définition."
+        ),
+        "tip.adv_keymap_import_btn": (
+            "Charge un export vial.rocks (.vil, .json) ou un keymap ZMK (.keymap).\n\n"
+            "Exemple : « penti.vil » exporté depuis vial.rocks → vos 4 couches sont "
+            "reprises dans le firmware.\n\n"
+            "Si le fichier ne vient pas du même firmware que le clavier sélectionné, "
+            "un avertissement précise ce qui sera abandonné."
+        ),
+        "tip.adv_keyboard_name": (
+            "Nom sous lequel le clavier se présente à l\u2019ordinateur.\n\n"
+            "Exemple : « Sofle Boulot » apparaîtra tel quel dans la liste Bluetooth "
+            "de Windows, au lieu du nom générique du firmware.\n\n"
+            "16 caractères maximum (limite de l\u2019annonce BLE). Vide = nom par défaut.\n"
+            "ZMK : CONFIG_ZMK_KEYBOARD_NAME"
+        ),
+        "tip.adv_nkro_enabled": (
+            "Signale un nombre illimité de touches pressées en même temps, au lieu "
+            "des 6 du mode clavier standard.\n\n"
+            "Exemple : en jeu, Maj+W+A+Espace+E passe en entier ; sans NKRO la "
+            "7ᵉ touche est ignorée.\n\n"
+            "⚠ Certains BIOS et écrans de connexion ne reconnaissent pas le NKRO.\n"
+            "QMK : NKRO_ENABLE — ZMK : ZMK_HID_REPORT_TYPE_NKRO"
+        ),
+        "tip.adv_hid_indicators_enabled": (
+            "Le clavier reçoit l\u2019état des voyants envoyé par le système "
+            "(Verr. Maj, Verr. Num, Arrêt défil.).\n\n"
+            "Exemple : nécessaire pour afficher « CAPS » sur l\u2019écran OLED quand "
+            "le verrouillage majuscule est actif.\n\n"
+            "ZMK : ZMK_HID_INDICATORS. QMK gère ces voyants nativement."
+        ),
+        "tip.adv_usb_boot_protocol": (
+            "Ajoute le protocole clavier simplifié que comprennent les BIOS et les "
+            "chargeurs d\u2019amorçage.\n\n"
+            "Exemple : sans cette option, certains claviers ZMK ne permettent pas "
+            "d\u2019entrer dans le BIOS ni de choisir un système au démarrage.\n\n"
+            "ZMK : ZMK_USB_BOOT"
+        ),
+        "tip.adv_auto_shift_enabled": (
+            "Maintenir une touche produit sa version majuscule, sans appuyer sur Maj.\n\n"
+            "Exemple : appui bref sur « a » → a ; appui maintenu → A. Idem pour "
+            "les chiffres et la ponctuation : maintenir « 1 » donne « & ».\n\n"
+            "QMK : AUTO_SHIFT_ENABLE"
+        ),
+        "tip.adv_auto_shift_timeout_ms": (
+            "Durée d\u2019appui à partir de laquelle la majuscule est envoyée.\n\n"
+            "Exemple : à 175 ms, une frappe normale reste en minuscule ; un appui "
+            "d\u2019un cinquième de seconde donne la majuscule. Augmentez si vous "
+            "obtenez des majuscules non voulues en tapant vite.\n\n"
+            "QMK : AUTO_SHIFT_TIMEOUT"
+        ),
+        "tip.adv_ble_passkey_entry": (
+            "Exige la saisie d\u2019un code à 6 chiffres lors de l\u2019appairage Bluetooth.\n\n"
+            "Exemple : à l\u2019appairage, l\u2019ordinateur affiche « 418293 » et vous "
+            "tapez ce code sur le clavier avant que la connexion soit acceptée.\n\n"
+            "Protège contre l\u2019appairage d\u2019un voisin ; ajoute une étape à chaque "
+            "nouvel appareil.\n"
+            "ZMK : ZMK_BLE_PASSKEY_ENTRY"
+        ),
+        "tip.adv_deep_sleep_timeout_min": (
+            "Délai d\u2019inactivité avant la mise en veille profonde.\n\n"
+            "Exemple : à 4 minutes, le clavier s\u2019éteint presque complètement après "
+            "une pause ; la première touche pressée le réveille (moins d\u2019une "
+            "seconde de latence).\n\n"
+            "Plus court = meilleure autonomie, réveils plus fréquents.\n"
+            "ZMK : ZMK_IDLE_SLEEP_TIMEOUT"
+        ),
+        "tip.adv_battery_report_interval_s": (
+            "Fréquence à laquelle le niveau de batterie est transmis à l\u2019ordinateur.\n\n"
+            "Exemple : à 60 s, l\u2019indicateur système se met à jour chaque minute. "
+            "À 600 s, il se rafraîchit dix fois moins souvent mais la radio "
+            "consomme d\u2019autant moins.\n\n"
+            "ZMK : ZMK_BATTERY_REPORT_INTERVAL"
+        ),
+        "tip.adv_soft_off_enabled": (
+            "Active une extinction logicielle propre, déclenchée par une touche.\n\n"
+            "Exemple : une touche &soft_off dans votre keymap éteint le clavier pour "
+            "un transport en sac ; il redémarre par le bouton reset.\n\n"
+            "Consommation quasi nulle, contrairement à la veille profonde.\n"
+            "ZMK : ZMK_PM_SOFT_OFF"
+        ),
+        "tip.adv_tap_dance_enabled": (
+            "Une même touche fait des choses différentes selon le nombre d\u2019appuis "
+            "rapprochés.\n\n"
+            "Exemple : un appui = « . », deux appuis = « : », trois appuis = « ; ». "
+            "Pratique sur un clavier compact où les symboles manquent.\n\n"
+            "QMK : TAP_DANCE_ENABLE — ZMK : ZMK_BEHAVIOR_TAP_DANCE"
+        ),
+        "tip.adv_sticky_key_enabled": (
+            "Un modificateur reste actif pour la touche suivante, sans le maintenir.\n\n"
+            "Exemple : appuyez sur Maj puis relâchez, puis sur « a » → « A ». "
+            "Évite les contorsions de doigts pour les raccourcis.\n\n"
+            "QMK : STICKY_KEYS — ZMK : ZMK_BEHAVIOR_STICKY_KEY"
+        ),
+        "tip.adv_tapping_term_ms": (
+            "Durée au-delà de laquelle un appui compte comme « maintenu » plutôt "
+            "que « tapé ».\n\n"
+            "Exemple : sur une touche Ctrl/Échap, un appui de moins de 200 ms envoie "
+            "Échap, un appui plus long agit comme Ctrl. Baissez si les couches "
+            "tardent à s\u2019activer, montez si vous obtenez des Ctrl involontaires.\n\n"
+            "QMK : TAPPING_TERM"
+        ),
+        "tip.adv_combo_term_ms": (
+            "Fenêtre pendant laquelle deux touches pressées ensemble forment un combo.\n\n"
+            "Exemple : à 50 ms, presser J et K simultanément déclenche Échap ; "
+            "au-delà, les deux lettres sont envoyées normalement.\n\n"
+            "QMK : COMBO_TERM"
+        ),
+        "tip.adv_permissive_hold": (
+            "Valide le rôle « maintenu » dès qu\u2019une autre touche est pressée "
+            "pendant le maintien, sans attendre le délai complet.\n\n"
+            "Exemple : sur une touche Maj/A, taper Maj+B enchaîné rapidement donne "
+            "« B » majuscule au lieu de « ab ». Recommandé si vous tapez vite.\n\n"
+            "QMK : PERMISSIVE_HOLD"
+        ),
+        "tip.adv_rgb_hue_start": (
+            "Teinte des LED au démarrage du clavier, sur le cercle chromatique "
+            "(0 = rouge, 120 = vert, 240 = bleu).\n\n"
+            "Exemple : 240 fait démarrer le clavier en bleu à chaque mise sous "
+            "tension, au lieu du rouge par défaut.\n\n"
+            "ZMK : ZMK_RGB_UNDERGLOW_HUE_START"
+        ),
+        "tip.adv_rgb_on_start": (
+            "Les LED s\u2019allument dès la mise sous tension.\n\n"
+            "Exemple : décoché, le clavier démarre éteint et vous allumez les LED "
+            "à la demande — l\u2019autonomie sur batterie s\u2019en trouve nettement "
+            "améliorée.\n\n"
+            "ZMK : ZMK_RGB_UNDERGLOW_ON_START"
+        ),
+        "tip.adv_rgb_auto_off_idle": (
+            "Éteint les LED après une période sans frappe, et les rallume à la "
+            "reprise.\n\n"
+            "Exemple : vous partez en réunion, l\u2019éclairage s\u2019éteint seul ; la "
+            "première touche pressée le rétablit.\n\n"
+            "ZMK : ZMK_RGB_UNDERGLOW_AUTO_OFF_IDLE"
+        ),
+        "tip.adv_rgb_auto_off_usb": (
+            "Éteint les LED dès que le câble USB est débranché.\n\n"
+            "Exemple : branché au bureau, le clavier est éclairé ; en déplacement "
+            "sur batterie, l\u2019éclairage s\u2019éteint automatiquement.\n\n"
+            "ZMK : ZMK_RGB_UNDERGLOW_AUTO_OFF_USB"
+        ),
+        "tip.adv_pointing_enabled": (
+            "Prise en charge d\u2019un périphérique de pointage soudé au clavier "
+            "(trackball, pavé tactile, trackpoint).\n\n"
+            "Exemple : un trackball sur la moitié droite déplace le curseur sans "
+            "quitter la position de frappe.\n\n"
+            "Nécessite le matériel correspondant et son câblage.\n"
+            "ZMK : ZMK_POINTING"
+        ),
+        "tip.adv_pointing_smooth_scroll": (
+            "Défilement continu au lieu de crans fixes.\n\n"
+            "Exemple : le défilement d\u2019une page suit le doigt au pixel près, "
+            "comme sur un pavé tactile d\u2019ordinateur portable.\n\n"
+            "ZMK : ZMK_POINTING_SMOOTH_SCROLLING"
+        ),
+        "tip.adv_mousekey_enabled": (
+            "Permet de piloter le curseur de la souris depuis le clavier.\n\n"
+            "Exemple : sur une couche dédiée, IJKL déplacent le pointeur et une "
+            "touche fait le clic gauche — utile sans souris sous la main.\n\n"
+            "Les trois réglages suivants n\u2019ont d\u2019effet que si cette option "
+            "est cochée.\n"
+            "QMK : MOUSEKEY_ENABLE"
+        ),
+        "tip.adv_mousekey_delay_ms": (
+            "Temps d\u2019attente entre l\u2019appui et le début du déplacement du "
+            "curseur.\n\n"
+            "Exemple : à 10 ms le curseur part presque instantanément ; augmentez "
+            "si de simples tapes font bouger le pointeur par erreur.\n\n"
+            "QMK : MOUSEKEY_DELAY"
+        ),
+        "tip.adv_mousekey_interval_ms": (
+            "Intervalle entre deux pas de déplacement pendant un appui maintenu.\n\n"
+            "Exemple : à 20 ms, le curseur avance 50 fois par seconde — mouvement "
+            "fluide. Une valeur plus élevée donne un déplacement saccadé.\n\n"
+            "QMK : MOUSEKEY_INTERVAL"
+        ),
+        "tip.adv_mousekey_max_speed": (
+            "Vitesse maximale atteinte par le curseur après accélération.\n\n"
+            "Exemple : à 10, traverser un écran 4K prend environ une seconde ; "
+            "montez pour un grand écran, baissez pour viser précisément.\n\n"
+            "QMK : MOUSEKEY_MAX_SPEED"
+        ),
+        # Options avancées — import de keymap
+        "adv.section.keymap_import": "Keymap importé",
+        "adv.keymap.use": "Utiliser un keymap importé au lieu du keymap par défaut",
+        "adv.keymap.import_btn": "Importer un fichier…",
+        "adv.keymap.no_file": "Aucun fichier importé",
+        "adv.keymap.loaded_vial": "Keymap vial.rocks chargé — {n} couche(s)",
+        "adv.keymap.loaded_zmk": "Keymap ZMK chargé — {n} couche(s)",
+        "adv.keymap.help": (
+            "Accepte un export vial.rocks (.vil, .json) ou un keymap ZMK (.keymap). "
+            "Le fichier est converti vers le firmware du clavier sélectionné ; ce qui "
+            "n\u2019a pas d\u2019équivalent est signalé après l\u2019import."
+        ),
+        "adv.keymap.dialog_title": "Choisir un fichier de keymap",
+        "adv.keymap.filter": "Keymaps (*.vil *.json *.keymap);;Tous les fichiers (*)",
+        "adv.keymap.error_title": "Import impossible",
+        "adv.keymap.error_msg": "Le fichier n\u2019a pas pu être lu : {exc}",
+        "adv.keymap.unknown_title": "Format non reconnu",
+        "adv.keymap.unknown_msg": (
+            "Ce fichier n\u2019est ni un export vial.rocks (.vil / .json avec une clé « layout ») "
+            "ni un keymap ZMK (.keymap)."
+        ),
+        "adv.keymap.zmk_no_layer": "Ce keymap ZMK ne contient aucune couche exploitable.",
+        "adv.keymap.cross_title": "Origine différente du firmware cible",
+        "adv.keymap.cross_zmk_to_qmk": (
+            "Ce keymap vient d\u2019un firmware ZMK et votre clavier est en QMK.\n\n"
+            "Les touches, les couches et les modificateurs seront repris. Les "
+            "fonctions propres à ZMK (Bluetooth, sortie USB/BLE, alimentation "
+            "externe) n\u2019ont pas d\u2019équivalent QMK et seront abandonnées.\n\n"
+            "Continuer ?"
+        ),
+        "adv.keymap.cross_vial_to_zmk": (
+            "Ce keymap vient d\u2019un firmware QMK (vial.rocks) et votre clavier est en ZMK.\n\n"
+            "Les touches, les couches et les modificateurs seront repris. Les "
+            "fonctions QMK sans équivalent ZMK seront abandonnées.\n\n"
+            "Continuer ?"
+        ),
+        "adv.keymap.report_title": "Rapport d\u2019import",
+        "adv.keymap.report_ok": "Keymap importé : {n} touches converties, aucune perte.",
+        "adv.keymap.report_partial": (
+            "Keymap importé : {converted} touches converties, {dropped} abandonnée(s).\n"
+            "Les touches abandonnées deviennent inactives dans le firmware généré."
+        ),
+        "adv.keymap.report_line": "Couche {layer}, position {position} : {source} — {reason}",
         "adv.section.identification": "Identification",
         "adv.section.keyboard_behavior": "Comportement clavier",
         "adv.section.bluetooth": "Bluetooth (ZMK uniquement)",
@@ -695,17 +916,6 @@ STRINGS: dict[str, dict[str, str]] = {
         "hardware.zmk_studio.help": "Bluetooth = convenient without a cable; USB = handy if BLE pairing is unstable.",
         "hardware.zmk_debug_logging.label": "Debug mode (Zephyr/ZMK logs over USB)",
         "hardware.zmk_debug_logging.help": "Enables boot/runtime logs on the USB CDC serial port. Capture with `screen /dev/ttyACM0 115200` or `picocom`. Increases flash size and BLE consumption — disable for production.",
-        "hardware.zmk_custom_keymap.label": "Import a custom keymap (Vial JSON)",
-        "hardware.zmk_custom_keymap.import_btn": "Choose file…",
-        "hardware.zmk_custom_keymap.no_file": "No file imported",
-        "hardware.zmk_custom_keymap.loaded": "Keymap loaded ({n} layers)",
-        "hardware.zmk_custom_keymap.help": "Import a keymap exported from Vial-QMK (.json). KFM converts to ZMK best-effort: most keys are preserved, some (BL_TOGG, QK_CLEAR_EEPROM, QMK-specific RGB modes) become &none.",
-        "hardware.zmk_custom_keymap.dialog_title": "Choose a Vial-QMK .json file",
-        "hardware.zmk_custom_keymap.error_title": "Keymap import error",
-        "hardware.zmk_custom_keymap.error_msg": "Cannot read file: {exc}",
-        "hardware.zmk_custom_keymap.invalid_format": "File is not a valid Vial export (missing 'layout' key).",
-        "hardware.zmk_custom_keymap.layers_warning_title": "Keymap import: layers ignored",
-        "hardware.zmk_custom_keymap.layers_warning_msg": "This keymap has {n} layers, but the generated ZMK firmware only has 4 (default, lower, raise + KFM Bluetooth layer). Only the first 3 layers are imported. MO/LT/TG/TO keys pointing to a missing layer will be neutralized at generation time.",
         "hardware.choice.custom": "Custom keyboard",
         "hardware.choice.custom_desc": "Import a layout from keyboard-layout-editor.com",
         "hardware.choice.back": "\u2190 Back to choice",
@@ -872,6 +1082,233 @@ STRINGS: dict[str, dict[str, str]] = {
         "rgb.custom.multi_press": "Multiple simultaneous presses",
         "rgb.custom.color_bg": "Background color:",
         # Advanced options tab
+        # Tooltips — advanced options
+        "tip.adv_use_custom_keymap": (
+            "Replaces the keyboard\u2019s default keymap with the one you import.\n\n"
+            "Example: you spent an hour tuning your layers on vial.rocks \u2014 export "
+            "them, import the file here, and the generated firmware boots straight "
+            "with your keys.\n\n"
+            "Unchecked: the keyboard uses the default keymap from its definition."
+        ),
+        "tip.adv_keymap_import_btn": (
+            "Loads a vial.rocks export (.vil, .json) or a ZMK keymap (.keymap).\n\n"
+            "Example: \u201cpenti.vil\u201d exported from vial.rocks \u2192 your 4 layers "
+            "are carried into the firmware.\n\n"
+            "If the file does not come from the same firmware as the selected "
+            "keyboard, a warning tells you what will be dropped."
+        ),
+        "tip.adv_keyboard_name": (
+            "Name the keyboard reports to the computer.\n\n"
+            "Example: \u201cSofle Work\u201d shows up as such in the Windows Bluetooth "
+            "list, instead of the firmware\u2019s generic name.\n\n"
+            "16 characters max (BLE advertising limit). Empty = default name.\n"
+            "ZMK: CONFIG_ZMK_KEYBOARD_NAME"
+        ),
+        "tip.adv_nkro_enabled": (
+            "Reports an unlimited number of simultaneous keypresses instead of the "
+            "6 allowed by the standard keyboard mode.\n\n"
+            "Example: while gaming, Shift+W+A+Space+E all register; without NKRO the "
+            "7th key is dropped.\n\n"
+            "\u26a0 Some BIOS and login screens do not understand NKRO.\n"
+            "QMK: NKRO_ENABLE \u2014 ZMK: ZMK_HID_REPORT_TYPE_NKRO"
+        ),
+        "tip.adv_hid_indicators_enabled": (
+            "The keyboard receives lock-light state from the operating system "
+            "(Caps Lock, Num Lock, Scroll Lock).\n\n"
+            "Example: required to show \u201cCAPS\u201d on the OLED display while caps "
+            "lock is on.\n\n"
+            "ZMK: ZMK_HID_INDICATORS. QMK handles these natively."
+        ),
+        "tip.adv_usb_boot_protocol": (
+            "Adds the simplified keyboard protocol that BIOS and boot loaders "
+            "understand.\n\n"
+            "Example: without it, some ZMK keyboards cannot enter the BIOS or pick "
+            "an operating system at boot.\n\n"
+            "ZMK: ZMK_USB_BOOT"
+        ),
+        "tip.adv_auto_shift_enabled": (
+            "Holding a key produces its shifted version, without pressing Shift.\n\n"
+            "Example: a quick tap on \u201ca\u201d gives a; holding it gives A. Same for "
+            "digits and punctuation.\n\n"
+            "QMK: AUTO_SHIFT_ENABLE"
+        ),
+        "tip.adv_auto_shift_timeout_ms": (
+            "How long a key must be held before the shifted character is sent.\n\n"
+            "Example: at 175 ms normal typing stays lowercase, while a fifth of a "
+            "second gives uppercase. Raise it if you get unwanted capitals when "
+            "typing fast.\n\n"
+            "QMK: AUTO_SHIFT_TIMEOUT"
+        ),
+        "tip.adv_ble_passkey_entry": (
+            "Requires a 6-digit code when pairing over Bluetooth.\n\n"
+            "Example: the computer shows \u201c418293\u201d and you type it on the "
+            "keyboard before the connection is accepted.\n\n"
+            "Protects against a neighbour pairing with your keyboard; adds a step "
+            "for every new device.\n"
+            "ZMK: ZMK_BLE_PASSKEY_ENTRY"
+        ),
+        "tip.adv_deep_sleep_timeout_min": (
+            "Idle time before the keyboard enters deep sleep.\n\n"
+            "Example: at 4 minutes the keyboard powers down almost completely after "
+            "a break; the first keypress wakes it in well under a second.\n\n"
+            "Shorter = better battery life, more frequent wake-ups.\n"
+            "ZMK: ZMK_IDLE_SLEEP_TIMEOUT"
+        ),
+        "tip.adv_battery_report_interval_s": (
+            "How often the battery level is sent to the computer.\n\n"
+            "Example: at 60 s the system indicator updates every minute. At 600 s it "
+            "refreshes ten times less often, and the radio draws that much less "
+            "power.\n\n"
+            "ZMK: ZMK_BATTERY_REPORT_INTERVAL"
+        ),
+        "tip.adv_soft_off_enabled": (
+            "Enables a clean software power-off, triggered by a key.\n\n"
+            "Example: an &soft_off key in your keymap shuts the keyboard down before "
+            "putting it in a bag; the reset button brings it back.\n\n"
+            "Draws almost no power, unlike deep sleep.\n"
+            "ZMK: ZMK_PM_SOFT_OFF"
+        ),
+        "tip.adv_tap_dance_enabled": (
+            "One key does different things depending on how many times you tap it.\n\n"
+            "Example: one tap = \u201c.\u201d, two taps = \u201c:\u201d, three taps = "
+            "\u201c;\u201d. Handy on a compact board short on symbols.\n\n"
+            "QMK: TAP_DANCE_ENABLE \u2014 ZMK: ZMK_BEHAVIOR_TAP_DANCE"
+        ),
+        "tip.adv_sticky_key_enabled": (
+            "A modifier stays active for the next key, with no need to hold it.\n\n"
+            "Example: press and release Shift, then \u201ca\u201d \u2192 \u201cA\u201d. "
+            "Avoids finger gymnastics for shortcuts.\n\n"
+            "QMK: STICKY_KEYS \u2014 ZMK: ZMK_BEHAVIOR_STICKY_KEY"
+        ),
+        "tip.adv_tapping_term_ms": (
+            "How long a press must last to count as \u201cheld\u201d rather than "
+            "\u201ctapped\u201d.\n\n"
+            "Example: on a Ctrl/Esc key, under 200 ms sends Esc, longer acts as Ctrl. "
+            "Lower it if layers feel sluggish, raise it if you trigger Ctrl by "
+            "accident.\n\n"
+            "QMK: TAPPING_TERM"
+        ),
+        "tip.adv_combo_term_ms": (
+            "Window during which two keys pressed together form a combo.\n\n"
+            "Example: at 50 ms, pressing J and K together sends Esc; beyond that both "
+            "letters are typed normally.\n\n"
+            "QMK: COMBO_TERM"
+        ),
+        "tip.adv_permissive_hold": (
+            "Commits the \u201chold\u201d role as soon as another key is pressed during "
+            "the hold, without waiting for the full delay.\n\n"
+            "Example: on a Shift/A key, quickly rolling Shift+B gives an uppercase "
+            "\u201cB\u201d instead of \u201cab\u201d. Recommended for fast typists.\n\n"
+            "QMK: PERMISSIVE_HOLD"
+        ),
+        "tip.adv_rgb_hue_start": (
+            "LED hue at power-on, on the colour wheel (0 = red, 120 = green, "
+            "240 = blue).\n\n"
+            "Example: 240 makes the keyboard start blue every time it powers up, "
+            "instead of the default red.\n\n"
+            "ZMK: ZMK_RGB_UNDERGLOW_HUE_START"
+        ),
+        "tip.adv_rgb_on_start": (
+            "LEDs turn on as soon as the keyboard powers up.\n\n"
+            "Example: unchecked, the keyboard starts dark and you switch the LEDs on "
+            "when you want them \u2014 battery life improves markedly.\n\n"
+            "ZMK: ZMK_RGB_UNDERGLOW_ON_START"
+        ),
+        "tip.adv_rgb_auto_off_idle": (
+            "Turns the LEDs off after a period without typing, and back on when you "
+            "resume.\n\n"
+            "Example: you leave for a meeting, the lighting switches itself off; the "
+            "first keypress restores it.\n\n"
+            "ZMK: ZMK_RGB_UNDERGLOW_AUTO_OFF_IDLE"
+        ),
+        "tip.adv_rgb_auto_off_usb": (
+            "Turns the LEDs off as soon as the USB cable is unplugged.\n\n"
+            "Example: lit while docked at the desk, dark on the move to save "
+            "battery.\n\n"
+            "ZMK: ZMK_RGB_UNDERGLOW_AUTO_OFF_USB"
+        ),
+        "tip.adv_pointing_enabled": (
+            "Support for a pointing device wired into the keyboard (trackball, "
+            "touchpad, trackpoint).\n\n"
+            "Example: a trackball on the right half moves the cursor without leaving "
+            "the home position.\n\n"
+            "Requires the matching hardware and wiring.\n"
+            "ZMK: ZMK_POINTING"
+        ),
+        "tip.adv_pointing_smooth_scroll": (
+            "Continuous scrolling instead of fixed steps.\n\n"
+            "Example: a page scrolls pixel by pixel as you move, like a laptop "
+            "touchpad.\n\n"
+            "ZMK: ZMK_POINTING_SMOOTH_SCROLLING"
+        ),
+        "tip.adv_mousekey_enabled": (
+            "Lets you drive the mouse pointer from the keyboard.\n\n"
+            "Example: on a dedicated layer, IJKL move the pointer and one key does a "
+            "left click \u2014 useful with no mouse at hand.\n\n"
+            "The three settings below only take effect when this is checked.\n"
+            "QMK: MOUSEKEY_ENABLE"
+        ),
+        "tip.adv_mousekey_delay_ms": (
+            "Wait between the keypress and the start of cursor movement.\n\n"
+            "Example: at 10 ms the cursor starts almost instantly; raise it if plain "
+            "taps nudge the pointer by mistake.\n\n"
+            "QMK: MOUSEKEY_DELAY"
+        ),
+        "tip.adv_mousekey_interval_ms": (
+            "Time between two movement steps while the key is held.\n\n"
+            "Example: at 20 ms the cursor advances 50 times per second \u2014 smooth "
+            "motion. Higher values feel jerky.\n\n"
+            "QMK: MOUSEKEY_INTERVAL"
+        ),
+        "tip.adv_mousekey_max_speed": (
+            "Top speed the cursor reaches once accelerated.\n\n"
+            "Example: at 10, crossing a 4K screen takes about a second; raise it for "
+            "a large display, lower it for precise aiming.\n\n"
+            "QMK: MOUSEKEY_MAX_SPEED"
+        ),
+        # Advanced options — keymap import
+        "adv.section.keymap_import": "Imported keymap",
+        "adv.keymap.use": "Use an imported keymap instead of the default one",
+        "adv.keymap.import_btn": "Import a file…",
+        "adv.keymap.no_file": "No file imported",
+        "adv.keymap.loaded_vial": "vial.rocks keymap loaded — {n} layer(s)",
+        "adv.keymap.loaded_zmk": "ZMK keymap loaded — {n} layer(s)",
+        "adv.keymap.help": (
+            "Accepts a vial.rocks export (.vil, .json) or a ZMK keymap (.keymap). "
+            "The file is converted for the selected keyboard\u2019s firmware; anything "
+            "without an equivalent is reported after the import."
+        ),
+        "adv.keymap.dialog_title": "Choose a keymap file",
+        "adv.keymap.filter": "Keymaps (*.vil *.json *.keymap);;All files (*)",
+        "adv.keymap.error_title": "Import failed",
+        "adv.keymap.error_msg": "The file could not be read: {exc}",
+        "adv.keymap.unknown_title": "Unrecognised format",
+        "adv.keymap.unknown_msg": (
+            "This file is neither a vial.rocks export (.vil / .json with a \u201clayout\u201d key) "
+            "nor a ZMK keymap (.keymap)."
+        ),
+        "adv.keymap.zmk_no_layer": "This ZMK keymap contains no usable layer.",
+        "adv.keymap.cross_title": "Source differs from target firmware",
+        "adv.keymap.cross_zmk_to_qmk": (
+            "This keymap comes from a ZMK firmware and your keyboard runs QMK.\n\n"
+            "Keys, layers and modifiers will be carried over. ZMK-specific "
+            "features (Bluetooth, USB/BLE output, external power) have no QMK "
+            "equivalent and will be dropped.\n\n"
+            "Continue?"
+        ),
+        "adv.keymap.cross_vial_to_zmk": (
+            "This keymap comes from a QMK firmware (vial.rocks) and your keyboard runs ZMK.\n\n"
+            "Keys, layers and modifiers will be carried over. QMK features without "
+            "a ZMK equivalent will be dropped.\n\n"
+            "Continue?"
+        ),
+        "adv.keymap.report_title": "Import report",
+        "adv.keymap.report_ok": "Keymap imported: {n} keys converted, nothing lost.",
+        "adv.keymap.report_partial": (
+            "Keymap imported: {converted} keys converted, {dropped} dropped.\n"
+            "Dropped keys become inactive in the generated firmware."
+        ),
+        "adv.keymap.report_line": "Layer {layer}, position {position}: {source} — {reason}",
         "adv.section.identification": "Identification",
         "adv.section.keyboard_behavior": "Keyboard behavior",
         "adv.section.bluetooth": "Bluetooth (ZMK only)",
@@ -1149,17 +1586,6 @@ STRINGS: dict[str, dict[str, str]] = {
         "hardware.zmk_studio.help": "Bluetooth = comodo senza cavo; USB = utile se il pairing BLE \u00e8 instabile.",
         "hardware.zmk_debug_logging.label": "Modalit\u00e0 debug (log Zephyr/ZMK su USB)",
         "hardware.zmk_debug_logging.help": "Attiva i log di boot/runtime sulla porta seriale USB CDC. Cattura con `screen /dev/ttyACM0 115200` o `picocom`. Aumenta la dimensione flash e il consumo BLE \u2014 disattivare in produzione.",
-        "hardware.zmk_custom_keymap.label": "Importa un keymap personalizzato (Vial JSON)",
-        "hardware.zmk_custom_keymap.import_btn": "Scegli file\u2026",
-        "hardware.zmk_custom_keymap.no_file": "Nessun file importato",
-        "hardware.zmk_custom_keymap.loaded": "Keymap caricato ({n} layers)",
-        "hardware.zmk_custom_keymap.help": "Importa un keymap esportato da Vial-QMK (.json). KFM converte in ZMK best-effort: la maggior parte dei tasti viene preservata, alcuni (BL_TOGG, QK_CLEAR_EEPROM, modi RGB QMK-specifici) diventano &none.",
-        "hardware.zmk_custom_keymap.dialog_title": "Scegli un file .json Vial-QMK",
-        "hardware.zmk_custom_keymap.error_title": "Errore importazione keymap",
-        "hardware.zmk_custom_keymap.error_msg": "Impossibile leggere il file: {exc}",
-        "hardware.zmk_custom_keymap.invalid_format": "Il file non \u00e8 un export Vial valido (chiave 'layout' mancante).",
-        "hardware.zmk_custom_keymap.layers_warning_title": "Import keymap: livelli ignorati",
-        "hardware.zmk_custom_keymap.layers_warning_msg": "Questo keymap contiene {n} livelli, ma il firmware ZMK generato ne ha solo 4 (default, lower, raise + livello Bluetooth KFM). Solo i primi 3 livelli vengono importati. I tasti MO/LT/TG/TO che puntano a un livello assente saranno neutralizzati alla generazione.",
         "hardware.choice.custom": "Tastiera custom",
         "hardware.choice.custom_desc": "Importa un layout da keyboard-layout-editor.com",
         "hardware.choice.back": "\u2190 Torna alla scelta",
@@ -1326,6 +1752,238 @@ STRINGS: dict[str, dict[str, str]] = {
         "rgb.custom.multi_press": "Pressioni multiple simultanee",
         "rgb.custom.color_bg": "Colore di sfondo:",
         # Scheda "Opzioni avanzate"
+        # Suggerimenti — opzioni avanzate
+        "tip.adv_use_custom_keymap": (
+            "Sostituisce il keymap predefinito della tastiera con quello importato.\n\n"
+            "Esempio: hai passato un\u2019ora a regolare i livelli su vial.rocks \u2014 "
+            "esportali, importa il file qui e il firmware generato parte già con i "
+            "tuoi tasti.\n\n"
+            "Deselezionato: la tastiera usa il keymap predefinito della sua definizione."
+        ),
+        "tip.adv_keymap_import_btn": (
+            "Carica un export di vial.rocks (.vil, .json) o un keymap ZMK (.keymap).\n\n"
+            "Esempio: «penti.vil» esportato da vial.rocks \u2192 i tuoi 4 livelli "
+            "vengono ripresi nel firmware.\n\n"
+            "Se il file non proviene dallo stesso firmware della tastiera "
+            "selezionata, un avviso indica cosa verrà abbandonato."
+        ),
+        "tip.adv_keyboard_name": (
+            "Nome con cui la tastiera si presenta al computer.\n\n"
+            "Esempio: «Sofle Ufficio» apparirà così nell\u2019elenco Bluetooth di "
+            "Windows, invece del nome generico del firmware.\n\n"
+            "Massimo 16 caratteri (limite dell\u2019annuncio BLE). Vuoto = nome "
+            "predefinito.\n"
+            "ZMK: CONFIG_ZMK_KEYBOARD_NAME"
+        ),
+        "tip.adv_nkro_enabled": (
+            "Segnala un numero illimitato di tasti premuti insieme, invece dei 6 "
+            "della modalità tastiera standard.\n\n"
+            "Esempio: nei giochi, Maiusc+W+A+Spazio+E passano tutti; senza NKRO il "
+            "settimo tasto viene ignorato.\n\n"
+            "\u26a0 Alcuni BIOS e schermate di accesso non riconoscono l\u2019NKRO.\n"
+            "QMK: NKRO_ENABLE \u2014 ZMK: ZMK_HID_REPORT_TYPE_NKRO"
+        ),
+        "tip.adv_hid_indicators_enabled": (
+            "La tastiera riceve dal sistema lo stato delle spie (Bloc Maiusc, Bloc "
+            "Num, Bloc Scorr).\n\n"
+            "Esempio: necessario per mostrare «CAPS» sul display OLED quando il "
+            "blocco maiuscole è attivo.\n\n"
+            "ZMK: ZMK_HID_INDICATORS. QMK le gestisce nativamente."
+        ),
+        "tip.adv_usb_boot_protocol": (
+            "Aggiunge il protocollo tastiera semplificato compreso da BIOS e boot "
+            "loader.\n\n"
+            "Esempio: senza questa opzione alcune tastiere ZMK non permettono di "
+            "entrare nel BIOS né di scegliere il sistema all\u2019avvio.\n\n"
+            "ZMK: ZMK_USB_BOOT"
+        ),
+        "tip.adv_auto_shift_enabled": (
+            "Tenere premuto un tasto produce la sua versione maiuscola, senza "
+            "premere Maiusc.\n\n"
+            "Esempio: tocco breve su «a» \u2192 a; pressione prolungata \u2192 A. Lo "
+            "stesso vale per cifre e punteggiatura.\n\n"
+            "QMK: AUTO_SHIFT_ENABLE"
+        ),
+        "tip.adv_auto_shift_timeout_ms": (
+            "Durata di pressione oltre la quale viene inviata la maiuscola.\n\n"
+            "Esempio: a 175 ms la digitazione normale resta minuscola, mentre un "
+            "quinto di secondo dà la maiuscola. Aumenta se ottieni maiuscole "
+            "indesiderate scrivendo veloce.\n\n"
+            "QMK: AUTO_SHIFT_TIMEOUT"
+        ),
+        "tip.adv_ble_passkey_entry": (
+            "Richiede un codice di 6 cifre durante l\u2019associazione Bluetooth.\n\n"
+            "Esempio: il computer mostra «418293» e tu lo digiti sulla tastiera prima "
+            "che la connessione venga accettata.\n\n"
+            "Protegge da associazioni indesiderate; aggiunge un passaggio per ogni "
+            "nuovo dispositivo.\n"
+            "ZMK: ZMK_BLE_PASSKEY_ENTRY"
+        ),
+        "tip.adv_deep_sleep_timeout_min": (
+            "Tempo di inattività prima della sospensione profonda.\n\n"
+            "Esempio: a 4 minuti la tastiera si spegne quasi del tutto dopo una "
+            "pausa; il primo tasto premuto la riattiva in meno di un secondo.\n\n"
+            "Più breve = maggiore autonomia, risvegli più frequenti.\n"
+            "ZMK: ZMK_IDLE_SLEEP_TIMEOUT"
+        ),
+        "tip.adv_battery_report_interval_s": (
+            "Frequenza con cui il livello della batteria viene inviato al computer.\n\n"
+            "Esempio: a 60 s l\u2019indicatore di sistema si aggiorna ogni minuto. A "
+            "600 s si aggiorna dieci volte meno spesso e la radio consuma molto "
+            "meno.\n\n"
+            "ZMK: ZMK_BATTERY_REPORT_INTERVAL"
+        ),
+        "tip.adv_soft_off_enabled": (
+            "Attiva uno spegnimento software pulito, azionato da un tasto.\n\n"
+            "Esempio: un tasto &soft_off nel keymap spegne la tastiera prima di "
+            "metterla in borsa; il pulsante di reset la riaccende.\n\n"
+            "Consumo quasi nullo, a differenza della sospensione profonda.\n"
+            "ZMK: ZMK_PM_SOFT_OFF"
+        ),
+        "tip.adv_tap_dance_enabled": (
+            "Uno stesso tasto fa cose diverse a seconda del numero di tocchi "
+            "ravvicinati.\n\n"
+            "Esempio: un tocco = «.», due tocchi = «:», tre tocchi = «;». Comodo su "
+            "una tastiera compatta a corto di simboli.\n\n"
+            "QMK: TAP_DANCE_ENABLE \u2014 ZMK: ZMK_BEHAVIOR_TAP_DANCE"
+        ),
+        "tip.adv_sticky_key_enabled": (
+            "Un modificatore resta attivo per il tasto successivo, senza tenerlo "
+            "premuto.\n\n"
+            "Esempio: premi e rilascia Maiusc, poi «a» \u2192 «A». Evita contorsioni "
+            "delle dita per le scorciatoie.\n\n"
+            "QMK: STICKY_KEYS \u2014 ZMK: ZMK_BEHAVIOR_STICKY_KEY"
+        ),
+        "tip.adv_tapping_term_ms": (
+            "Durata oltre la quale una pressione conta come «tenuta» invece che "
+            "«toccata».\n\n"
+            "Esempio: su un tasto Ctrl/Esc, sotto i 200 ms invia Esc, oltre agisce "
+            "come Ctrl. Riduci se i livelli sembrano lenti, aumenta se attivi Ctrl "
+            "per sbaglio.\n\n"
+            "QMK: TAPPING_TERM"
+        ),
+        "tip.adv_combo_term_ms": (
+            "Finestra entro cui due tasti premuti insieme formano un combo.\n\n"
+            "Esempio: a 50 ms, premere J e K insieme invia Esc; oltre, vengono "
+            "digitate entrambe le lettere.\n\n"
+            "QMK: COMBO_TERM"
+        ),
+        "tip.adv_permissive_hold": (
+            "Conferma il ruolo «tenuto» appena viene premuto un altro tasto durante "
+            "la pressione, senza attendere il ritardo completo.\n\n"
+            "Esempio: su un tasto Maiusc/A, incatenare rapidamente Maiusc+B dà una "
+            "«B» maiuscola invece di «ab». Consigliato se digiti velocemente.\n\n"
+            "QMK: PERMISSIVE_HOLD"
+        ),
+        "tip.adv_rgb_hue_start": (
+            "Tonalità dei LED all\u2019accensione, sulla ruota dei colori (0 = rosso, "
+            "120 = verde, 240 = blu).\n\n"
+            "Esempio: 240 fa partire la tastiera in blu a ogni accensione, invece del "
+            "rosso predefinito.\n\n"
+            "ZMK: ZMK_RGB_UNDERGLOW_HUE_START"
+        ),
+        "tip.adv_rgb_on_start": (
+            "I LED si accendono già all\u2019avvio.\n\n"
+            "Esempio: deselezionato, la tastiera parte spenta e accendi i LED quando "
+            "servono \u2014 l\u2019autonomia migliora nettamente.\n\n"
+            "ZMK: ZMK_RGB_UNDERGLOW_ON_START"
+        ),
+        "tip.adv_rgb_auto_off_idle": (
+            "Spegne i LED dopo un periodo senza digitazione e li riaccende alla "
+            "ripresa.\n\n"
+            "Esempio: vai in riunione e l\u2019illuminazione si spegne da sola; il "
+            "primo tasto premuto la ripristina.\n\n"
+            "ZMK: ZMK_RGB_UNDERGLOW_AUTO_OFF_IDLE"
+        ),
+        "tip.adv_rgb_auto_off_usb": (
+            "Spegne i LED appena il cavo USB viene scollegato.\n\n"
+            "Esempio: illuminata alla scrivania, spenta in mobilità per risparmiare "
+            "batteria.\n\n"
+            "ZMK: ZMK_RGB_UNDERGLOW_AUTO_OFF_USB"
+        ),
+        "tip.adv_pointing_enabled": (
+            "Supporto per un dispositivo di puntamento montato sulla tastiera "
+            "(trackball, touchpad, trackpoint).\n\n"
+            "Esempio: una trackball sulla metà destra muove il cursore senza "
+            "lasciare la posizione di digitazione.\n\n"
+            "Richiede l\u2019hardware corrispondente e il relativo cablaggio.\n"
+            "ZMK: ZMK_POINTING"
+        ),
+        "tip.adv_pointing_smooth_scroll": (
+            "Scorrimento continuo invece che a scatti fissi.\n\n"
+            "Esempio: la pagina scorre pixel per pixel seguendo il dito, come su un "
+            "touchpad di un portatile.\n\n"
+            "ZMK: ZMK_POINTING_SMOOTH_SCROLLING"
+        ),
+        "tip.adv_mousekey_enabled": (
+            "Permette di guidare il puntatore del mouse dalla tastiera.\n\n"
+            "Esempio: su un livello dedicato, IJKL spostano il puntatore e un tasto "
+            "esegue il clic sinistro \u2014 utile senza mouse a portata di mano.\n\n"
+            "Le tre impostazioni seguenti hanno effetto solo se questa è "
+            "selezionata.\n"
+            "QMK: MOUSEKEY_ENABLE"
+        ),
+        "tip.adv_mousekey_delay_ms": (
+            "Attesa tra la pressione e l\u2019inizio del movimento del cursore.\n\n"
+            "Esempio: a 10 ms il cursore parte quasi subito; aumenta se semplici "
+            "tocchi spostano il puntatore per errore.\n\n"
+            "QMK: MOUSEKEY_DELAY"
+        ),
+        "tip.adv_mousekey_interval_ms": (
+            "Intervallo tra due passi di movimento mentre il tasto è premuto.\n\n"
+            "Esempio: a 20 ms il cursore avanza 50 volte al secondo \u2014 movimento "
+            "fluido. Valori più alti risultano a scatti.\n\n"
+            "QMK: MOUSEKEY_INTERVAL"
+        ),
+        "tip.adv_mousekey_max_speed": (
+            "Velocità massima raggiunta dal cursore dopo l\u2019accelerazione.\n\n"
+            "Esempio: a 10, attraversare uno schermo 4K richiede circa un secondo; "
+            "aumenta per un grande display, riduci per mirare con precisione.\n\n"
+            "QMK: MOUSEKEY_MAX_SPEED"
+        ),
+        # Opzioni avanzate — importazione keymap
+        "adv.section.keymap_import": "Keymap importato",
+        "adv.keymap.use": "Usa un keymap importato invece di quello predefinito",
+        "adv.keymap.import_btn": "Importa un file…",
+        "adv.keymap.no_file": "Nessun file importato",
+        "adv.keymap.loaded_vial": "Keymap vial.rocks caricato — {n} livello/i",
+        "adv.keymap.loaded_zmk": "Keymap ZMK caricato — {n} livello/i",
+        "adv.keymap.help": (
+            "Accetta un export di vial.rocks (.vil, .json) o un keymap ZMK (.keymap). "
+            "Il file viene convertito per il firmware della tastiera selezionata; "
+            "ciò che non ha un equivalente viene segnalato dopo l\u2019importazione."
+        ),
+        "adv.keymap.dialog_title": "Scegli un file di keymap",
+        "adv.keymap.filter": "Keymap (*.vil *.json *.keymap);;Tutti i file (*)",
+        "adv.keymap.error_title": "Importazione non riuscita",
+        "adv.keymap.error_msg": "Impossibile leggere il file: {exc}",
+        "adv.keymap.unknown_title": "Formato non riconosciuto",
+        "adv.keymap.unknown_msg": (
+            "Questo file non è né un export di vial.rocks (.vil / .json con una chiave «layout») "
+            "né un keymap ZMK (.keymap)."
+        ),
+        "adv.keymap.zmk_no_layer": "Questo keymap ZMK non contiene alcun livello utilizzabile.",
+        "adv.keymap.cross_title": "Origine diversa dal firmware di destinazione",
+        "adv.keymap.cross_zmk_to_qmk": (
+            "Questo keymap proviene da un firmware ZMK e la tua tastiera usa QMK.\n\n"
+            "Tasti, livelli e modificatori vengono mantenuti. Le funzioni "
+            "specifiche di ZMK (Bluetooth, uscita USB/BLE, alimentazione esterna) "
+            "non hanno equivalenti in QMK e verranno abbandonate.\n\n"
+            "Continuare?"
+        ),
+        "adv.keymap.cross_vial_to_zmk": (
+            "Questo keymap proviene da un firmware QMK (vial.rocks) e la tua tastiera usa ZMK.\n\n"
+            "Tasti, livelli e modificatori vengono mantenuti. Le funzioni QMK senza "
+            "equivalente ZMK verranno abbandonate.\n\n"
+            "Continuare?"
+        ),
+        "adv.keymap.report_title": "Rapporto di importazione",
+        "adv.keymap.report_ok": "Keymap importato: {n} tasti convertiti, nessuna perdita.",
+        "adv.keymap.report_partial": (
+            "Keymap importato: {converted} tasti convertiti, {dropped} abbandonati.\n"
+            "I tasti abbandonati diventano inattivi nel firmware generato."
+        ),
+        "adv.keymap.report_line": "Livello {layer}, posizione {position}: {source} — {reason}",
         "adv.section.identification": "Identificazione",
         "adv.section.keyboard_behavior": "Comportamento tastiera",
         "adv.section.bluetooth": "Bluetooth (solo ZMK)",
