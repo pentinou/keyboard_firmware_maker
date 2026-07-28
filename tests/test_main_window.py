@@ -1,6 +1,8 @@
 """Tests pour MainWindow — structure des onglets."""
-import pytest
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
+
+import pytest
 from PySide6.QtWidgets import QDialog, QTabWidget
 
 from models.project_model import ProjectModel
@@ -137,8 +139,9 @@ def test_file_menu_has_open_action(qtbot):
 
 def test_open_project_syncs_oled_overlays(qtbot, tmp_path):
     """L4/M1 — _open_project() doit synchroniser les checkboxes overlay d'OledWidget."""
-    from modules.project_manager.file_io import save_project
     from PySide6.QtWidgets import QCheckBox
+
+    from modules.project_manager.file_io import save_project
     model = ProjectModel()
     model.oled.left.layer.enabled = True
     model.oled.left.wpm.enabled = True
@@ -193,9 +196,10 @@ def test_initial_tab_state_reflects_default_keyboard_capabilities(qtbot):
 def test_open_project_preserves_mcu_selection(qtbot, tmp_path):
     """L4/M1 — _open_project() doit restaurer le MCU sauvegardé, pas le premier de la liste."""
     import pytest
-    from modules.project_manager.file_io import save_project
+
     from config import KEYBOARDS_DIR
     from modules.hardware.keyboard_loader import load_all_keyboards
+    from modules.project_manager.file_io import save_project
     keyboards = load_all_keyboards(KEYBOARDS_DIR)
     corne = next((kb for kb in keyboards if kb.model == "corne"), None)
     if corne is None or len(corne.mcu_options) < 2:
@@ -232,7 +236,7 @@ def test_rgb_checkbox_overrides_yaml_capability(qtbot):
     model = ProjectModel()
     window = MainWindow(model)
     qtbot.addWidget(window)
-    from PySide6.QtWidgets import QComboBox, QCheckBox
+    from PySide6.QtWidgets import QCheckBox, QComboBox
     keyboard_combo = window._tab_hardware.findChild(QComboBox, "keyboard_combo")
     corne_index = next(i for i in range(keyboard_combo.count()) if "Corne" in keyboard_combo.itemText(i))
     keyboard_combo.setCurrentIndex(corne_index)
@@ -245,8 +249,10 @@ def test_rgb_checkbox_overrides_yaml_capability(qtbot):
 def test_open_project_restores_rgb_enabled(qtbot, tmp_path):
     """_open_project() doit restaurer rgb_enabled depuis le fichier .kfm.json."""
     from unittest.mock import patch
-    from modules.project_manager.file_io import save_project
+
     from PySide6.QtWidgets import QCheckBox
+
+    from modules.project_manager.file_io import save_project
     model = ProjectModel()
     model.keyboard.model = "corne"
     model.keyboard.rgb_enabled = True
@@ -267,7 +273,7 @@ def test_rgb_checkbox_uncheck_disables_tab(qtbot):
     model = ProjectModel()
     window = MainWindow(model)
     qtbot.addWidget(window)
-    from PySide6.QtWidgets import QComboBox, QCheckBox
+    from PySide6.QtWidgets import QCheckBox, QComboBox
     keyboard_combo = window._tab_hardware.findChild(QComboBox, "keyboard_combo")
     sofle_index = next(i for i in range(keyboard_combo.count()) if "Sofle" in keyboard_combo.itemText(i))
     keyboard_combo.setCurrentIndex(sofle_index)
@@ -282,7 +288,7 @@ def test_keyboard_change_resets_rgb_checkbox(qtbot):
     model = ProjectModel()
     window = MainWindow(model)
     qtbot.addWidget(window)
-    from PySide6.QtWidgets import QComboBox, QCheckBox
+    from PySide6.QtWidgets import QCheckBox, QComboBox
     keyboard_combo = window._tab_hardware.findChild(QComboBox, "keyboard_combo")
     rgb_checkbox = window._tab_hardware.findChild(QCheckBox, "rgb_checkbox")
     # Selectionner Corne et cocher manuellement RGB
@@ -322,3 +328,154 @@ def test_check_vial_qmk_no_warning_on_acceptance(qtbot):
                 window = MainWindow(model)
                 qtbot.addWidget(window)
     mock_warn.assert_not_called()
+
+
+@pytest.fixture
+def window(qtbot) -> MainWindow:
+    w = MainWindow(ProjectModel())
+    qtbot.addWidget(w)
+    return w
+
+
+@contextmanager
+def shown(window: MainWindow):
+    """Simule une fenêtre affichée le temps du bloc.
+
+    La garde de fermeture ne s'applique qu'à une fenêtre visible. On ne peut
+    pas l'afficher réellement : pytest-qt ferme les widgets dans son hook de
+    teardown, donc la fenêtre doit être redevenue « invisible » à la sortie
+    du test, sinon ce close déclenche le vrai QMessageBox et bloque la suite.
+    """
+    window.isVisible = lambda: True
+    try:
+        yield window
+    finally:
+        del window.isVisible
+
+
+class TestCloseEvent:
+    """closeEvent : arrêt des builds en cours + garde-fou modifications non sauvegardées.
+
+    Régression : `BuildWidget.cleanup()` n'était appelé nulle part — fermer
+    l'application pendant une compilation laissait make/west orphelin et
+    détruisait un QThread en cours d'exécution. Aucune confirmation n'était
+    non plus demandée avant de perdre un projet non sauvegardé.
+    """
+
+    def test_clean_project_closes_without_prompt(self, window):
+        from PySide6.QtGui import QCloseEvent
+        event = QCloseEvent()
+
+        with shown(window), patch("ui.main_window.QMessageBox.question") as question:
+            window.closeEvent(event)
+
+        question.assert_not_called()
+        assert event.isAccepted() is True
+
+    def test_close_stops_running_build(self, window):
+        from PySide6.QtGui import QCloseEvent
+        window._tab_build.cleanup = MagicMock()
+        event = QCloseEvent()
+
+        with shown(window):
+            window.closeEvent(event)
+
+        window._tab_build.cleanup.assert_called_once()
+
+    def test_dirty_project_asks_before_closing(self, window):
+        from PySide6.QtGui import QCloseEvent
+        from PySide6.QtWidgets import QMessageBox
+        window.model.rgb.per_key["L_r0_c0"] = "#FF0000"
+        assert window.is_dirty() is True
+        event = QCloseEvent()
+
+        with shown(window), patch(
+            "ui.main_window.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Discard,
+        ) as question:
+            window.closeEvent(event)
+
+        question.assert_called_once()
+        assert event.isAccepted() is True
+
+    def test_cancel_aborts_closing(self, window):
+        from PySide6.QtGui import QCloseEvent
+        from PySide6.QtWidgets import QMessageBox
+        window.model.rgb.per_key["L_r0_c0"] = "#FF0000"
+        window._tab_build.cleanup = MagicMock()
+        event = QCloseEvent()
+
+        with shown(window), patch(
+            "ui.main_window.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Cancel,
+        ):
+            window.closeEvent(event)
+
+        assert event.isAccepted() is False
+        window._tab_build.cleanup.assert_not_called()
+
+    def test_failed_save_aborts_closing(self, window):
+        """Sauvegarde annulée ou en échec : la fenêtre ne doit pas se fermer."""
+        from PySide6.QtGui import QCloseEvent
+        from PySide6.QtWidgets import QMessageBox
+        window.model.rgb.per_key["L_r0_c0"] = "#FF0000"
+        window._save_project = MagicMock(return_value=False)
+        event = QCloseEvent()
+
+        with shown(window), patch(
+            "ui.main_window.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Save,
+        ):
+            window.closeEvent(event)
+
+        window._save_project.assert_called_once()
+        assert event.isAccepted() is False
+
+    def test_running_build_asks_confirmation(self, window):
+        from PySide6.QtGui import QCloseEvent
+        from PySide6.QtWidgets import QMessageBox
+        window._tab_build.is_building = MagicMock(return_value=True)
+        window._tab_build.cleanup = MagicMock()
+        event = QCloseEvent()
+
+        with shown(window), patch(
+            "ui.main_window.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.No,
+        ) as question:
+            window.closeEvent(event)
+
+        question.assert_called_once()
+        assert event.isAccepted() is False
+        window._tab_build.cleanup.assert_not_called()
+
+
+class TestDirtyTracking:
+    def test_new_project_is_clean(self, window):
+        assert window.is_dirty() is False
+
+    def test_model_change_marks_dirty(self, window):
+        window.model.oled.anti_burnin = not window.model.oled.anti_burnin
+        assert window.is_dirty() is True
+
+    def test_save_clears_dirty_flag(self, window, tmp_path):
+        window.model.oled.sleep_timeout_s = 90
+        window._project_path = tmp_path / "p.kfm.json"
+        window._project_path.write_text("{}", encoding="utf-8")
+
+        assert window._save_project() is True
+        assert window.is_dirty() is False
+
+
+def test_hidden_window_closes_without_prompt(qtbot):
+    """Fermeture programmatique (fenêtre jamais affichée) : aucune question posée."""
+    from PySide6.QtGui import QCloseEvent
+    window = MainWindow(ProjectModel())
+    qtbot.addWidget(window)
+    window.model.rgb.per_key["L_r0_c0"] = "#FF0000"
+    event = QCloseEvent()
+
+    with patch("ui.main_window.QMessageBox.question") as question:
+        window.closeEvent(event)
+
+    question.assert_not_called()
+    assert event.isAccepted() is True

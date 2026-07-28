@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QFormLayout,
@@ -95,7 +94,9 @@ class AdvancedOptionsWidget(QWidget):
         form.addRow(info)
 
         self._container_layout.addWidget(group)
-        self._firmware_compat.append((group, ("qmk", "zmk")))
+        # ZMK uniquement : mappé à CONFIG_ZMK_KEYBOARD_NAME. Le générateur QMK
+        # prend le nom depuis le YAML du clavier (vial_name), pas depuis ce champ.
+        self._firmware_compat.append((group, ("zmk",)))
 
     def _build_section_keyboard_behavior(self) -> None:
         group = QGroupBox(tr("adv.section.keyboard_behavior"))
@@ -104,12 +105,16 @@ class AdvancedOptionsWidget(QWidget):
         self._nkro = self._make_check("adv_nkro_enabled", tr("adv.nkro"))
         v.addWidget(self._nkro)
 
+        # HID indicators et Boot Protocol : Kconfig ZMK uniquement. QMK les gère
+        # nativement, décocher ici n'aurait aucun effet sur le firmware généré.
         self._hid_indicators = self._make_check(
-            "adv_hid_indicators_enabled", tr("adv.hid_indicators")
+            "adv_hid_indicators_enabled", tr("adv.hid_indicators"), firmware_only=("zmk",)
         )
         v.addWidget(self._hid_indicators)
 
-        self._usb_boot = self._make_check("adv_usb_boot_protocol", tr("adv.usb_boot"))
+        self._usb_boot = self._make_check(
+            "adv_usb_boot_protocol", tr("adv.usb_boot"), firmware_only=("zmk",)
+        )
         v.addWidget(self._usb_boot)
 
         # Auto-shift QMK uniquement

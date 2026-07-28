@@ -103,7 +103,10 @@ STRINGS: dict[str, dict[str, str]] = {
         ),
         "build.btn.generate": "G\u00e9n\u00e9rer firmware",
         "build.btn.export": "Exporter le firmware",
+        "build.btn.cancel": "Annuler",
         "build.btn.guide": "Guide de flash",
+        "build.cancelling": "Annulation en cours\u2026",
+        "build.cancelled": "Compilation annul\u00e9e.",
         "build.toolchain_found": "Toolchain : {gcc_path}  |  version {version}  |  source : {source}",
         "build.toolchain_not_found": "\u26a0 Toolchain introuvable\n{msg}",
         "build.toolchain_missing_title": "Toolchain introuvable",
@@ -199,6 +202,16 @@ STRINGS: dict[str, dict[str, str]] = {
         "dlg.save_title": "Sauvegarder le projet",
         "dlg.open_title": "Ouvrir un projet",
         "dlg.file_filter": "Projet KFM (*.kfm.json)",
+        "dlg.unsaved_title": "Modifications non sauvegardées",
+        "dlg.unsaved_msg": (
+            "Le projet a été modifié depuis la dernière sauvegarde.\n"
+            "Voulez-vous l’enregistrer avant de quitter ?"
+        ),
+        "dlg.build_running_title": "Compilation en cours",
+        "dlg.build_running_msg": (
+            "Une compilation est en cours.\n"
+            "Quitter maintenant va l’interrompre. Continuer ?"
+        ),
         # Parcourir vial-qmk
         "hardware.vial_browse": "Parcourir vial-qmk (620+ claviers)",
         "hardware.vial_search_placeholder": "Rechercher un clavier (ex: planck, corne, sofle)\u2026",
@@ -544,7 +557,10 @@ STRINGS: dict[str, dict[str, str]] = {
         ),
         "build.btn.generate": "Generate firmware",
         "build.btn.export": "Export firmware",
+        "build.btn.cancel": "Cancel",
         "build.btn.guide": "Flash guide",
+        "build.cancelling": "Cancelling…",
+        "build.cancelled": "Build cancelled.",
         "build.toolchain_found": "Toolchain: {gcc_path}  |  version {version}  |  source: {source}",
         "build.toolchain_not_found": "\u26a0 Toolchain not found\n{msg}",
         "build.toolchain_missing_title": "Toolchain not found",
@@ -640,6 +656,16 @@ STRINGS: dict[str, dict[str, str]] = {
         "dlg.save_title": "Save project",
         "dlg.open_title": "Open project",
         "dlg.file_filter": "KFM project (*.kfm.json)",
+        "dlg.unsaved_title": "Unsaved changes",
+        "dlg.unsaved_msg": (
+            "The project has been modified since the last save.\n"
+            "Do you want to save it before quitting?"
+        ),
+        "dlg.build_running_title": "Build in progress",
+        "dlg.build_running_msg": (
+            "A build is currently running.\n"
+            "Quitting now will abort it. Continue?"
+        ),
         # Browse vial-qmk
         "hardware.vial_browse": "Browse vial-qmk (620+ keyboards)",
         "hardware.vial_search_placeholder": "Search for a keyboard (e.g. planck, corne, sofle)\u2026",
@@ -985,7 +1011,10 @@ STRINGS: dict[str, dict[str, str]] = {
         ),
         "build.btn.generate": "Genera firmware",
         "build.btn.export": "Esporta firmware",
+        "build.btn.cancel": "Annulla",
         "build.btn.guide": "Guida flash",
+        "build.cancelling": "Annullamento in corso…",
+        "build.cancelled": "Compilazione annullata.",
         "build.toolchain_found": "Toolchain: {gcc_path}  |  versione {version}  |  sorgente: {source}",
         "build.toolchain_not_found": "\u26a0 Toolchain non trovata\n{msg}",
         "build.toolchain_missing_title": "Toolchain non trovata",
@@ -1081,6 +1110,16 @@ STRINGS: dict[str, dict[str, str]] = {
         "dlg.save_title": "Salva progetto",
         "dlg.open_title": "Apri progetto",
         "dlg.file_filter": "Progetto KFM (*.kfm.json)",
+        "dlg.unsaved_title": "Modifiche non salvate",
+        "dlg.unsaved_msg": (
+            "Il progetto è stato modificato dall’ultimo salvataggio.\n"
+            "Vuoi salvarlo prima di uscire?"
+        ),
+        "dlg.build_running_title": "Compilazione in corso",
+        "dlg.build_running_msg": (
+            "È in corso una compilazione.\n"
+            "Uscire ora la interromperà. Continuare?"
+        ),
         # Sfoglia vial-qmk
         "hardware.vial_browse": "Sfoglia vial-qmk (620+ tastiere)",
         "hardware.vial_search_placeholder": "Cerca una tastiera (es. planck, corne, sofle)\u2026",

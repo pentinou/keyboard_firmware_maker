@@ -133,6 +133,32 @@ class TestAdvancedOptionsFirmwareSwitching:
         pointing = widget.findChild(QCheckBox, "adv_pointing_enabled")
         assert pointing.isEnabled() is False
 
+    def test_qmk_mode_disables_options_without_qmk_mapping(self, qtbot):
+        """Les options sans mapping dans le générateur QMK sont grisées en QMK.
+
+        `keyboard_name` (CONFIG_ZMK_KEYBOARD_NAME), `hid_indicators` et
+        `usb_boot_protocol` n'ont aucune traduction côté template QMK : les
+        laisser actives faisait croire à un réglage qui n'était jamais appliqué.
+        """
+        model = ProjectModel()
+        widget = AdvancedOptionsWidget(model)
+        qtbot.addWidget(widget)
+        widget.set_firmware("qmk")
+
+        assert widget.findChild(QLineEdit, "adv_keyboard_name").isEnabled() is False
+        assert widget.findChild(QCheckBox, "adv_hid_indicators_enabled").isEnabled() is False
+        assert widget.findChild(QCheckBox, "adv_usb_boot_protocol").isEnabled() is False
+
+    def test_zmk_mode_enables_options_without_qmk_mapping(self, qtbot):
+        model = ProjectModel()
+        widget = AdvancedOptionsWidget(model)
+        qtbot.addWidget(widget)
+        widget.set_firmware("zmk")
+
+        assert widget.findChild(QLineEdit, "adv_keyboard_name").isEnabled() is True
+        assert widget.findChild(QCheckBox, "adv_hid_indicators_enabled").isEnabled() is True
+        assert widget.findChild(QCheckBox, "adv_usb_boot_protocol").isEnabled() is True
+
     def test_common_options_enabled_both_firmwares(self, qtbot):
         model = ProjectModel()
         widget = AdvancedOptionsWidget(model)
@@ -142,7 +168,6 @@ class TestAdvancedOptionsFirmwareSwitching:
             widget.set_firmware(firmware)
             assert widget.findChild(QCheckBox, "adv_nkro_enabled").isEnabled() is True
             assert widget.findChild(QCheckBox, "adv_tap_dance_enabled").isEnabled() is True
-            assert widget.findChild(QLineEdit, "adv_keyboard_name").isEnabled() is True
 
 
 class TestAdvancedOptionsSerialization:

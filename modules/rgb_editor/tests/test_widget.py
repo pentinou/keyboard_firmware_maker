@@ -11,6 +11,7 @@ from models.project_model import ProjectModel
 from modules.rgb_editor.effects import EFFECT_TYPES
 from modules.rgb_editor.widget import RgbWidget
 
+
 def _item_color(item) -> str:
     """Retourne la couleur hex uppercase d'un KeyColorItem (QGraphicsRectItem)."""
     return item.brush().color().name().upper()
@@ -235,8 +236,9 @@ class TestRgbWidgetEffects:
     def test_sync_restores_fade_ms(self, qtbot):
         model = ProjectModel()
         model.keyboard.model = "sofle-v2"
-        from models.project_model import RgbEffect
         from PySide6.QtWidgets import QSpinBox
+
+        from models.project_model import RgbEffect
         model.rgb.effects = [RgbEffect(type="solid_reactive_simple", fade_ms=800)]
         w = RgbWidget(model)
         qtbot.addWidget(w)
@@ -328,6 +330,7 @@ class TestRgbWidgetPreview:
     def test_hide_event_restores_per_key_colors(self, qtbot, model):
         """M2 — hideEvent restaure les couleurs per-key après arrêt du preview."""
         from PySide6.QtGui import QHideEvent
+
         from models.project_model import RgbEffect
         model.rgb.per_key = {"L_r0_c0": "#FF0000"}
         w = RgbWidget(model)
@@ -338,3 +341,50 @@ class TestRgbWidgetPreview:
         # hideEvent doit restaurer la couleur per-key
         w.hideEvent(QHideEvent())
         assert _item_color(w._key_buttons["L_r0_c0"]) == "#FF0000"
+
+
+class TestCustomEffectRightClick:
+    """Le clic droit retire une touche de la sélection dans l'éditeur custom.
+
+    Régression : la garde testait `currentIndex() != 3` alors que le stack
+    n'a que 3 pages (0=static, 1=natif, 2=éditeur timeline) — le clic droit
+    sortait donc systématiquement sans rien faire.
+    """
+
+    @staticmethod
+    def _open_custom_editor(widget, track):
+        from models.project_model import CustomEffect
+        widget._model.rgb.custom_effects = [CustomEffect(name="T", tracks=[track])]
+        widget._sync_from_model()
+        widget._load_custom_into_editor(0)
+        widget._editing_custom_idx = 0
+        widget._effect_stack.setCurrentIndex(2)
+
+    def test_right_click_removes_fixed_key(self, widget, model):
+        from models.project_model import EffectTrack
+        track = EffectTrack(target_mode="fixed", keys_fixed=["L_r2_c3"])
+        self._open_custom_editor(widget, track)
+
+        widget._on_key_right_clicked("L_r2_c3")
+
+        assert model.rgb.custom_effects[0].tracks[0].keys_fixed == []
+
+    def test_right_click_removes_trigger_key(self, widget, model):
+        from models.project_model import EffectTrack
+        track = EffectTrack(target_mode="fixed", trigger_keys=["L_r0_c0"])
+        self._open_custom_editor(widget, track)
+
+        widget._on_key_right_clicked("L_r0_c0")
+
+        assert model.rgb.custom_effects[0].tracks[0].trigger_keys == []
+
+    def test_right_click_ignored_outside_custom_editor(self, widget, model):
+        from models.project_model import EffectTrack
+        track = EffectTrack(target_mode="fixed", keys_fixed=["L_r2_c3"])
+        self._open_custom_editor(widget, track)
+        # Retour sur la page des effets natifs : le clic droit ne doit rien faire
+        widget._effect_stack.setCurrentIndex(1)
+
+        widget._on_key_right_clicked("L_r2_c3")
+
+        assert model.rgb.custom_effects[0].tracks[0].keys_fixed == ["L_r2_c3"]

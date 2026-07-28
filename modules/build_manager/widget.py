@@ -39,7 +39,7 @@ from models.project_model import ProjectModel
 from modules.build_manager.builder import MCU_FLASH, BuildWorker
 from modules.build_manager.msys2_manager import Msys2Manager, Msys2SetupDialog, is_windows
 from modules.build_manager.toolchain import INSTALL_GUIDE_MSG, detect_toolchain
-from modules.build_manager.toolchain_installer import ToolchainInstaller, ToolchainSetupDialog
+from modules.build_manager.toolchain_installer import ToolchainSetupDialog
 from modules.build_manager.vial_qmk_manager import VIAL_QMK_DIR, VialQmkManager
 from modules.build_manager.zmk_builder import (
     ZEPHYR_SDK_DIR,
@@ -48,7 +48,7 @@ from modules.build_manager.zmk_builder import (
     is_zephyr_sdk_installed,
 )
 from modules.build_manager.zmk_template_generator import ZmkTemplateGenerator
-from modules.hardware.keyboard_loader import load_keyboard, get_firmware_type
+from modules.hardware.keyboard_loader import get_firmware_type, load_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,7 @@ class BuildWidget(QWidget):
         self._last_uf2: str | None = None  # chemin du dernier .uf2 compilé (FR28)
         self._last_zmk_dir: Path | None = None  # dossier du dernier zmk-config généré
         self._last_zmk_uf2s: list[Path] = []  # .uf2 produits par la dernière compilation ZMK locale
+        self._cancelling = False  # annulation demandée : l'erreur du worker est attendue
         self._setup_ui()
         self._refresh_toolchain_status()
 
@@ -85,6 +86,12 @@ class BuildWidget(QWidget):
         self._btn_build.setObjectName("btn_build")
         self._btn_build.clicked.connect(self._on_build_clicked)
         btn_row.addWidget(self._btn_build)
+
+        self._btn_cancel = QPushButton(tr("build.btn.cancel"))
+        self._btn_cancel.setObjectName("btn_cancel")
+        self._btn_cancel.setEnabled(False)  # activé pendant une compilation
+        self._btn_cancel.clicked.connect(self._on_cancel_clicked)
+        btn_row.addWidget(self._btn_cancel)
 
         self._btn_export = QPushButton(tr("build.btn.export"))
         self._btn_export.setObjectName("btn_export")
@@ -276,6 +283,8 @@ class BuildWidget(QWidget):
             return
 
         self._btn_build.setEnabled(False)
+        self._btn_cancel.setEnabled(True)
+        self._cancelling = False
         self._progress.setValue(0)
         self._log.clear()
         self._lbl_size.setText("")
@@ -314,6 +323,8 @@ class BuildWidget(QWidget):
         self._btn_build.setEnabled(False)
         self._btn_zmk_config.setEnabled(False)
         self._btn_export.setEnabled(False)
+        self._btn_cancel.setEnabled(True)
+        self._cancelling = False
         self._progress.setValue(0)
         self._log.clear()
         self._lbl_size.setText("")
@@ -332,6 +343,7 @@ class BuildWidget(QWidget):
         """Affiche les .uf2 produits et active l'export."""
         self._btn_build.setEnabled(True)
         self._btn_zmk_config.setEnabled(True)
+        self._btn_cancel.setEnabled(False)
         self._last_zmk_uf2s = [Path(p) for p in uf2_paths]
         self._btn_export.setEnabled(bool(self._last_zmk_uf2s))
         self._lbl_status.setText(tr("build.zmk.success"))
@@ -343,6 +355,13 @@ class BuildWidget(QWidget):
         """Affiche l'erreur de compilation ZMK."""
         self._btn_build.setEnabled(True)
         self._btn_zmk_config.setEnabled(True)
+        self._btn_cancel.setEnabled(False)
+        if self._cancelling:
+            # Erreur attendue : le worker signale l'interruption qu'on a demandée
+            self._cancelling = False
+            self._lbl_status.setText(tr("build.cancelled"))
+            logger.info("Compilation ZMK annulée par l'utilisateur")
+            return
         self._lbl_status.setText(tr("build.error"))
         QMessageBox.critical(self, tr("build.zmk.error_title"), msg)
         logger.error("Erreur compilation ZMK : %s", msg)
@@ -408,6 +427,7 @@ class BuildWidget(QWidget):
     def _on_build_success(self, uf2_path: str) -> None:
         """Affiche la taille du firmware et avertit si dépassement flash (FR17, FR18)."""
         self._btn_build.setEnabled(True)
+        self._btn_cancel.setEnabled(False)
         self._last_uf2 = uf2_path
         self._btn_export.setEnabled(True)
         path = Path(uf2_path)
@@ -434,9 +454,40 @@ class BuildWidget(QWidget):
     def _on_build_error(self, msg: str) -> None:
         """Affiche l'erreur humanisée et réactive le bouton (NFR8)."""
         self._btn_build.setEnabled(True)
+        self._btn_cancel.setEnabled(False)
+        if self._cancelling:
+            # Erreur attendue : le worker signale l'interruption qu'on a demandée
+            self._cancelling = False
+            self._lbl_status.setText(tr("build.cancelled"))
+            logger.info("Compilation annulée par l'utilisateur")
+            return
         self._lbl_status.setText(tr("build.error"))
         QMessageBox.critical(self, tr("build.error_title"), msg)
         logger.error("Erreur compilation : %s", msg)
+
+    # ──────────────────────────────────────────────────── Annulation ──
+
+    def _on_cancel_clicked(self) -> None:
+        """Interrompt la compilation en cours (tue make/west)."""
+        worker = self._active_worker()
+        if worker is None:
+            return
+        self._cancelling = True
+        self._btn_cancel.setEnabled(False)
+        self._lbl_status.setText(tr("build.cancelling"))
+        worker.stop()
+        logger.info("Annulation de la compilation demandée")
+
+    def _active_worker(self) -> BuildWorker | ZmkBuildWorker | None:
+        """Retourne le worker de compilation en cours, ou None."""
+        for worker in (self._worker, self._zmk_worker):
+            if worker is not None and worker.isRunning():
+                return worker
+        return None
+
+    def is_building(self) -> bool:
+        """Vrai si une compilation est en cours (QMK ou ZMK)."""
+        return self._active_worker() is not None
 
     # ─────────────────────────────────────────────── Export + Guide ──
 

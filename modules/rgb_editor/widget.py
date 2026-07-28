@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 import re
-from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QHideEvent, QLinearGradient, QPainter, QPen, QShowEvent
@@ -25,13 +24,13 @@ from PySide6.QtWidgets import (
     QGraphicsSimpleTextItem,
     QGraphicsView,
     QGroupBox,
-    QInputDialog,
-    QMessageBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QRadioButton,
@@ -44,6 +43,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from config import CUSTOM_KEYBOARDS_DIR, KEYBOARDS_DIR
 from i18n import tr
 from models.project_model import CustomEffect, EffectStep, EffectTrack, KeyOffset, ProjectModel, RgbEffect
 from modules.hardware.keyboard_loader import KeyboardDefinition, KeyLayout, load_all_keyboards
@@ -52,8 +52,6 @@ from modules.rgb_editor.effects import EFFECT_TYPES, EffectDef
 
 logger = logging.getLogger(__name__)
 
-KEYBOARDS_DIR = Path(__file__).parent.parent.parent / "keyboards"
-CUSTOM_KEYBOARDS_DIR = Path.home() / ".keyboard_firmware_maker" / "custom_keyboards"
 KEY_SIZE = 36  # px
 
 # ── Timeline constants ──
@@ -1529,6 +1527,7 @@ class RgbWidget(QWidget):
         if not ce:
             return ""
         from jinja2 import Environment, FileSystemLoader
+
         from modules.build_manager.template_generator import TEMPLATES_DIR, _build_timeline_effects
 
         kb = self._find_current_keyboard()
@@ -1781,7 +1780,8 @@ class RgbWidget(QWidget):
 
     def _on_key_right_clicked(self, key_id: str) -> None:
         """Clic droit : retirer une touche de la sélection (fixed, relative ou trigger)."""
-        if self._editing_custom_idx is None or self._effect_stack.currentIndex() != 3:
+        # Page 2 = éditeur timeline (le stack n'a que 3 pages, cf. _setup_ui)
+        if self._editing_custom_idx is None or self._effect_stack.currentIndex() != 2:
             return
         track = self._current_track()
         if not track:

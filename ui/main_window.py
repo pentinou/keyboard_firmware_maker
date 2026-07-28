@@ -11,11 +11,9 @@ from pathlib import Path
 
 from PySide6.QtGui import QActionGroup
 from PySide6.QtWidgets import (
-    QApplication,
     QDialog,
     QFileDialog,
     QMainWindow,
-    QMenuBar,
     QMessageBox,
     QTabWidget,
     QWidget,
@@ -24,10 +22,10 @@ from PySide6.QtWidgets import (
 from i18n import AVAILABLE_LANGUAGES, get_language, set_language, tr
 from models.project_model import ProjectModel
 from modules.advanced_options.widget import AdvancedOptionsWidget
-from modules.hardware.widget import HardwareWidget
-from modules.oled_editor.widget import OledWidget
 from modules.build_manager.vial_qmk_manager import VialQmkManager, VialQmkSetupDialog
 from modules.build_manager.widget import BuildWidget
+from modules.hardware.widget import HardwareWidget
+from modules.oled_editor.widget import OledWidget
 from modules.project_manager.file_io import load_project, save_project
 from modules.rgb_editor.widget import RgbWidget
 from ui.widgets.about_dialog import AboutDialog
@@ -49,12 +47,29 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._setup_menu()
         self._check_vial_qmk()
+        # Empreinte de l'état "propre" — les widgets ont fini d'initialiser le
+        # modèle (sélection clavier par défaut), tout écart ultérieur = modification.
+        self._saved_snapshot = self._snapshot()
         logger.info("MainWindow initialized")
 
     @property
     def model(self) -> ProjectModel:
         """Accès en lecture au ProjectModel central."""
         return self._model
+
+    # ─────────────────────────────────────── État sauvegardé / modifié ──
+
+    def _snapshot(self) -> str:
+        """Empreinte JSON de l'état du modèle, pour détecter les modifications.
+
+        Le modèle est un dataclass sans signal de changement : on compare
+        l'état sérialisé plutôt que d'instrumenter chaque widget.
+        """
+        return json.dumps(self._model.to_dict(), sort_keys=True)
+
+    def is_dirty(self) -> bool:
+        """Vrai si le projet a été modifié depuis la dernière sauvegarde."""
+        return self._snapshot() != self._saved_snapshot
 
     def _setup_ui(self) -> None:
         self.setWindowTitle(tr("app.title"))
@@ -135,7 +150,9 @@ class MainWindow(QMainWindow):
         open_action.triggered.connect(self._open_project)
         file_menu.addSeparator()
         quit_action = file_menu.addAction(tr("menu.file.quit"))
-        quit_action.triggered.connect(QApplication.quit)
+        # close() et non QApplication.quit() : quitter doit passer par closeEvent
+        # (build en cours, modifications non sauvegardées).
+        quit_action.triggered.connect(self.close)
 
         # Menu Configuration (entre Fichier et Aide)
         config_menu = menu_bar.addMenu(tr("menu.config"))
@@ -158,7 +175,8 @@ class MainWindow(QMainWindow):
         set_language(lang)
         QMessageBox.information(self, tr("dlg.lang_change_title"), tr("dlg.lang_change_msg"))
 
-    def _save_project(self) -> None:
+    def _save_project(self) -> bool:
+        """Sauvegarde le projet. Retourne True si l'écriture a réussi."""
         if self._project_path and self._project_path.exists():
             # Quick save au même emplacement
             try:
@@ -166,16 +184,19 @@ class MainWindow(QMainWindow):
                 logger.info("Projet sauvegardé : %s", self._project_path)
             except OSError as e:
                 QMessageBox.critical(self, tr("dlg.error"), tr("dlg.save_error").format(e=e))
-            return
-        self._save_project_as()
+                return False
+            self._saved_snapshot = self._snapshot()
+            return True
+        return self._save_project_as()
 
-    def _save_project_as(self) -> None:
+    def _save_project_as(self) -> bool:
+        """Sauvegarde sous un nouveau nom. Retourne False si annulé ou échoué."""
         default_dir = str(self._project_path.parent) if self._project_path else str(Path.home())
         path, _ = QFileDialog.getSaveFileName(
             self, tr("dlg.save_title"), default_dir, tr("dlg.file_filter")
         )
         if not path:
-            return
+            return False
         if not path.endswith(".kfm.json"):
             path += ".kfm.json"
         self._project_path = Path(path)
@@ -184,6 +205,9 @@ class MainWindow(QMainWindow):
             logger.info("Projet sauvegardé : %s", self._project_path)
         except OSError as e:
             QMessageBox.critical(self, tr("dlg.error"), tr("dlg.save_error").format(e=e))
+            return False
+        self._saved_snapshot = self._snapshot()
+        return True
 
     def _open_project(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -210,6 +234,7 @@ class MainWindow(QMainWindow):
         self._tab_oled._sync_from_model()
         self._tab_rgb._sync_from_model()
         self._tab_advanced.reload_from_model()
+        self._saved_snapshot = self._snapshot()
         logger.info("Projet ouvert : %s", path)
 
     def _check_vial_qmk(self) -> None:
@@ -226,3 +251,48 @@ class MainWindow(QMainWindow):
     def _show_about(self) -> None:
         dialog = AboutDialog(self)
         dialog.exec()
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        """Confirme la fermeture (build en cours, modifications non sauvegardées).
+
+        Termine toujours par l'arrêt des compilations en cours : sans cela, un
+        QThread survit à la fenêtre et le sous-processus make/west reste orphelin.
+
+        Une fenêtre non affichée est fermée sans question : il n'y a personne
+        devant pour répondre (fermeture programmatique, tests).
+        """
+        if not self.isVisible():
+            self._tab_build.cleanup()
+            event.accept()
+            return
+
+        if self._tab_build.is_building():
+            reply = QMessageBox.question(
+                self,
+                tr("dlg.build_running_title"),
+                tr("dlg.build_running_msg"),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+
+        if self.is_dirty():
+            reply = QMessageBox.question(
+                self,
+                tr("dlg.unsaved_title"),
+                tr("dlg.unsaved_msg"),
+                QMessageBox.StandardButton.Save
+                | QMessageBox.StandardButton.Discard
+                | QMessageBox.StandardButton.Cancel,
+            )
+            if reply == QMessageBox.StandardButton.Cancel:
+                event.ignore()
+                return
+            # Sauvegarde annulée ou échouée : on ne ferme pas silencieusement
+            if reply == QMessageBox.StandardButton.Save and not self._save_project():
+                event.ignore()
+                return
+
+        self._tab_build.cleanup()
+        event.accept()
