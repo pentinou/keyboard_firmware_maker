@@ -146,7 +146,7 @@ class TestBuildWorker:
 
     def test_worker_emits_progress_from_make_output(self, qtbot, tmp_path):
         """Les lignes [  X%] doivent émettre des signaux progress."""
-        from modules.build_manager.builder import BuildWorker, _parse_progress
+        from modules.build_manager.builder import BuildWorker
         from modules.build_manager.template_generator import TemplateGenerator
 
         progress_vals: list[int] = []
@@ -318,6 +318,7 @@ class TestBuildWidget:
 
     def test_build_click_shows_warning_if_toolchain_missing(self, widget, qtbot):
         from unittest.mock import patch
+
         from modules.build_manager.toolchain import ToolchainInfo
         missing = ToolchainInfo(gcc_path=None, version="unknown", source="missing")
         with patch("modules.build_manager.widget.detect_toolchain", return_value=missing):
@@ -326,8 +327,8 @@ class TestBuildWidget:
         mock_warn.assert_called_once()
 
     def test_build_click_shows_warning_if_vial_qmk_not_ready(self, widget, qtbot):
-        from pathlib import Path
         from unittest.mock import patch
+
         from modules.build_manager.toolchain import ToolchainInfo
         available = ToolchainInfo(gcc_path=Path("/fake/gcc"), version="13.3.rel1", source="system")
         with patch("modules.build_manager.widget.detect_toolchain", return_value=available):

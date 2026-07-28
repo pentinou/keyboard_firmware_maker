@@ -25,7 +25,6 @@ sys.path.insert(0, str(ROOT))
 from models.project_model import KeyboardConfig, ProjectModel
 from modules.build_manager.zmk_template_generator import ZmkTemplateGenerator
 
-
 # Keymap où chaque touche = N1, structure Sofle v2 (5 rows split 6+6, row 4 = 10 thumbs)
 _DIAG_KEYMAP = """\
 /*

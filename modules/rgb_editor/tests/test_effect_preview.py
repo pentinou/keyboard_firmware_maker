@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+
 from models.project_model import RgbEffect
 from modules.rgb_editor.effect_preview import EffectPreview
 

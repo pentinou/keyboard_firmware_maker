@@ -388,7 +388,7 @@ class TestZmkCustomKeymap:
         # (mais peut-être dans lower/raise qui retombent sur YAML)
         # On vérifie au moins que la première row default a ESC répété
         lines = keymap.split("\n")
-        default_section_start = next(i for i, l in enumerate(lines) if "default_layer" in l)
+        default_section_start = next(i for i, line in enumerate(lines) if "default_layer" in line)
         # Lire les ~7 lignes suivantes (header + 5 rows + footer)
         default_section = "\n".join(lines[default_section_start:default_section_start + 15])
         # Première row du default doit contenir ESC plusieurs fois (pas N1)

@@ -1,5 +1,4 @@
 """Tests pour AboutDialog — version et lien GitHub."""
-import pytest
 
 from ui.widgets.about_dialog import AboutDialog
 

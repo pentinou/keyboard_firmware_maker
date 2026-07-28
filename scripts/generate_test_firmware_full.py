@@ -21,7 +21,6 @@ sys.path.insert(0, str(ROOT))
 from models.project_model import KeyboardConfig, ProjectModel
 from modules.build_manager.zmk_template_generator import ZmkTemplateGenerator
 
-
 # Mêmes bindings RGB que generate_test_firmware_rgb.py
 _RGB_KEYMAP_REPLACEMENTS = [
     ("&kp EXCL",  "&rgb_ug RGB_TOG"),  # Q = toggle on/off

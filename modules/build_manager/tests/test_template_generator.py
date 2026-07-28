@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from models.project_model import OledConfig, OledImageItem, OledSideConfig, ProjectModel, RgbConfig, RgbEffect
+from models.project_model import OledImageItem, ProjectModel, RgbEffect
 from modules.build_manager.template_generator import TemplateGenerator, _encode_oled_frames
 
 
@@ -25,7 +25,7 @@ def basic_model():
 
 class TestTemplateGeneratorGenerate:
     def test_generate_creates_keymap_c(self, generator, basic_model, tmp_path):
-        result = generator.generate(basic_model, tmp_path)
+        generator.generate(basic_model, tmp_path)
         assert (tmp_path / "keymaps" / "default" / "keymap.c").is_file()
 
     def test_generate_creates_config_h(self, generator, basic_model, tmp_path):
@@ -292,7 +292,7 @@ class TestKatawaJojoTemplate:
     def test_katawajojo_enabled_right_generates_file(self, generator, basic_model, tmp_path):
         """Avec right.katawajojo_enabled, keymaps/default/katawajojo.c doit être généré."""
         basic_model.oled.right.katawajojo_enabled = True
-        result = generator.generate(basic_model, tmp_path)
+        generator.generate(basic_model, tmp_path)
         assert (tmp_path / "keymaps" / "default" / "katawajojo.c").is_file()
 
     def test_katawajojo_c_contains_sprite_data(self, generator, basic_model, tmp_path):
@@ -355,7 +355,7 @@ class TestNewLunaTemplate:
     def test_luna_enabled_right_generates_luna_c(self, generator, basic_model, tmp_path):
         """Avec right.luna_enabled, keymaps/default/luna.c doit être généré."""
         basic_model.oled.right.luna_enabled = True
-        result = generator.generate(basic_model, tmp_path)
+        generator.generate(basic_model, tmp_path)
         assert (tmp_path / "keymaps" / "default" / "luna.c").is_file()
 
     def test_luna_c_contains_sprite_data(self, generator, basic_model, tmp_path):
@@ -416,7 +416,7 @@ class TestOceanDreamTemplate:
     def test_ocean_dream_enabled_right_generates_file(self, generator, basic_model, tmp_path):
         """Avec right.ocean_dream_enabled, ocean_dream.c doit être généré."""
         basic_model.oled.right.ocean_dream_enabled = True
-        result = generator.generate(basic_model, tmp_path)
+        generator.generate(basic_model, tmp_path)
         assert (tmp_path / "keymaps" / "default" / "ocean_dream.c").is_file()
 
     def test_ocean_dream_c_contains_render_function(self, generator, basic_model, tmp_path):

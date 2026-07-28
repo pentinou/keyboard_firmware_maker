@@ -11,7 +11,6 @@ import pytest
 import modules.build_manager.toolchain as tc
 import modules.build_manager.vial_qmk_manager as vqm
 
-
 # ─────────────────────────────────────────── Tests toolchain.py ──
 
 class TestDetectToolchain:

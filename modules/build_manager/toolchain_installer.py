@@ -8,11 +8,8 @@ Pattern identique à VialQmkManager : logique pure + QThread + QDialog.
 from __future__ import annotations
 
 import logging
-import shutil
-import zipfile
 from pathlib import Path
 from typing import Callable
-from urllib.request import urlretrieve
 
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (
@@ -22,12 +19,13 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from config import CACHE_DIR, DOWNLOADED_TOOLCHAIN_DIR
 from i18n import tr
+from modules.build_manager.download import download_file, safe_extract_zip
 
 logger = logging.getLogger(__name__)
 
-CACHE_DIR = Path.home() / ".keyboard_firmware_maker"
-TOOLCHAIN_INSTALL_DIR = CACHE_DIR / "toolchain" / "windows"
+TOOLCHAIN_INSTALL_DIR = DOWNLOADED_TOOLCHAIN_DIR
 
 # ARM GNU Toolchain 13.3.Rel1 pour Windows (zip, ~250 MB compressé)
 TOOLCHAIN_VERSION = "13.3.Rel1"
@@ -36,6 +34,9 @@ TOOLCHAIN_URL = (
     f"https://developer.arm.com/-/media/Files/downloads/gnu/"
     f"{TOOLCHAIN_VERSION}/binrel/{TOOLCHAIN_ARCHIVE}"
 )
+# Empreinte publiée par ARM : <TOOLCHAIN_URL>.sha256asc
+# À mettre à jour en même temps que TOOLCHAIN_VERSION.
+TOOLCHAIN_SHA256 = "e46fda043c0ce83582bc8db4b3ef85f77f4beb7333344c2f4193c17e1167a095"
 
 
 class ToolchainInstaller:
@@ -73,24 +74,27 @@ class ToolchainInstaller:
 
         archive_path = CACHE_DIR / TOOLCHAIN_ARCHIVE
 
-        # Étape 1 — Téléchargement (0 → 70%)
+        # Étape 1 — Téléchargement + vérification SHA-256 (0 → 70%)
         _log("Téléchargement de la toolchain ARM…")
         if progress_callback:
             progress_callback(5)
 
-        def _report_progress(block_num: int, block_size: int, total_size: int) -> None:
-            if total_size > 0 and progress_callback:
-                pct = min(int(block_num * block_size / total_size * 65), 65)
-                progress_callback(5 + pct)
+        def _report_progress(pct: int) -> None:
+            if progress_callback:
+                progress_callback(5 + int(pct * 0.65))
 
-        urlretrieve(TOOLCHAIN_URL, str(archive_path), reporthook=_report_progress)
+        download_file(
+            TOOLCHAIN_URL,
+            archive_path,
+            expected_sha256=TOOLCHAIN_SHA256,
+            progress_callback=_report_progress,
+        )
         if progress_callback:
             progress_callback(70)
 
         # Étape 2 — Extraction (70 → 90%)
         _log("Extraction de la toolchain ARM…")
-        with zipfile.ZipFile(archive_path) as zf:
-            zf.extractall(path=TOOLCHAIN_INSTALL_DIR)
+        safe_extract_zip(archive_path, TOOLCHAIN_INSTALL_DIR)
         if progress_callback:
             progress_callback(90)
 

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from PySide6.QtCore import Qt, QPointF, QRectF
+from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QPen
 from PySide6.QtWidgets import (
     QGraphicsEllipseItem,
@@ -131,8 +131,6 @@ def build_wiring_scene(data: WiringData) -> QGraphicsScene:
     _draw_col_wires(scene, pin_points, key_rects, data, keys_offset_y + keys_h_px)
 
     # ── Périphériques ──────────────────────────────────────────────────
-    periph_y = mcu_y + mcu_h / 2
-
     if data.has_oled:
         oled_x = mcu_x - 100
         oled_y = mcu_y + 10

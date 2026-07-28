@@ -12,11 +12,8 @@ import logging
 import shutil
 import subprocess
 import sys
-import tarfile
-import zipfile
 from pathlib import Path
 from typing import Callable
-from urllib.request import urlretrieve
 
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (
@@ -26,11 +23,12 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from config import CACHE_DIR
 from i18n import tr
+from modules.build_manager.download import download_file, safe_extract_tar, safe_extract_zip
 
 logger = logging.getLogger(__name__)
 
-CACHE_DIR = Path.home() / ".keyboard_firmware_maker"
 MSYS2_DIR = CACHE_DIR / "msys2"
 
 # URL de l'archive MSYS2 base (sans IDE, ~90 MB compressé)
@@ -39,6 +37,9 @@ MSYS2_RELEASE_BASE = "https://github.com/msys2/msys2-installer/releases/download
 MSYS2_VERSION = "2024-01-13"
 MSYS2_ARCHIVE = f"msys2-base-x86_64-{MSYS2_VERSION.replace('-', '')}.sfx.exe"
 MSYS2_URL = f"{MSYS2_RELEASE_BASE}/{MSYS2_VERSION}/{MSYS2_ARCHIVE}"
+# Empreinte publiée par MSYS2 : <MSYS2_URL>.sha256
+# À mettre à jour en même temps que MSYS2_VERSION.
+MSYS2_SHA256 = "dba7e6d27e6a9ab850f502da44f6bfcd16d4d7b175fc2b25bee37207335cb12f"
 
 # Paquets minimaux nécessaires pour compiler QMK
 MSYS2_PACKAGES = ["make", "bash", "coreutils"]
@@ -95,17 +96,21 @@ class Msys2Manager:
 
         archive_path = CACHE_DIR / MSYS2_ARCHIVE
 
-        # Étape 1 — Téléchargement (0 → 60%)
+        # Étape 1 — Téléchargement + vérification SHA-256 (0 → 60%)
         _log("Téléchargement de MSYS2…")
         if progress_callback:
             progress_callback(5)
 
-        def _report_progress(block_num: int, block_size: int, total_size: int) -> None:
-            if total_size > 0 and progress_callback:
-                pct = min(int(block_num * block_size / total_size * 55), 55)
-                progress_callback(5 + pct)
+        def _report_progress(pct: int) -> None:
+            if progress_callback:
+                progress_callback(5 + int(pct * 0.55))
 
-        urlretrieve(MSYS2_URL, str(archive_path), reporthook=_report_progress)
+        download_file(
+            MSYS2_URL,
+            archive_path,
+            expected_sha256=MSYS2_SHA256,
+            progress_callback=_report_progress,
+        )
         if progress_callback:
             progress_callback(60)
 
@@ -164,11 +169,9 @@ def _extract_msys2(archive_path: Path, dest: Path) -> None:
             capture_output=True,
         )
     elif name.endswith(".tar.xz") or name.endswith(".tar.gz"):
-        with tarfile.open(archive_path) as tar:
-            tar.extractall(path=dest)
+        safe_extract_tar(archive_path, dest)
     elif name.endswith(".zip"):
-        with zipfile.ZipFile(archive_path) as zf:
-            zf.extractall(path=dest)
+        safe_extract_zip(archive_path, dest)
     else:
         # Tentative sfx comme fallback
         subprocess.run(

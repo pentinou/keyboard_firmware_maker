@@ -21,7 +21,6 @@ sys.path.insert(0, str(ROOT))
 from models.project_model import KeyboardConfig, ProjectModel
 from modules.build_manager.zmk_template_generator import ZmkTemplateGenerator
 
-
 # Bindings RGB à injecter sur le layer `raise`, aux emplacements des touches
 # Q, W, E, R, T côté gauche (row 1 cols 1-5). Le keymap généré met `&kp EXCL`,
 # `&kp AT`, etc. sur cette row ; on les remplace par les contrôles RGB.

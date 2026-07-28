@@ -292,7 +292,6 @@ class EffectPreview:
                 btn.set_color(_hsv_to_hex(hue, 1.0, 1.0))
 
         elif preview == "cycle_out_in":
-            max_dist = math.sqrt(cr ** 2 + cc ** 2) + 1
             for key_id, btn in self._key_buttons.items():
                 meta = self._key_meta.get(key_id)
                 if meta is None:
@@ -547,7 +546,6 @@ class EffectPreview:
         step = steps[active_idx]
         elapsed_in_step = t - step.time_ms
         hold_ms = getattr(step, "hold_ms", 0)
-        total_ms = hold_ms + step.fade_ms
         if elapsed_in_step <= 0:
             return step.color
         # Phase de maintien (hold)

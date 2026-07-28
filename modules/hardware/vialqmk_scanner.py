@@ -14,6 +14,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from config import VIAL_QMK_INDEX_FILE
 from modules.hardware.keyboard_loader import (
     KeyboardDefinition,
     KeyLayout,
@@ -50,7 +51,7 @@ CATEGORY_THRESHOLDS: list[tuple[int, str]] = [
 CATEGORY_FULLSIZE = "fullsize"
 CATEGORY_SPLIT = "split"
 
-CACHE_FILE = Path.home() / ".keyboard_firmware_maker" / "vial-qmk-index.json"
+CACHE_FILE = VIAL_QMK_INDEX_FILE
 
 
 def categorize_keyboard(key_count: int, is_split: bool) -> str:

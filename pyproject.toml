@@ -47,10 +47,15 @@ target-version = ["py311"]
 [tool.ruff]
 line-length = 120
 target-version = "py311"
+exclude = ["_bmad", "_bmad-output", "toolchain", "firmware_test_*"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Scripts standalone : sys.path est complété avant les imports du projet
+"scripts/*.py" = ["E402"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "modules"]

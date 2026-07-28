@@ -112,6 +112,7 @@ class TestBuilderUsesClassifier:
     def test_make_failure_emits_classified_error(self, qtbot, tmp_path):
         """make returncode != 0 → error signal contient le message du classifier."""
         from unittest.mock import MagicMock, patch
+
         from modules.build_manager.builder import BuildWorker
         from modules.build_manager.template_generator import TemplateGenerator
 
@@ -145,6 +146,7 @@ class TestBuilderUsesClassifier:
     def test_generator_exception_emits_error_not_crash(self, qtbot, tmp_path):
         """Si le generator lève une exception, error est émis (AC: 4)."""
         from unittest.mock import MagicMock
+
         from modules.build_manager.builder import BuildWorker
         from modules.build_manager.template_generator import TemplateGenerator
 
@@ -167,6 +169,7 @@ class TestBuilderUsesClassifier:
     def test_generator_exception_emits_readable_message_not_raw_exc(self, qtbot, tmp_path):
         """M1 — exception sans pattern matché → message générique lisible, pas str(exc) (FR21)."""
         from unittest.mock import MagicMock
+
         from modules.build_manager.builder import BuildWorker
         from modules.build_manager.template_generator import TemplateGenerator
 
@@ -192,8 +195,8 @@ class TestBuilderUsesClassifier:
 class TestBuildWidgetStatus:
     @pytest.fixture
     def widget(self, qtbot):
-        from modules.build_manager.widget import BuildWidget
         from models.project_model import ProjectModel
+        from modules.build_manager.widget import BuildWidget
         m = ProjectModel()
         m.keyboard.model = "sofle-v2"
         w = BuildWidget(m)
@@ -206,8 +209,9 @@ class TestBuildWidgetStatus:
         assert lbl is not None
 
     def test_error_updates_status_label(self, widget):
-        from PySide6.QtWidgets import QLabel
         from unittest.mock import patch
+
+        from PySide6.QtWidgets import QLabel
         with patch("modules.build_manager.widget.QMessageBox.critical"):
             widget._on_build_error("Erreur test")
         lbl = widget.findChild(QLabel, "lbl_build_status")
@@ -223,8 +227,9 @@ class TestBuildWidgetStatus:
 
     def test_build_log_populated_after_error(self, widget):
         """AC1 — les logs QMK bruts restent accessibles dans build_log après erreur."""
-        from PySide6.QtWidgets import QPlainTextEdit
         from unittest.mock import patch
+
+        from PySide6.QtWidgets import QPlainTextEdit
 
         # Simuler quelques lignes de log comme si make les avait émises
         widget._log.appendPlainText("arm-none-eabi-gcc: command not found")

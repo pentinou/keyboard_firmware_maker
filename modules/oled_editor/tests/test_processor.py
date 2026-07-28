@@ -1,20 +1,25 @@
 """Tests pytest pour modules/oled_editor/processor.py — convert_image."""
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 import pytest
-
 from PIL import UnidentifiedImageError
 
-from dataclasses import dataclass, field
-
 from modules.oled_editor.processor import (
-    OLED_BUFFER_SIZE, OLED_HEIGHT, OLED_WIDTH,
-    composite_side_frame, composite_side_frames, composite_side_frames_per_layer,
-    convert_image, convert_image_with_delays,
-    frame_32x128_to_lvgl_128x32, frame_to_qmk_bytes, get_frame_delays,
+    OLED_BUFFER_SIZE,
+    OLED_HEIGHT,
+    OLED_WIDTH,
+    composite_side_frame,
+    composite_side_frames,
+    composite_side_frames_per_layer,
+    convert_image,
+    convert_image_with_delays,
+    frame_32x128_to_lvgl_128x32,
+    frame_to_qmk_bytes,
+    get_frame_delays,
 )
 
 

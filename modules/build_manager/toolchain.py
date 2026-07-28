@@ -17,7 +17,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from config import TOOLCHAIN_DIR
+from config import DOWNLOADED_TOOLCHAIN_DIR, TOOLCHAIN_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +42,6 @@ class ToolchainInfo:
     @property
     def is_available(self) -> bool:
         return self.gcc_path is not None
-
-
-DOWNLOADED_TOOLCHAIN_DIR = Path.home() / ".keyboard_firmware_maker" / "toolchain" / "windows"
 
 
 def detect_toolchain() -> ToolchainInfo:

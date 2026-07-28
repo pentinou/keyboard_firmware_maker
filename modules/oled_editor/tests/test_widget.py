@@ -751,6 +751,7 @@ class TestZmkImageLayerSpinbox:
     def test_layer_change_updates_selected_image(self, qtbot, model):
         """Sélectionner une image puis modifier le spinbox doit mettre à jour image.layer."""
         from PySide6.QtWidgets import QSpinBox
+
         from models.project_model import OledImageItem
         model.keyboard.oled_sides = ["left"]
         # Image avec frame runtime
@@ -780,9 +781,8 @@ class TestZmkImageLayerSpinbox:
 
     def test_canvas_selection_emits_signal(self, qtbot, model):
         """Le canvas émet selection_changed quand on simule un click sur une image."""
-        from PySide6.QtCore import QPoint
         from PySide6.QtGui import QMouseEvent
-        from PySide6.QtCore import Qt
+
         from models.project_model import OledImageItem
         model.keyboard.oled_sides = ["left"]
         white = bytes([0xFF] * (32 * 128))
@@ -811,6 +811,7 @@ class TestZmkImageLayerSpinbox:
     def test_selection_sync_updates_spinbox_value(self, qtbot, model):
         """Quand on sélectionne une image avec layer=2, le spinbox doit afficher 2."""
         from PySide6.QtWidgets import QSpinBox
+
         from models.project_model import OledImageItem
         model.keyboard.oled_sides = ["left"]
         white = bytes([0xFF] * (32 * 128))
@@ -889,7 +890,6 @@ class TestZmkCanvasOverlays:
 
         from PySide6.QtCore import QPointF
         from PySide6.QtGui import QMouseEvent
-        from PySide6.QtCore import Qt
         # Ciblage : 1 col vers la droite, 4 lignes plus bas
         px = 1 * canvas.CHAR_W + 1
         py = 4 * canvas.PAGE_H + 1

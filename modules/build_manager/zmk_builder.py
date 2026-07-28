@@ -25,6 +25,7 @@ from pathlib import Path
 import yaml
 from PySide6.QtCore import QThread, Signal
 
+from config import CACHE_DIR, ZMK_WORKSPACE_DIR
 from models.project_model import ProjectModel
 from modules.build_manager.proc_stream import (
     ProcInterruptedError,
@@ -35,8 +36,7 @@ from modules.build_manager.zmk_template_generator import ZmkTemplateGenerator
 
 logger = logging.getLogger(__name__)
 
-CACHE_DIR = Path.home() / ".keyboard_firmware_maker"
-ZMK_WORKSPACE_DIR = CACHE_DIR / "zmk-workspace"
+
 ZEPHYR_SDK_VERSION = "0.17.0"
 ZEPHYR_SDK_DIR = CACHE_DIR / f"zephyr-sdk-{ZEPHYR_SDK_VERSION}"
 

@@ -9,7 +9,13 @@ from pathlib import Path
 
 import pytest
 
-from modules.hardware.keyboard_loader import KeyboardDefinition, McuOption, get_firmware_type, load_all_keyboards, load_keyboard
+from modules.hardware.keyboard_loader import (
+    KeyboardDefinition,
+    McuOption,
+    get_firmware_type,
+    load_all_keyboards,
+    load_keyboard,
+)
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 _KEYBOARDS_DIR = Path(__file__).parents[3] / "keyboards"
@@ -66,6 +72,7 @@ class TestLoadKeyboard:
     def test_no_qt_import_in_module(self):
         """keyboard_loader doit être pur Python — aucun import Qt."""
         import inspect
+
         import modules.hardware.keyboard_loader as mod
         source = inspect.getsource(mod)
         assert "PySide6" not in source

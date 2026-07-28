@@ -6,8 +6,8 @@ import logging
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout
 
-from i18n import tr
 from _version import __version__ as APP_VERSION
+from i18n import tr
 
 logger = logging.getLogger(__name__)
 GITHUB_URL = "https://github.com/Pentinou/keyboard_firmware_maker"

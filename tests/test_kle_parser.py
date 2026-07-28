@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from modules.keyboard_editor.kle_parser import KleKey, parse_kle_json
+from modules.keyboard_editor.kle_parser import parse_kle_json
 
 
 class TestParseKleJson:

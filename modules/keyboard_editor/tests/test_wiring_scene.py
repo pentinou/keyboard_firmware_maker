@@ -4,16 +4,14 @@ Vérifie la construction de la scène de câblage QGraphicsScene.
 """
 from __future__ import annotations
 
-import sys
-
 import pytest
 
 from modules.keyboard_editor.kle_parser import KleKey
 from modules.keyboard_editor.wiring_scene import (
     WiringData,
-    build_wiring_scene,
-    _row_color,
     _col_color,
+    _row_color,
+    build_wiring_scene,
 )
 
 

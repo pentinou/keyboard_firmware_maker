@@ -5,10 +5,8 @@ Contient KeyItem (touche draggable avec snap-to-grid) et KeyboardCanvas
 """
 from __future__ import annotations
 
-from pathlib import Path
-
-from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QBrush, QColor, QFont, QPen, QPixmap
+from PySide6.QtCore import QPointF, Qt
+from PySide6.QtGui import QBrush, QColor, QFont, QPen
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -20,8 +18,6 @@ from PySide6.QtWidgets import (
     QGraphicsRectItem,
     QGraphicsScene,
     QGraphicsView,
-    QLabel,
-    QMessageBox,
     QSpinBox,
     QVBoxLayout,
     QWidget,

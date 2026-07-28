@@ -1,7 +1,5 @@
 """Tests for ProjectModel — sérialisation/désérialisation JSON."""
 from models.project_model import (
-    BuildConfig,
-    KeyboardConfig,
     OledConfig,
     OledImageItem,
     OledOverlayItem,
@@ -10,7 +8,6 @@ from models.project_model import (
     RgbConfig,
     RgbEffect,
 )
-
 
 # ─── OledOverlayItem ──────────────────────────────────────────────────────────
 

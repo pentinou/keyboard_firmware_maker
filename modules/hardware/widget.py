@@ -7,7 +7,6 @@ Deux parcours : Compatible Vial (620+ claviers indexés) ou Custom (import KLE).
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -16,7 +15,6 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -27,22 +25,17 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config import KEYBOARDS_DIR
+from config import CUSTOM_KEYBOARDS_DIR, KEYBOARDS_DIR, VIAL_QMK_DIR
 from i18n import tr
 from models.project_model import ProjectModel
 from modules.hardware.keyboard_loader import KeyboardDefinition, load_all_keyboards
 from modules.hardware.vialqmk_scanner import (
-    CATEGORY_SPLIT,
     VialKeyboardEntry,
     categorize_keyboard,
-    count_keys_from_keymap,
     load_vial_keyboard,
     scan_vial_keyboards,
 )
 from modules.keyboard_editor.dialog import KleImportWidget
-
-CUSTOM_KEYBOARDS_DIR: Path = Path.home() / ".keyboard_firmware_maker" / "custom_keyboards"
-VIAL_QMK_DIR: Path = Path.home() / ".keyboard_firmware_maker" / "vial-qmk"
 
 logger = logging.getLogger(__name__)
 

@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from config import CUSTOM_KEYBOARDS_DIR
 from i18n import tr
 from modules.hardware.keyboard_loader import (
     KeyboardDefinition,
@@ -51,7 +52,7 @@ from modules.keyboard_editor.yaml_exporter import export_keyboard
 
 logger = logging.getLogger(__name__)
 
-CUSTOM_DIR = Path.home() / ".keyboard_firmware_maker" / "custom_keyboards"
+CUSTOM_DIR = CUSTOM_KEYBOARDS_DIR
 _VALID_MODEL_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 _BOOTLOADERS = ["rp2040", "caterina", "atmel-dfu", "stm32-dfu", "tinyuf2"]
 

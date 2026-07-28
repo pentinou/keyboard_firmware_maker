@@ -20,11 +20,10 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
 
-from config import TEMPLATES_DIR
-
+from config import CUSTOM_KEYBOARDS_DIR, TEMPLATES_DIR, VIAL_QMK_DIR
 from models.project_model import CustomEffect, OledSideConfig, ProjectModel
-from modules.oled_editor.processor import frame_to_qmk_bytes
 from modules.hardware.keyboard_loader import KeyboardDefinition, McuPins, load_keyboard
+from modules.oled_editor.processor import frame_to_qmk_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +128,7 @@ class TemplateGenerator:
     def _get_rgb_default(model: ProjectModel) -> dict[str, Any]:
         """Extrait les paramètres RGB par défaut depuis le premier effet configuré."""
         from colorsys import rgb_to_hsv
+
         from modules.rgb_editor.effects import EFFECT_QMK_MODE
 
         if not model.rgb.effects:
@@ -422,8 +422,11 @@ class TemplateGenerator:
 
         # Build list of enabled QMK effect constants for config.h
         from modules.rgb_editor.effects import (
-            ALL_BUILTIN_IDS, EFFECT_QMK_MODE, QMK_ENUM_ORDER,
-            EFFECT_OLED_NAME, NEEDS_FRAMEBUFFER,
+            ALL_BUILTIN_IDS,
+            EFFECT_OLED_NAME,
+            EFFECT_QMK_MODE,
+            NEEDS_FRAMEBUFFER,
+            QMK_ENUM_ORDER,
         )
         if model.rgb.enabled_effects:
             enabled_ids = [eid for eid in model.rgb.enabled_effects if eid in EFFECT_QMK_MODE]
@@ -608,13 +611,10 @@ def _resolve_active_layout(kb_def: KeyboardDefinition, variant_slug: str) -> lis
     return kb_def.layout_variants[0].keys
 
 
-_VIAL_QMK_DIR = Path.home() / ".keyboard_firmware_maker" / "vial-qmk"
-
-
 def _load_native_layouts(
     keyboard_path: str,
     layout_macro: str,
-    vial_qmk_dir: Path = _VIAL_QMK_DIR,
+    vial_qmk_dir: Path = VIAL_QMK_DIR,
 ) -> tuple[dict | None, str]:
     """Charge la section 'layouts' du keyboard.json natif vial-qmk.
 
@@ -675,7 +675,7 @@ def _load_native_led_config(
     matrix_rows: int,
     matrix_cols: int,
     underglow_per_side: int = -1,
-    vial_qmk_dir: Path = _VIAL_QMK_DIR,
+    vial_qmk_dir: Path = VIAL_QMK_DIR,
 ) -> dict[str, Any] | None:
     """Charge la config LED native depuis info.json / keyboard.json du clavier vial-qmk.
 
@@ -785,9 +785,6 @@ def _native_layout_to_vial_keys(layout_keys: list[dict]) -> list[dict]:
     return vial_keys
 
 
-_CUSTOM_KEYBOARDS_DIR = Path.home() / ".keyboard_firmware_maker" / "custom_keyboards"
-
-
 def _load_keyboard_def(model_name: str, project_root: Path) -> KeyboardDefinition:
     """Charge la définition complète du clavier depuis le YAML.
 
@@ -796,7 +793,7 @@ def _load_keyboard_def(model_name: str, project_root: Path) -> KeyboardDefinitio
     """
     candidates = [
         project_root / "keyboards" / f"{model_name}.yaml",
-        _CUSTOM_KEYBOARDS_DIR / f"{model_name}.yaml",
+        CUSTOM_KEYBOARDS_DIR / f"{model_name}.yaml",
     ]
     for kb_file in candidates:
         if kb_file.is_file():

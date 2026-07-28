@@ -1,13 +1,12 @@
 """Tests pour ui/widgets/flash_guide_dialog.py — Story 4.4."""
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import MagicMock, patch
+from PySide6.QtWidgets import QLabel, QPushButton, QStackedWidget
 
-from PySide6.QtWidgets import QStackedWidget, QLabel, QPushButton
-
-from ui.widgets.flash_guide_dialog import FLASH_GUIDE_STEPS, FlashGuideDialog, ASSETS_DIR
-
+from ui.widgets.flash_guide_dialog import ASSETS_DIR, FLASH_GUIDE_STEPS, FlashGuideDialog
 
 # ──────────────────────────────────────────────────── FlashGuideDialog ──
 
@@ -188,8 +187,8 @@ class TestFlashGuideAssets:
 class TestBuildWidgetExport:
     @pytest.fixture
     def widget(self, qtbot):
-        from modules.build_manager.widget import BuildWidget
         from models.project_model import ProjectModel
+        from modules.build_manager.widget import BuildWidget
         m = ProjectModel()
         m.keyboard.model = "sofle-v2"
         w = BuildWidget(m)

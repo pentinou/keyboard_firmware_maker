@@ -4,7 +4,6 @@ Chargement des images depuis les assets locaux uniquement — aucun appel résea
 """
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TypedDict
 
 from PySide6.QtCore import Qt

@@ -757,7 +757,7 @@ class OledWidget(QWidget):
         )
         # Drag d'un widget ZMK natif → re-sync les QSpinBox col/line correspondants.
         canvas.widget_position_changed.connect(
-            lambda n, c, l, s=side: self._sync_zmk_widget_spinbox(s, n, c, l)
+            lambda n, c, line, s=side: self._sync_zmk_widget_spinbox(s, n, c, line)
         )
         vl.addWidget(canvas)
 

@@ -1,10 +1,7 @@
 """Tests pour modules/build_manager/zmk_builder.py — ZmkBuildWorker + helpers."""
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from models.project_model import ProjectModel
 from modules.build_manager.zmk_builder import (
@@ -150,13 +147,11 @@ class TestBuildDirNaming:
         return ZmkBuildWorker(model=model, workspace_dir=tmp_path)
 
     def test_simple_shield_uses_name(self, tmp_path):
-        worker = self._make_worker(tmp_path)
         entry = {"board": "nice_nano_v2", "shield": "sofle_v2_left"}
         build_dir_name = entry["shield"].replace(" ", "_")
         assert build_dir_name == "sofle_v2_left"
 
     def test_shield_with_spaces_underscored(self, tmp_path):
-        worker = self._make_worker(tmp_path)
         entry = {"board": "nice_nano_v2", "shield": "sofle_v2_left nice_view_adapter nice_view"}
         build_dir_name = entry["shield"].replace(" ", "_")
         assert build_dir_name == "sofle_v2_left_nice_view_adapter_nice_view"

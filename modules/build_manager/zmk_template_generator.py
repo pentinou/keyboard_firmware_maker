@@ -28,11 +28,9 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader
 
 from config import KEYBOARDS_DIR, TEMPLATES_DIR
-
 from models.project_model import OledSideConfig, ProjectModel
 from modules.hardware.keyboard_loader import KeyboardDefinition, McuPins, load_keyboard
 from modules.oled_editor.processor import (
-    composite_side_frame,
     composite_side_frames,
     composite_side_frames_per_layer,
     frame_32x128_to_lvgl_128x32,

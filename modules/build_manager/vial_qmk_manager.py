@@ -14,7 +14,6 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
-from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QThread, Signal
@@ -25,6 +24,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from config import CACHE_DIR, VIAL_QMK_DIR
 from i18n import tr
 
 logger = logging.getLogger(__name__)
@@ -33,8 +33,7 @@ logger = logging.getLogger(__name__)
 VIAL_QMK_SHA = "72fb6f1fed4de5fc4ac9ecda1952f5d126388d48"
 VIAL_QMK_REPO = "https://github.com/vial-kb/vial-qmk.git"
 
-CACHE_DIR = Path.home() / ".keyboard_firmware_maker"
-VIAL_QMK_DIR = CACHE_DIR / "vial-qmk"
+
 
 
 # ─────────────────────────────────────────────── Pure Python logic ──
