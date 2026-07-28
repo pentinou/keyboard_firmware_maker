@@ -51,6 +51,8 @@ Any keyboard layout pasted from [keyboard-layout-editor.com](http://keyboard-lay
 - Linux, Windows 10/11, or WSL2
 - `git` (required for Vial-QMK repository)
 - `make` + `arm-none-eabi-gcc` (for firmware compilation — auto-installed on Windows)
+- `libxcb-cursor0` on Linux/WSL2 (Qt X11 backend — auto-installed by `start.sh`).
+  Without it Qt falls back to Wayland, where WSLg leaves popup menus painted on screen.
 
 ## Installation
 

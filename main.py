@@ -4,7 +4,9 @@ Lance QApplication, instancie ProjectModel et MainWindow.
 """
 from __future__ import annotations
 
+import ctypes
 import logging
+import os
 import platform
 import subprocess
 import sys
@@ -51,6 +53,39 @@ class _WslUrlHandler(QObject):
             pass
 
 
+def _xcb_plugin_usable() -> bool:
+    """Vrai si le plugin Qt xcb peut se charger (libxcb-cursor requise depuis Qt 6.5)."""
+    if not os.environ.get("DISPLAY"):
+        return False
+    try:
+        ctypes.CDLL("libxcb-cursor.so.0")
+    except OSError:
+        return False
+    return True
+
+
+def _configure_qt_platform() -> None:
+    """Sous WSLg, préfère X11 (xcb) à Wayland pour l'affichage.
+
+    Le compositeur de WSLg ne repeint pas la zone d'un popup Qt après sa
+    fermeture : les listes déroulantes et les menus restent « gravés » à
+    l'écran. XWayland n'a pas ce défaut.
+
+    On ne force rien si l'utilisateur a explicitement choisi une plateforme,
+    ni si le plugin xcb n'est pas chargeable — Qt garde alors Wayland plutôt
+    que d'échouer au démarrage.
+    """
+    if not _is_wsl() or os.environ.get("QT_QPA_PLATFORM"):
+        return
+    if not _xcb_plugin_usable():
+        logging.getLogger(__name__).info(
+            "Plugin Qt xcb indisponible (libxcb-cursor0 manquant ?) — "
+            "affichage Wayland conservé ; des artefacts de popup sont possibles sous WSLg."
+        )
+        return
+    os.environ["QT_QPA_PLATFORM"] = "xcb"
+
+
 def _configure_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -63,6 +98,7 @@ def main() -> int:
     """Point d'entrée principal de l'application."""
     _configure_logging()
     logger = logging.getLogger(__name__)
+    _configure_qt_platform()
 
     app = QApplication(sys.argv)
     app.setApplicationName("keyboard_firmware_maker")

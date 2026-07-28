@@ -113,6 +113,16 @@ else
 fi
 echo -e "${GREEN}[OK]${NC} Dépendances Python"
 
+# ── libxcb-cursor0 (backend X11 de Qt) ────────────────────────────────────────
+# Requis par Qt >= 6.5 pour charger le plugin xcb. Sans lui, Qt bascule sur
+# Wayland ; sous WSLg les popups (listes déroulantes, menus) laissent alors des
+# traces à l'écran après fermeture.
+if ! ldconfig -p 2>/dev/null | grep -q "libxcb-cursor.so.0"; then
+    echo -e "${YELLOW}[INFO]${NC} libxcb-cursor0 manquant (affichage Qt/X11) — installation..."
+    _apt_update_once
+    sudo apt-get install -y libxcb-cursor0
+fi
+
 # ── git ───────────────────────────────────────────────────────────────────────
 if ! command -v git &>/dev/null; then
     echo -e "${YELLOW}[INFO]${NC} git manquant — installation..."
