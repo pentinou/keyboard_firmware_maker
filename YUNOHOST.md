@@ -26,20 +26,37 @@ que la tuile : il ne lance aucune compilation.
 ## Mon installation
 
 - **Machine qui compile** : le PC Windows (192.168.1.20), KFM dans WSL (`Ubuntu-24.04`, réseau
-  `mirrored`, systemd actif). Démarrage automatique, depuis ce dossier :
+  `mirrored`, systemd actif). Le service tourne depuis un dossier de travail git dédié, toujours
+  sur cette branche (on développe dans `~/keyboard_firmware_maker` sans le perturber) ; il
+  partage l'environnement Python de ce dernier :
 
-      sudo sh linux/installer-service-web.sh --allow 192.168.1.179,192.168.1.20
+      git worktree add ~/kfm-web yunohost
+      ln -s ~/keyboard_firmware_maker/.venv ~/kfm-web/.venv
+      cd ~/kfm-web && sudo sh linux/installer-service-web.sh --allow 192.168.1.179,192.168.1.20
 
   (192.168.1.179 : le portail YunoHost ; 192.168.1.20 : le PC lui-même, pour l'ouvrir par son
-  adresse réseau.) Le pare-feu Hyper-V de WSL doit laisser entrer le port 8767 : vérifier que la
-  règle `WSL-projets-YunoHost` le couvre, sinon l'ajouter.
-- **Portail** : YunoHost `gingerfox.run`, tuile par exemple `kfm.gingerfox.run`, installée depuis
-  ce dossier `ynh/` :
+  adresse réseau.) WSL démarre avec la tâche Windows du portier d'IA Launcher, et le service avec lui.
+- **Pare-feu Hyper-V de WSL** : il bloque l'entrée par défaut. Règle créée pour le port 8767, dans
+  un PowerShell **administrateur** :
 
-      sudo yunohost app install ./ynh -a "domain=kfm.gingerfox.run&path=/&upstream=http://192.168.1.20:8767&label=Keyboard Firmware Maker&mac=00:D8:61:76:42:BF&init_main_permission=admins"
+      New-NetFirewallHyperVRule -Name KFM-web -DisplayName "KFM interface web (YunoHost)" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8767 -Action Allow
 
+- **Portail** : YunoHost `gingerfox.run`, tuile `kfm.gingerfox.run` (DNS : joker `*.gingerfox.run`,
+  certificat Let's Encrypt), installée le 2026-11-13 depuis ce dossier `ynh/` copié sur le serveur :
+
+      sudo yunohost domain add kfm.gingerfox.run && sudo yunohost domain cert install kfm.gingerfox.run
+      sudo yunohost app install /tmp/kfm_ynh -a "domain=kfm.gingerfox.run&path=/&upstream=http://192.168.1.20:8767&label=Keyboard Firmware Maker&mac=00:D8:61:76:42:BF&init_main_permission=admins"
+
+  Mettre à jour la tuile : `rsync -a --delete -e "ssh -p 2222" ynh/ pentinou@192.168.1.179:/tmp/kfm_ynh/`
+  puis `sudo yunohost app upgrade kfm --file /tmp/kfm_ynh`.
   **Après installation ou mise à jour, revérifier les permissions de la tuile**
   (`yunohost user permission list kfm`) : seule `admins` doit y figurer.
+
+## Déployer une modification
+
+Commit + push de `yunohost`, puis `cd ~/kfm-web && git pull` (ou `git merge` depuis l'autre dossier)
+et `sudo systemctl restart kfm-web` — pas pendant une compilation (`curl -s
+http://127.0.0.1:8767/api/activity` : `"occupe": false`).
 
 ## Sécurité
 
