@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keyboard Firmware Maker</title>
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">Keyboard <b>Firmware Maker</b></div>
+  <nav class="modes">
+    <button class="mode active" data-mode="hardware" onclick="showMode('hardware')">⌨ Matériel</button>
+    <button class="mode" data-mode="oled" onclick="showMode('oled')">🖥 OLED</button>
+    <button class="mode" data-mode="rgb" onclick="showMode('rgb')">🌈 RGB</button>
+    <button class="mode" data-mode="advanced" onclick="showMode('advanced')">⚙ Options avancées</button>
+    <button class="mode" data-mode="build" onclick="showMode('build')">🔨 Build</button>
+  </nav>
+  <div class="pills">
+    <span class="pill" id="pill-fw">—</span>
+    <span class="pill" id="pill-build">aucune compilation</span>
+  </div>
+</header>
+
+<div class="layout">
+<aside class="side">
+  <h2>Projet</h2>
+  <div class="row-inline">
+    <input id="project-name" size="22" placeholder="mon-clavier" oninput="setProjectName(this.value)" title="nom du fichier .kfm.json à l'enregistrement">
+  </div>
+  <div class="row-inline">
+    <button class="btn small" onclick="newProject()" title="repartir d'un projet vide">Nouveau</button>
+    <button class="btn small" onclick="$('open-file').click()" title="ouvrir un fichier .kfm.json (aussi ceux de l'application de bureau)">Ouvrir…</button>
+    <button class="btn small primary" onclick="downloadProject()" title="télécharger le projet (.kfm.json) : il s'ouvre aussi dans l'application de bureau">Enregistrer</button>
+    <input type="file" id="open-file" accept=".json" class="hidden" onchange="openProject(this.files[0]); this.value=''">
+  </div>
+  <p class="muted small">Le projet est gardé dans ce navigateur entre deux visites. Enregistrez-le pour le garder ailleurs ou le partager.</p>
+  <h2>Clavier</h2>
+  <div id="side-kb" class="small"></div>
+  <h2>Outils de compilation <button class="link" onclick="refreshStatus()" title="re-détecter">↻</button></h2>
+  <div id="side-tools" class="small"></div>
+</aside>
+
+<main class="main">
+  <div id="mode-hardware"></div>
+  <div id="mode-oled" class="hidden"></div>
+  <div id="mode-rgb" class="hidden"></div>
+  <div id="mode-advanced" class="hidden"></div>
+  <div id="mode-build" class="hidden"></div>
+</main>
+</div>
+<div id="toast" class="toast hidden"></div>
+<script src="static/app.js"></script>
+<script src="static/rgb.js"></script>
+</body>
+</html>

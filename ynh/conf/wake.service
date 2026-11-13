@@ -1,0 +1,20 @@
+[Unit]
+Description=__LABEL__ : réveil du serveur de calcul par Wake-on-LAN
+After=network.target
+
+[Service]
+Type=simple
+User=__APP__
+Group=__APP__
+Environment=WAKE_MAC=__MAC__
+Environment=WAKE_PORT=__PORT__
+Environment=WAKE_BROADCAST=__BROADCAST__
+ExecStart=/usr/bin/python3 __INSTALL_DIR__/wake.py
+Restart=always
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

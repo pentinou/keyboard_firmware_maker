@@ -1,0 +1,73 @@
+#:schema https://raw.githubusercontent.com/YunoHost/apps/master/schemas/manifest.v2.schema.json
+
+packaging_format = 2
+
+id = "kfm"
+name = "Keyboard Firmware Maker"
+description.fr = "Tuile du portail vers l'interface web de Keyboard Firmware Maker, sur la machine qui compile (derrière le SSO, sans transmettre d'identifiants)"
+description.en = "Portal tile to the Keyboard Firmware Maker web interface, on the build machine (behind SSO, no credentials forwarded)"
+
+version = "0.1.0~ynh1"
+maintainers = ["pentinou"]
+
+[upstream]
+license = "GPL-3.0-only"
+code = "https://github.com/pentinou/keyboard_firmware_maker"
+
+[integration]
+yunohost = ">= 12.1"
+helpers_version = "2.1"
+architectures = "all"
+multi_instance = true
+ldap = "not_relevant"
+sso = "not_relevant"
+disk = "1M"
+ram.build = "10M"
+ram.runtime = "1M"
+
+[install]
+    [install.domain]
+    type = "domain"
+
+    [install.path]
+    type = "path"
+    default = "/"
+
+    [install.upstream]
+    ask.fr = "Adresse de l'interface : http://127.0.0.1:8767 si elle tourne sur ce serveur, sinon http://ADRESSE_DE_LA_MACHINE:8767"
+    ask.en = "Interface address: http://127.0.0.1:8767 on this server, else http://MACHINE_ADDRESS:8767"
+    type = "string"
+    default = "http://127.0.0.1:8767"
+    example = "http://192.168.1.50:8767"
+
+    [install.label]
+    ask.fr = "Nom de la tuile dans le portail"
+    ask.en = "Tile name in the portal"
+    type = "string"
+    default = "Keyboard Firmware Maker"
+
+    [install.mac]
+    ask.fr = "Adresse MAC de la machine, pour un bouton « Réveiller le PC » quand elle est éteinte (vide = pas de bouton)"
+    ask.en = "MAC address of the machine, for a \"Wake up\" button when it is off (empty = no button)"
+    type = "string"
+    optional = true
+    example = "AA:BB:CC:DD:EE:FF"
+
+    [install.init_main_permission]
+    type = "group"
+    default = "admins"
+
+[resources]
+    [resources.system_user]
+
+    [resources.install_dir]
+    # nginx (www-data) sert la page « PC éteint » depuis ce dossier
+    group = "www-data:r-x"
+
+    [resources.ports]
+    main.default = 8099
+
+    [resources.permissions]
+    main.url = "/"
+    # le SSO ne transmet PAS d'en-tête Authorization (identifiants) à la machine qui compile
+    main.auth_header = false

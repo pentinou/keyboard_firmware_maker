@@ -1,0 +1,8 @@
+#!/bin/bash
+
+source _common.sh
+source /usr/share/yunohost/helpers
+
+ynh_config_remove_systemd "$app-reveil"
+ynh_config_remove_nginx
+ynh_script_progression "Suppression de $app terminée"

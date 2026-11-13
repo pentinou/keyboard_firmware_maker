@@ -1,0 +1,9 @@
+#!/bin/bash
+
+source _common.sh
+source /usr/share/yunohost/helpers
+
+mac="${mac:-}"
+ynh_app_setting_set --key=mac --value="$mac"
+_kfm_setup
+ynh_script_progression "Mise à jour de $app terminée"

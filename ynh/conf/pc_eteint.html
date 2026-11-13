@@ -1,0 +1,22 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>__LABEL__ : serveur éteint</title>
+<body style="font:16px system-ui;max-width:34em;margin:4em auto;padding:0 1em">
+<h1>__LABEL__ ne répond pas</h1>
+<p>__LABEL__ tourne sur <code>__UPSTREAM__</code> : cette machine est éteinte ou en veille,
+ou l'interface web de Keyboard Firmware Maker n'y est pas lancée.</p>
+<p><button id="b" style="font:inherit;padding:.6em 1.2em" onclick="reveiller()">Réveiller le PC</button>
+<span id="m"></span></p>
+<p><a href="javascript:location.reload()">Réessayer</a> · <a href="/yunohost/sso/">Retour au portail</a></p>
+<script>
+function reveiller() {
+  document.getElementById('b').disabled = true;
+  fetch('__PATH_REVEIL__', {method: 'POST'}).then(r => {
+    if (!r.ok) throw new Error(r.status);
+    document.getElementById('m').textContent = ' Signal envoyé : la machine démarre (1 à 2 minutes), la page se recharge toute seule.';
+    setInterval(() => location.reload(), 15000);
+  }).catch(e => {
+    document.getElementById('m').textContent = ' Réveil impossible (' + e.message + ') : pas d'adresse MAC configurée pour cette tuile ?';
+    document.getElementById('b').disabled = false;
+  });
+}
+</script>
