@@ -572,3 +572,24 @@ def test_from_dict_survives_corrupted_int_values():
     assert off.dr == 1 and off.dc == 0
     step = model.rgb.custom_effects[0].tracks[0].steps[0]
     assert step.hold_ms == 0 and step.fade_ms == 200
+
+
+def test_oled_extras_round_trip_and_instances():
+    """Exemplaires supplémentaires : sérialisés, relus, les types inconnus ignorés."""
+    from models.project_model import OledExtraItem, OledSideConfig
+
+    side = OledSideConfig()
+    side.wpm.enabled = True
+    side.wpm.line = 3
+    side.extras = [OledExtraItem("wpm", 1, 9), OledExtraItem("zmk_battery", 0, 4, show_peer=True)]
+    data = side.to_dict()
+    data["extras"].append({"kind": "luna", "col": 0, "line": 0})   # animation : jamais en double
+
+    back = OledSideConfig.from_dict(data)
+
+    assert back.extras == side.extras
+    assert [(e.col, e.line) for e in back.instances("wpm")] == [(0, 3), (1, 9)]
+    assert back.instances("zmk_battery")[0].show_peer is True
+    assert back.instances("layer") == []
+    # ancien projet sans « extras »
+    assert OledSideConfig.from_dict({"wpm": {"enabled": True}}).extras == []

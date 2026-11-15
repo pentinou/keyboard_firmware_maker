@@ -120,6 +120,25 @@ class TestTemplateGeneratorGenerate:
         content = (tmp_path / "keymaps" / "default" / "keymap.c").read_text()
         assert "oled_task_user" in content
 
+    def test_keymap_c_renders_every_copy_of_an_overlay(self, generator, basic_model, tmp_path):
+        """Le WPM placé deux fois sur l'écran gauche est écrit aux deux positions."""
+        from models.project_model import OledExtraItem
+        basic_model.oled.left.wpm.enabled = True
+        basic_model.oled.left.wpm.line = 2
+        basic_model.oled.left.extras.append(OledExtraItem("wpm", col=1, line=9))
+        generator.generate(basic_model, tmp_path)
+        content = (tmp_path / "keymaps" / "default" / "keymap.c").read_text()
+        assert content.count("oled_write(get_u8_str(get_current_wpm(), ' '), false);") == 2
+        assert "oled_set_cursor(0, 2);" in content
+        assert "oled_set_cursor(1, 9);" in content
+        assert "WPM_ENABLE = yes" in (tmp_path / "rules.mk").read_text()
+
+    def test_extra_copy_alone_still_enables_oled(self, generator, basic_model, tmp_path):
+        from models.project_model import OledExtraItem
+        basic_model.oled.right.extras.append(OledExtraItem("kfm", col=0, line=5))
+        generator.generate(basic_model, tmp_path)
+        assert "OLED_ENABLE = yes" in (tmp_path / "rules.mk").read_text()
+
     def test_keymap_c_uses_is_keyboard_left(self, generator, basic_model, tmp_path):
         """keymap.c doit utiliser is_keyboard_left() pour brancher gauche/droite."""
         basic_model.oled.left.layer.enabled = True

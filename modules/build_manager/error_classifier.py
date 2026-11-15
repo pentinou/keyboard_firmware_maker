@@ -47,6 +47,20 @@ _ERROR_PATTERNS: list[tuple[re.Pattern, str, str, str]] = [
         "pour réduire la taille du firmware.",
     ),
     (
+        re.compile(r"qmk: not found|qmk: No such file|Cannot run \"qmk hello\"", re.IGNORECASE),
+        "qmk_cli_missing",
+        "La commande qmk (outil de compilation QMK) est introuvable.",
+        "Installez-la : python3 -m pip install --user qmk\n"
+        "Elle doit être dans le PATH du programme qui compile (~/.local/bin).",
+    ),
+    (
+        re.compile(r"error: '(KC|RGB|BL|QK|RM|UG)_\w*' undeclared"),
+        "keycode_unknown",
+        "Le keymap importé contient une touche inconnue de cette version de QMK.",
+        "Le journal ci-dessus donne son nom (« 'KC_…' undeclared »).\n"
+        "Remplacez-la dans Vial puis ré-importez le keymap (Options avancées).",
+    ),
+    (
         re.compile(r"No rule to make target|no targets specified", re.IGNORECASE),
         "make_target_missing",
         "Cible de compilation introuvable dans le répertoire Vial-QMK.",

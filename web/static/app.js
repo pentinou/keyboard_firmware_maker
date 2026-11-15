@@ -67,8 +67,9 @@ async function openProject(file) {
     setProjectName($('project-name').value);
     save();
     showMode(MODE);
+    await Promise.all(['left', 'right'].flatMap(sd => P.oled[sd].images).map(i => loadImage(i.image_path)));
     const missing = allImages().length;
-    toast(`Projet « ${file.name} » ouvert` + (missing ? ` — ${missing} image(s) OLED à vérifier dans l'onglet OLED` : ''));
+    toast(`Projet « ${file.name} » ouvert` + (missing ? ` — ${missing} image(s) OLED à renvoyer depuis l'onglet OLED` : ''), missing ? 8000 : 3500);
   } catch (e) {
     toast('Ouverture impossible : ' + e.message, 6000);
   }
@@ -244,27 +245,57 @@ function setKb(field, value) {
 const IMG = {};   // image_path → {preview, natural_w, natural_h, frames} | {missing:true}
 const allImages = () => ['left', 'right'].flatMap(s => P.oled[s].images).filter(i => IMG[i.image_path]?.missing);
 
-async function loadImage(path) {
-  if (IMG[path]) return;
-  IMG[path] = {loading: true};
-  try {
-    IMG[path] = await api('api/oled/image?path=' + encodeURIComponent(path));
-  } catch (e) {
-    IMG[path] = {missing: true};
-  }
-  if (MODE === 'oled') renderOled();
+// Renvoie la vérification en cours (à attendre), ou rien si l'image est déjà connue.
+function loadImage(path) {
+  if (!IMG[path]) IMG[path] = {loading: (async () => {
+    try {
+      IMG[path] = await api('api/oled/image?path=' + encodeURIComponent(path));
+    } catch (e) {
+      IMG[path] = {missing: true};
+    }
+    if (MODE === 'oled') renderOled();
+  })()};
+  return IMG[path].loading;
 }
 
-async function uploadImage(side, file) {
+async function uploadImage(side, file, col = 0, line = 0) {
   if (!file) return;
   try {
     const info = await api('api/oled/image?name=' + encodeURIComponent(file.name), {method: 'POST', body: file});
     IMG[info.image_path] = info;
-    P.oled[side].images.push({image_path: info.image_path, natural_w: info.natural_w, natural_h: info.natural_h,
-      col: 0, line: 0, inverted: false, layer: -1});
+    const img = {image_path: info.image_path, natural_w: info.natural_w, natural_h: info.natural_h,
+      col: 0, line: 0, inverted: false, layer: -1};
+    [img.col, img.line] = clampPos('img', img, col, line);
+    P.oled[side].images.push(img);
+    OSEL = `${side}|img:${P.oled[side].images.length - 1}`;
     save();
     renderOled();
     if (info.frames > 1) toast(`GIF animé : ${info.frames} images`);
+  } catch (e) {
+    toast('Image refusée : ' + e.message, 6000);
+  }
+}
+
+// Image du projet absente du serveur (projet venu de l'application de bureau) : on renvoie le
+// fichier, l'entrée garde sa position et ses réglages.
+let RESEND = null;
+const imgName = path => path.split(/[\\/]/).pop();
+
+function resendImage(side, i) {
+  RESEND = [side, i];
+  $('re-oled').click();
+}
+
+async function replaceImage(file) {
+  if (!file || !RESEND) return;
+  const img = P.oled[RESEND[0]].images[RESEND[1]];
+  try {
+    const info = await api('api/oled/image?name=' + encodeURIComponent(file.name), {method: 'POST', body: file});
+    IMG[info.image_path] = info;
+    Object.assign(img, {image_path: info.image_path, natural_w: info.natural_w, natural_h: info.natural_h});
+    [img.col, img.line] = clampPos('img', img, img.col, img.line);
+    save();
+    renderOled();
   } catch (e) {
     toast('Image refusée : ' + e.message, 6000);
   }
@@ -280,16 +311,260 @@ function setOled(path, value) {
   renderOled();
 }
 
-function setImage(side, i, field, value) {
-  if (field === 'delete') P.oled[side].images.splice(i, 1);
-  else P.oled[side].images[i][field] = value;
+const QMK_OVERLAYS = [['layer', 'Couche active'], ['caps_lock', 'Verr. Maj'], ['wpm', 'WPM (mots/min)'], ['rgb_mode', 'Mode RGB'], ['kfm', 'Logo <KFM>']];
+const QMK_ANIMS = [['luna', 'Luna (chien)'], ['ocean_dream', 'Ocean Dream'], ['bongo', 'Bongo Cat'], ['crab', 'Crabe'], ['katawajojo', 'KatawaJojo']];
+const ZMK_WIDGETS = [['zmk_battery', 'Batterie'], ['zmk_output', 'Sortie (USB/BLE)'], ['zmk_layer', 'Couche active'], ['zmk_peripheral', 'Liaison des moitiés']];
+
+// Éditeur des écrans : un seul encart, les écrans côte à côte comme deux moniteurs.
+// Un élément se glisse à la souris (aimanté à la grille du firmware : colonne = 6 px, ligne = 8 px),
+// y compris d'un écran à l'autre ; Ctrl au lâcher = copie au lieu de déplacement.
+// Clé d'un élément : 'img:<index>', 'x:<index>' (exemplaire supplémentaire d'une information,
+// dans `extras`), une clé d'information (1er exemplaire, champ dédié du modèle) ou d'animation.
+// Les animations gardent un état global dans le firmware : un seul exemplaire par écran.
+// Tailles et bornes : les mêmes que l'éditeur de l'application de bureau (oled_editor/widget.py).
+const OS = 3;                                 // zoom de l'aperçu
+const OW = 32, OH = 128;                      // écran en pixels
+let OSEL = null;                              // élément sélectionné : '<côté>|<clé>'
+const OLABEL = {layer: 'LAYER', caps_lock: 'CAPS', wpm: 'WPM', rgb_mode: 'RGB :', kfm: '<KFM>',
+  zmk_battery: 'BAT', zmk_output: 'BLE', zmk_layer: 'L0', zmk_peripheral: 'LINK',
+  luna: 'luna', ocean_dream: '~~~~', bongo: 'bongo', crab: 'crab', katawajojo: 'kata'};
+const OPAGES = {layer: 3, caps_lock: 3, rgb_mode: 4, wpm: 1, kfm: 1, zmk_battery: 2, zmk_output: 2, zmk_layer: 2, zmk_peripheral: 2};
+const OCOLS = {zmk_battery: 4, zmk_output: 4, zmk_layer: 5, zmk_peripheral: 3};
+const OANIM_H = {luna: 22, katawajojo: 22, ocean_dream: 128, bongo: 32, crab: 32};
+
+const isAnim = kind => kind in OANIM_H;
+const oledKeys = () => (firmware() === 'zmk' ? ZMK_WIDGETS : [...QMK_OVERLAYS, ...QMK_ANIMS]);
+const oledName = kind => kind === 'img' ? 'Image' : oledKeys().find(([k]) => k === kind)?.[1] || kind;
+const extrasOf = side => (P.oled[side].extras ||= []);
+// Type d'un élément ('img', une clé d'information ou d'animation)
+const oledKind = (side, key) => key.startsWith('img:') ? 'img' : key.startsWith('x:') ? extrasOf(side)[+key.slice(2)]?.kind : key;
+// Objet qui porte col/line de l'élément (null pour une animation, dont seule la ligne est gardée)
+function oledEntry(side, key) {
+  const s = P.oled[side];
+  if (key.startsWith('img:')) return s.images[+key.slice(4)];
+  if (key.startsWith('x:')) return extrasOf(side)[+key.slice(2)];
+  return isAnim(key) ? null : s[key];
+}
+
+// Taille [l, h] en pixels écran d'un élément ; img = l'entrée image pour 'img'.
+function oledSize(kind, img) {
+  if (kind === 'img') return [Math.max(1, img.natural_w), Math.max(1, img.natural_h)];
+  if (isAnim(kind)) return [OW, OANIM_H[kind]];
+  return [(OCOLS[kind] || OW / 6) * 6, (OPAGES[kind] || 1) * 8];
+}
+
+// Position aimantée et bornée (colonne, ligne) : l'élément reste dans l'écran.
+function clampPos(kind, img, col, line) {
+  const [w, h] = oledSize(kind, img);
+  const maxCol = isAnim(kind) ? 0 : kind === 'img' || kind in OCOLS ? Math.floor((OW - w) / 6) : 4;
+  const maxLine = Math.floor((OH - h) / 8);
+  return [Math.max(0, Math.min(col, maxCol)), Math.max(0, Math.min(line, maxLine))];
+}
+
+// Éléments affichés sur un écran : [{key, kind, col, line, img?}]
+function oledItems(side) {
+  const s = P.oled[side], kinds = oledKeys().map(([k]) => k);
+  const items = s.images.map((img, i) => ({key: 'img:' + i, kind: 'img', col: img.col, line: img.line, img}));
+  for (const kind of kinds) {
+    if (isAnim(kind)) { if (s[kind + '_enabled']) items.push({key: kind, kind, col: 0, line: s[kind + '_line']}); }
+    else if (s[kind].enabled) items.push({key: kind, kind, col: s[kind].col, line: s[kind].line});
+  }
+  extrasOf(side).forEach((e, i) => { if (kinds.includes(e.kind)) items.push({key: 'x:' + i, kind: e.kind, col: e.col, line: e.line}); });
+  return items;
+}
+
+function oledItemHtml(side, it) {
+  const [w, h] = oledSize(it.kind, it.img), sel = OSEL === `${side}|${it.key}`;
+  const style = `left:${it.col * 6 * OS}px;top:${it.line * 8 * OS}px;width:${w * OS}px;height:${h * OS}px`;
+  let inner;
+  if (it.img) {
+    const info = IMG[it.img.image_path] || {};
+    inner = info.preview ? `<img src="${info.preview}" draggable="false"${it.img.inverted ? ' style="filter:invert(1)"' : ''}>`
+      : `<span class="${info.missing ? 'miss' : ''}">${info.missing ? 'image à renvoyer' : '…'}</span>`;
+  } else inner = `<span>${esc(OLABEL[it.kind])}</span>`;
+  const cls = ['oitem', it.img ? 'pic' : isAnim(it.kind) ? 'anim' : 'txt', sel ? 'sel' : ''].join(' ');
+  return `<div class="${cls}" style="${style}" title="${esc(oledName(it.kind))} — glisser pour déplacer, Ctrl = copier"
+    onpointerdown="oledGrab(event, '${side}', '${it.key}')">${inner}</div>`;
+}
+
+// Retire un élément d'un écran (sans redessiner). Le 1er exemplaire d'une information qui en a
+// d'autres est remplacé par le suivant : le champ dédié du modèle reste le 1er exemplaire.
+function removeEntry(side, key) {
+  const s = P.oled[side];
+  if (key.startsWith('img:')) s.images.splice(+key.slice(4), 1);
+  else if (key.startsWith('x:')) extrasOf(side).splice(+key.slice(2), 1);
+  else if (isAnim(key)) s[key + '_enabled'] = false;
+  else {
+    const j = extrasOf(side).findIndex(e => e.kind === key);
+    if (j < 0) s[key].enabled = false;
+    else {
+      const [e] = extrasOf(side).splice(j, 1);
+      Object.assign(s[key], {col: e.col, line: e.line}, 'show_peer' in s[key] ? {show_peer: e.show_peer} : {});
+    }
+  }
+}
+
+// Déplace (ou copie) un élément vers un écran à la position donnée ; from = null : ajout depuis la palette.
+function oledPlace(from, key, to, col, line, copy) {
+  const src = from && P.oled[from], dst = P.oled[to], kind = from ? oledKind(from, key) : key;
+  if (kind === 'img') {
+    const i = +key.slice(4);
+    let img = src.images[i];
+    if (copy) img = clone(img);
+    else if (from !== to) src.images.splice(i, 1);
+    [img.col, img.line] = clampPos(kind, img, col, line);
+    if (copy || from !== to) dst.images.push(img);
+    OSEL = `${to}|img:${dst.images.indexOf(img)}`;
+  } else if (isAnim(kind)) {
+    if (dst[kind + '_enabled'] && (from !== to || copy)) {
+      toast(`« ${oledName(kind)} » est déjà sur l'écran ${to === 'left' ? 'gauche' : 'droit'} (une animation n'y est qu'une fois)`, 5000);
+      renderOled();
+      return;
+    }
+    if (src && !copy) src[kind + '_enabled'] = false;
+    dst[kind + '_enabled'] = true;
+    dst[kind + '_line'] = clampPos(kind, null, col, line)[1];
+    OSEL = `${to}|${kind}`;
+  } else {
+    [col, line] = clampPos(kind, null, col, line);
+    if (from === to && !copy) {
+      Object.assign(oledEntry(from, key), {col, line});
+      OSEL = `${to}|${key}`;
+    } else {
+      const peer = from ? !!oledEntry(from, key).show_peer : false;
+      if (from && !copy) removeEntry(from, key);
+      if (!dst[kind].enabled) {
+        Object.assign(dst[kind], {enabled: true, col, line}, kind === 'zmk_battery' ? {show_peer: peer} : {});
+        OSEL = `${to}|${kind}`;
+      } else {
+        extrasOf(to).push({kind, col, line, show_peer: peer});
+        OSEL = `${to}|x:${extrasOf(to).length - 1}`;
+      }
+    }
+  }
   save();
   renderOled();
 }
 
-const QMK_OVERLAYS = [['layer', 'Couche active'], ['caps_lock', 'Verr. Maj'], ['wpm', 'WPM (mots/min)'], ['rgb_mode', 'Mode RGB'], ['kfm', 'Logo <KFM>']];
-const QMK_ANIMS = [['luna', 'Luna (chien)'], ['ocean_dream', 'Ocean Dream'], ['bongo', 'Bongo Cat'], ['crab', 'Crabe'], ['katawajojo', 'KatawaJojo']];
-const ZMK_WIDGETS = [['zmk_battery', 'Batterie'], ['zmk_output', 'Sortie (USB/BLE)'], ['zmk_layer', 'Couche active'], ['zmk_peripheral', 'Liaison des moitiés']];
+// Remet les deux écrans à vide (valeurs d'un projet neuf) ; les réglages généraux restent.
+function oledReset() {
+  if (!confirm('Retirer tous les éléments (images, informations, animations) des deux écrans ?')) return;
+  for (const side of ['left', 'right']) P.oled[side] = clone(META.default_project.oled[side]);
+  OSEL = null;
+  save();
+  renderOled();
+}
+
+function oledRemove(side, key) {
+  removeEntry(side, key);
+  OSEL = null;
+  save();
+  renderOled();
+}
+
+function oledSetPos(side, key, field, value) {
+  const kind = oledKind(side, key), s = P.oled[side];
+  if (isAnim(kind)) s[kind + '_line'] = clampPos(kind, null, 0, field === 'line' ? value : s[kind + '_line'])[1];
+  else {
+    const cur = oledEntry(side, key), pos = {col: cur.col, line: cur.line, [field]: value};
+    [cur.col, cur.line] = clampPos(kind, kind === 'img' ? cur : null, pos.col, pos.line);
+  }
+  save();
+  renderOled();
+}
+
+// Réglage propre à un élément (image : inverted, layer ; batterie ZMK : show_peer)
+function oledSetField(side, key, field, value) {
+  oledEntry(side, key)[field] = value;
+  save();
+  renderOled();
+}
+
+// Glisser : un fantôme suit librement la souris (comme une fenêtre), un cadre montre où l'élément
+// tombera sur l'écran survolé. Sans mouvement, c'est un simple clic qui sélectionne.
+function oledGrab(ev, from, key) {
+  if (ev.button !== 0) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  const el = ev.currentTarget, r = el.getBoundingClientRect();
+  const kind = from ? oledKind(from, key) : key;
+  const img = kind === 'img' ? P.oled[from].images[+key.slice(4)] : null;
+  const [w, h] = oledSize(kind, img);
+  // depuis la palette, on « tient » l'élément par son coin haut-gauche
+  const offX = from ? ev.clientX - r.left : 4, offY = from ? ev.clientY - r.top : 4;
+  const x0 = ev.clientX, y0 = ev.clientY;
+  let ghost = null, target = null;
+  const hint = document.createElement('div');
+  hint.className = 'odrop hidden';
+
+  const move = e => {
+    if (!ghost) {
+      if (Math.hypot(e.clientX - x0, e.clientY - y0) < 4) return;
+      ghost = (from ? el.cloneNode(true) : document.createElement('div'));
+      if (!from) { ghost.className = 'oitem txt'; ghost.innerHTML = `<span>${esc(OLABEL[kind])}</span>`; }
+      ghost.classList.add('oghost');
+      ghost.style.width = w * OS + 'px';
+      ghost.style.height = h * OS + 'px';
+      document.body.appendChild(ghost);
+    }
+    ghost.style.left = e.clientX - offX + 'px';
+    ghost.style.top = e.clientY - offY + 'px';
+    ghost.classList.toggle('copy', !!from && e.ctrlKey);
+    target = null;
+    for (const scr of document.querySelectorAll('.oscreen')) {
+      const sr = scr.getBoundingClientRect();
+      if (e.clientX < sr.left || e.clientX > sr.right || e.clientY < sr.top || e.clientY > sr.bottom) continue;
+      const [col, line] = clampPos(kind, img, Math.round((e.clientX - offX - sr.left) / (6 * OS)),
+        Math.round((e.clientY - offY - sr.top) / (8 * OS)));
+      target = {side: scr.dataset.side, col, line};
+      if (hint.parentNode !== scr) scr.appendChild(hint);
+      Object.assign(hint.style, {left: col * 6 * OS + 'px', top: line * 8 * OS + 'px', width: w * OS + 'px', height: h * OS + 'px'});
+      hint.classList.remove('hidden');
+    }
+    if (!target) hint.classList.add('hidden');
+  };
+  const up = e => {
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    ghost?.remove();
+    hint.remove();
+    if (!ghost) {   // clic
+      if (from) { OSEL = `${from}|${key}`; renderOled(); }
+      return;
+    }
+    if (target) oledPlace(from, key, target.side, target.col, target.line, !!from && e.ctrlKey);
+  };
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+}
+
+// Fichier image lâché depuis l'explorateur sur un écran : envoyé et posé à l'endroit du lâcher.
+function oledFileDrop(ev, side) {
+  ev.preventDefault();
+  const file = ev.dataTransfer.files[0], r = ev.currentTarget.getBoundingClientRect();
+  uploadImage(side, file, Math.round((ev.clientX - r.left) / (6 * OS)), Math.round((ev.clientY - r.top) / (8 * OS)));
+}
+
+function oledProps() {
+  if (!OSEL) return '<p class="muted small">Cliquez un élément sur un écran pour le régler.</p>';
+  const [side, key] = OSEL.split('|'), s = P.oled[side], kind = oledKind(side, key);
+  const entry = kind && oledEntry(side, key);
+  const on = kind && (isAnim(kind) ? s[kind + '_enabled'] : entry && (entry.enabled ?? true));
+  if (!on) { OSEL = null; return oledProps(); }
+  const img = kind === 'img' ? entry : null;
+  const col = isAnim(kind) ? 0 : entry.col, line = isAnim(kind) ? s[kind + '_line'] : entry.line;
+  const info = img ? IMG[img.image_path] || {} : {};
+  const field = (f, v) => `oledSetField('${side}','${key}','${f}',${v})`;
+  return `<div class="oprops"><b>${esc(oledName(kind))}</b> <span class="muted small">· écran ${side === 'left' ? 'gauche' : 'droit'}</span>
+    ${img ? `<div class="small muted" title="${esc(img.image_path)}">${esc(imgName(img.image_path))}${info.frames > 1 ? ` · ${info.frames} images` : ''}
+      ${info.missing ? `<span class="badge err">absente du serveur</span> <button class="btn small" onclick="resendImage('${side}',${key.slice(4)})">Renvoyer le fichier…</button>` : ''}</div>` : ''}
+    <div class="row-inline">col <input type="number" min="0" max="4" value="${col}" ${isAnim(kind) ? 'disabled' : ''} onchange="oledSetPos('${side}','${key}','col',+this.value)">
+      ligne <input type="number" min="0" max="15" value="${line}" onchange="oledSetPos('${side}','${key}','line',+this.value)"></div>
+    ${img ? `<div class="row-inline"><label class="switch small"><input type="checkbox" ${img.inverted ? 'checked' : ''} onchange="${field('inverted', 'this.checked')}"> inversée</label>
+      couche <input type="number" min="-1" max="9" value="${img.layer}" title="-1 = toutes les couches" onchange="${field('layer', '+this.value')}"></div>` : ''}
+    ${kind === 'zmk_battery' ? `<label class="switch small"><input type="checkbox" ${entry.show_peer ? 'checked' : ''} onchange="${field('show_peer', 'this.checked')}"> + batterie de l'autre moitié</label>` : ''}
+    <div class="row-inline"><button class="btn small danger" onclick="oledRemove('${side}','${key}')" title="touche Suppr">Supprimer</button></div></div>`;
+}
 
 function renderOled() {
   const el = $('mode-oled');
@@ -297,83 +572,45 @@ function renderOled() {
   if (!hasOled()) { el.innerHTML = '<section class="card muted">Ce clavier n\'a pas d\'écran OLED activé (onglet Matériel).</section>'; return; }
   const fw = firmware(), o = P.oled, zmk = fw === 'zmk';
   const builtin = zmk && o.use_builtin_screen;
+  const sides = P.keyboard.oled_sides;
   let html = `<section class="card"><h1>Écrans OLED</h1>
-    <p class="lead">Écran 32×128 vertical. Position en <b>colonnes</b> (0-4, un caractère = 6 px) et <b>lignes</b> (0-15, une ligne = 8 px).
-    L'aperçu est indicatif : le texte réel dépend de la police du firmware.</p>
     ${setting('Anti-marquage', `<label class="switch"><input type="checkbox" ${o.anti_burnin ? 'checked' : ''} onchange="setOled('anti_burnin', this.checked)"> inversion + décalage d'un pixel toutes les 60 s</label>`)}
     ${setting('Mise en veille', `<label class="switch"><input type="checkbox" ${o.sleep_enabled ? 'checked' : ''} onchange="setOled('sleep_enabled', this.checked)"> éteindre écran et LEDs après</label>
       <input type="number" min="10" max="3600" value="${o.sleep_timeout_s}" onchange="setOled('sleep_timeout_s', +this.value)"> s`)}
-    ${zmk ? setting('Écran ZMK d\'origine', `<label class="switch"><input type="checkbox" ${o.use_builtin_screen ? 'checked' : ''} onchange="setOled('use_builtin_screen', this.checked)"> couche + batterie + sortie (ignore les réglages ci-dessous)</label>`) : ''}
+    ${zmk ? setting('Écran ZMK d\'origine', `<label class="switch"><input type="checkbox" ${o.use_builtin_screen ? 'checked' : ''} onchange="setOled('use_builtin_screen', this.checked)"> couche + batterie + sortie (ignore la disposition ci-dessous)</label>`) : ''}
     ${zmk ? setting('Pourcentage batterie', `<label class="switch"><input type="checkbox" ${o.show_battery_percentage ? 'checked' : ''} onchange="setOled('show_battery_percentage', this.checked)"> afficher le % en texte</label>`) : ''}
     </section>`;
   if (!builtin) {
-    for (const side of P.keyboard.oled_sides) {
-      const s = o[side];
-      for (const img of s.images) if (!IMG[img.image_path]) loadImage(img.image_path);
-      const imgs = s.images.map((img, i) => {
-        const info = IMG[img.image_path] || {};
-        return `<div class="imgrow">${info.preview ? `<img src="${info.preview}">` : `<span class="badge ${info.missing ? 'err' : ''}">${info.missing ? 'à renvoyer' : '…'}</span>`}
-          <span class="small muted" title="${esc(img.image_path)}">${esc(img.image_path.split('/').pop())}${info.frames > 1 ? ` · ${info.frames} images` : ''}</span>
-          col <input type="number" min="0" max="4" value="${img.col}" onchange="setImage('${side}',${i},'col',+this.value)">
-          ligne <input type="number" min="0" max="15" value="${img.line}" onchange="setImage('${side}',${i},'line',+this.value)">
-          <label class="switch small"><input type="checkbox" ${img.inverted ? 'checked' : ''} onchange="setImage('${side}',${i},'inverted',this.checked)"> inversée</label>
-          couche <input type="number" min="-1" max="9" value="${img.layer}" title="-1 = toutes les couches" onchange="setImage('${side}',${i},'layer',+this.value)">
-          <button class="btn small danger" onclick="setImage('${side}',${i},'delete')">✕</button></div>`;
-      }).join('');
-      const items = zmk ? ZMK_WIDGETS : QMK_OVERLAYS;
-      const ovl = items.map(([key, label]) => `<label class="switch"><input type="checkbox" ${s[key].enabled ? 'checked' : ''} onchange="setOled('${side}.${key}.enabled', this.checked)"> ${label}</label>
-        <span>col <input type="number" min="0" max="4" value="${s[key].col}" onchange="setOled('${side}.${key}.col', +this.value)"></span>
-        <span>ligne <input type="number" min="0" max="15" value="${s[key].line}" onchange="setOled('${side}.${key}.line', +this.value)"></span>
-        <span>${key === 'zmk_battery' ? `<label class="switch small"><input type="checkbox" ${s[key].show_peer ? 'checked' : ''} onchange="setOled('${side}.zmk_battery.show_peer', this.checked)"> + l'autre moitié</label>` : ''}</span>`).join('');
-      const anims = zmk ? '' : '<h3>Animations</h3><div class="ovl">' + QMK_ANIMS.map(([key, label]) => `<label class="switch"><input type="checkbox" ${s[key + '_enabled'] ? 'checked' : ''} onchange="setOled('${side}.${key}_enabled', this.checked)"> ${label}</label>
-        <span>ligne <input type="number" min="0" max="15" value="${s[key + '_line']}" onchange="setOled('${side}.${key}_line', +this.value)"></span><span></span><span></span>`).join('') + '</div>';
-      html += `<section class="card"><h1>Écran ${side === 'left' ? 'gauche' : 'droit'}</h1><div class="oledwrap">
-        <canvas class="oled" id="oled-${side}" width="32" height="128" style="width:96px;height:384px"></canvas>
-        <div><h3>Images</h3>${imgs || '<p class="muted small">aucune image</p>'}
-          <div class="row-inline"><button class="btn small" onclick="$('up-${side}').click()">+ ajouter une image</button>
-          <span class="muted small">PNG, JPG, GIF animé… convertie en noir et blanc 1 bit</span>
-          <input type="file" id="up-${side}" class="hidden" accept="image/*" onchange="uploadImage('${side}', this.files[0]); this.value=''"></div>
-          <h3>${zmk ? 'Widgets ZMK' : 'Informations'}</h3><div class="ovl">${ovl}</div>${anims}</div></div></section>`;
-    }
+    for (const side of sides) for (const img of o[side].images) if (!IMG[img.image_path]) loadImage(img.image_path);
+    const screens = sides.map(side => `<div class="ocol"><div class="small muted">${side === 'left' ? 'Gauche' : 'Droite'}</div>
+      <div class="oscreen" data-side="${side}" style="width:${OW * OS}px;height:${OH * OS}px"
+        onpointerdown="if (event.target === this) { OSEL = null; renderOled(); }"
+        ondragover="event.preventDefault()" ondrop="oledFileDrop(event, '${side}')">${oledItems(side).map(it => oledItemHtml(side, it)).join('')}</div></div>`).join('');
+    const palette = oledKeys().map(([key, label]) =>
+      `<span class="chip ochip" onpointerdown="oledGrab(event, null, '${key}')" title="glisser sur un écran pour l'ajouter">${esc(label)}</span>`).join('');
+    const lost = sides.flatMap(sd => o[sd].images.map((img, i) => ({sd, i, img}))).filter(x => IMG[x.img.image_path]?.missing);
+    const lostHtml = lost.length ? `<div class="warn-item warn">${lost.length > 1 ? 'Ces images du projet ne sont' : 'Cette image du projet n\'est'} pas sur le serveur
+      (projet créé sur un autre ordinateur ou avec l'application de bureau) : la compilation ${lost.length > 1 ? 'les ' : 'l\''}ignore.
+      Renvoyez le fichier (la position et les réglages sont gardés) ou retirez-${lost.length > 1 ? 'les' : 'la'}.
+      ${lost.map(x => `<div class="row-inline"><span class="mono small" title="${esc(x.img.image_path)}">${esc(imgName(x.img.image_path))}</span>
+        <span class="muted small">écran ${x.sd === 'left' ? 'gauche' : 'droit'}</span>
+        <button class="btn small" onclick="resendImage('${x.sd}',${x.i})">Renvoyer le fichier…</button>
+        <button class="btn small danger" onclick="oledRemove('${x.sd}','img:${x.i}')">Retirer</button></div>`).join('')}</div>` : '';
+    html += `<section class="card"><h1>Disposition</h1>
+      <p class="lead">Glissez un élément de la liste sur un écran pour l'ajouter, autant de fois que vous voulez
+      (les animations : une fois par écran). Sur les écrans : clic = sélection,
+      <b>Suppr</b> = supprimer, glisser = déplacer, y compris d'un écran à l'autre (<b>Ctrl</b> au lâcher = copier).
+      Ils s'aimantent à la grille du firmware : colonne de 6 px, ligne de 8 px. L'aperçu est indicatif : le texte réel dépend de la police du firmware.</p>${lostHtml}
+      <div class="odesk"><div class="oscreens">${screens}</div>
+        <div class="opanel"><h3>${zmk ? 'Widgets ZMK' : 'Informations et animations'}</h3><div class="chips">${palette}</div>
+          <div class="row-inline"><button class="btn small" onclick="$('up-oled').click()">+ image</button>
+            <button class="btn small danger" onclick="oledReset()" title="retirer tous les éléments des deux écrans">Vider les écrans</button>
+            <span class="muted small">ou glissez un fichier image sur un écran</span>
+            <input type="file" id="up-oled" class="hidden" accept="image/*" onchange="uploadImage('${sides[0]}', this.files[0]); this.value=''">
+            <input type="file" id="re-oled" class="hidden" accept="image/*" onchange="replaceImage(this.files[0]); this.value=''"></div>
+          <h3>Élément sélectionné</h3>${oledProps()}</div></div></section>`;
   }
   el.innerHTML = html;
-  if (!builtin) for (const side of P.keyboard.oled_sides) drawOled(side);
-}
-
-function drawOled(side) {
-  const cv = $('oled-' + side);
-  if (!cv) return;
-  const ctx = cv.getContext('2d'), s = P.oled[side], zmk = firmware() === 'zmk';
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, 32, 128);
-  for (const img of s.images) {
-    const info = IMG[img.image_path];
-    if (!info?.preview) continue;
-    const im = new Image();
-    im.onload = () => {
-      ctx.save();
-      if (img.inverted) ctx.filter = 'invert(1)';
-      ctx.drawImage(im, img.col * 6, img.line * 8);
-      ctx.restore();
-    };
-    im.src = info.preview;
-  }
-  ctx.fillStyle = '#fff';
-  ctx.font = '7px monospace';
-  ctx.textBaseline = 'top';
-  const labels = zmk
-    ? {zmk_battery: 'BAT', zmk_output: 'BLE', zmk_layer: 'L0', zmk_peripheral: 'LINK'}
-    : {layer: 'LAYER', caps_lock: 'CAPS', wpm: 'WPM', rgb_mode: 'RGB :', kfm: '<KFM>'};
-  for (const [key, text] of Object.entries(labels)) {
-    if (s[key].enabled) ctx.fillText(text, s[key].col * 6, s[key].line * 8);
-  }
-  if (!zmk) {
-    ctx.strokeStyle = '#fff';
-    for (const [key, h] of [['luna', 3], ['bongo', 4], ['crab', 4], ['katawajojo', 3]]) {
-      if (s[key + '_enabled']) { ctx.strokeRect(1.5, s[key + '_line'] * 8 + .5, 29, h * 8 - 1); ctx.fillText(key.slice(0, 4), 3, s[key + '_line'] * 8 + 2); }
-    }
-    if (s.ocean_dream_enabled) ctx.fillText('~~~~', 4, 60);
-  }
 }
 
 // ─────────────────────────────────────────────────────────── Options avancées ──
@@ -582,5 +819,11 @@ async function init() {
   showMode(kb() ? MODE : 'hardware');
   refreshStatus();
 }
+
+document.addEventListener('keydown', e => {
+  if (MODE !== 'oled' || !OSEL || e.target.closest('input, select, textarea')) return;
+  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); oledRemove(...OSEL.split('|')); }
+  else if (e.key === 'Escape') { OSEL = null; renderOled(); }
+});
 
 init();

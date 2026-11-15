@@ -356,12 +356,7 @@ def _side_has_custom_oled(side: OledSideConfig) -> bool:
     """
     if any(img.frames for img in side.images):
         return True
-    return (
-        side.zmk_battery.enabled
-        or side.zmk_output.enabled
-        or side.zmk_layer.enabled
-        or side.zmk_peripheral.enabled
-    )
+    return any(side.instances(k) for k in ("zmk_battery", "zmk_output", "zmk_layer", "zmk_peripheral"))
 
 
 # Hauteur typique d'un widget ZMK (icône) en pixels LVGL natifs après rotation.
@@ -399,21 +394,24 @@ def _build_widgets_context(side: OledSideConfig, role: str) -> list[dict]:
         central-only ou peripheral-only).
     """
     widgets: list[dict] = []
-    if side.zmk_battery.enabled:
-        x, y = _editor_to_lvgl_pos(side.zmk_battery.col, side.zmk_battery.line)
+    for w in side.instances("zmk_battery"):
+        x, y = _editor_to_lvgl_pos(w.col, w.line)
         # show_peer uniquement valide en central (peripheral n'a pas accès au peer)
-        show_peer = bool(side.zmk_battery.show_peer) and role == "central"
+        show_peer = bool(w.show_peer) and role == "central"
         widgets.append({"type": "battery", "x": x, "y": y, "show_peer": show_peer})
     if role == "central":
-        if side.zmk_output.enabled:
-            x, y = _editor_to_lvgl_pos(side.zmk_output.col, side.zmk_output.line)
-            widgets.append({"type": "output", "x": x, "y": y})
-        if side.zmk_layer.enabled:
-            x, y = _editor_to_lvgl_pos(side.zmk_layer.col, side.zmk_layer.line)
-            widgets.append({"type": "layer", "x": x, "y": y})
-    if role == "peripheral" and side.zmk_peripheral.enabled:
-        x, y = _editor_to_lvgl_pos(side.zmk_peripheral.col, side.zmk_peripheral.line)
-        widgets.append({"type": "peripheral", "x": x, "y": y})
+        for kind, wtype in (("zmk_output", "output"), ("zmk_layer", "layer")):
+            for w in side.instances(kind):
+                x, y = _editor_to_lvgl_pos(w.col, w.line)
+                widgets.append({"type": wtype, "x": x, "y": y})
+    if role == "peripheral":
+        for w in side.instances("zmk_peripheral"):
+            x, y = _editor_to_lvgl_pos(w.col, w.line)
+            widgets.append({"type": "peripheral", "x": x, "y": y})
+    # Un nom de variable C par exemplaire : les widgets ZMK gardent la liste de leurs
+    # instances et les mettent toutes à jour.
+    for i, w in enumerate(widgets):
+        w["var"] = f"{w['type']}_widget_{i}"
     return widgets
 
 

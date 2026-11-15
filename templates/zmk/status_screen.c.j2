@@ -183,19 +183,19 @@ K_TIMER_DEFINE(status_screen_anim_timer, status_screen_anim_timer_cb, NULL);
 {% for w in oled_widgets %}
 {% if w.type == "battery" %}
 #ifdef CONFIG_ZMK_WIDGET_BATTERY_STATUS
-static struct zmk_widget_battery_status battery_widget;
+static struct zmk_widget_battery_status {{ w.var }};
 #endif
 {% elif w.type == "output" %}
 #ifdef CONFIG_ZMK_WIDGET_OUTPUT_STATUS
-static struct zmk_widget_output_status output_widget;
+static struct zmk_widget_output_status {{ w.var }};
 #endif
 {% elif w.type == "layer" %}
 #ifdef CONFIG_ZMK_WIDGET_LAYER_STATUS
-static struct zmk_widget_layer_status layer_widget;
+static struct zmk_widget_layer_status {{ w.var }};
 #endif
 {% elif w.type == "peripheral" %}
 #ifdef CONFIG_ZMK_WIDGET_PERIPHERAL_STATUS
-static struct zmk_widget_peripheral_status peripheral_widget;
+static struct zmk_widget_peripheral_status {{ w.var }};
 #endif
 {% endif %}
 {% endfor %}
@@ -231,23 +231,23 @@ lv_obj_t *zmk_display_status_screen(void) {
 {% for w in oled_widgets %}
 {% if w.type == "battery" %}
 #ifdef CONFIG_ZMK_WIDGET_BATTERY_STATUS
-    zmk_widget_battery_status_init(&battery_widget, screen);
-    lv_obj_set_pos(zmk_widget_battery_status_obj(&battery_widget), {{ w.x }}, {{ w.y }});
+    zmk_widget_battery_status_init(&{{ w.var }}, screen);
+    lv_obj_set_pos(zmk_widget_battery_status_obj(&{{ w.var }}), {{ w.x }}, {{ w.y }});
 #endif
 {% elif w.type == "output" %}
 #ifdef CONFIG_ZMK_WIDGET_OUTPUT_STATUS
-    zmk_widget_output_status_init(&output_widget, screen);
-    lv_obj_set_pos(zmk_widget_output_status_obj(&output_widget), {{ w.x }}, {{ w.y }});
+    zmk_widget_output_status_init(&{{ w.var }}, screen);
+    lv_obj_set_pos(zmk_widget_output_status_obj(&{{ w.var }}), {{ w.x }}, {{ w.y }});
 #endif
 {% elif w.type == "layer" %}
 #ifdef CONFIG_ZMK_WIDGET_LAYER_STATUS
-    zmk_widget_layer_status_init(&layer_widget, screen);
-    lv_obj_set_pos(zmk_widget_layer_status_obj(&layer_widget), {{ w.x }}, {{ w.y }});
+    zmk_widget_layer_status_init(&{{ w.var }}, screen);
+    lv_obj_set_pos(zmk_widget_layer_status_obj(&{{ w.var }}), {{ w.x }}, {{ w.y }});
 #endif
 {% elif w.type == "peripheral" %}
 #ifdef CONFIG_ZMK_WIDGET_PERIPHERAL_STATUS
-    zmk_widget_peripheral_status_init(&peripheral_widget, screen);
-    lv_obj_set_pos(zmk_widget_peripheral_status_obj(&peripheral_widget), {{ w.x }}, {{ w.y }});
+    zmk_widget_peripheral_status_init(&{{ w.var }}, screen);
+    lv_obj_set_pos(zmk_widget_peripheral_status_obj(&{{ w.var }}), {{ w.x }}, {{ w.y }});
 #endif
 {% endif %}
 {% endfor %}

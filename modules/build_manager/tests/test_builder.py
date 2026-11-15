@@ -336,3 +336,21 @@ class TestBuildWidget:
                 with patch("modules.build_manager.widget.QMessageBox.warning") as mock_warn:
                     widget._on_build_clicked()
         mock_warn.assert_called_once()
+
+
+def test_make_env_finds_qmk_in_user_bin(tmp_path, monkeypatch):
+    """Service systemd ou lanceur graphique : PATH sans ~/.local/bin, où pip --user met qmk.
+    Sans lui, make échoue sur « No rule to make target »."""
+    from modules.build_manager import msys2_manager
+
+    user_bin = tmp_path / ".local" / "bin"
+    user_bin.mkdir(parents=True)
+    (user_bin / "qmk").write_text("#!/bin/sh\n")
+    (user_bin / "qmk").chmod(0o755)
+    monkeypatch.setattr(msys2_manager, "is_windows", lambda: False)
+    monkeypatch.setattr(msys2_manager.Path, "home", lambda: tmp_path)
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    _cmd, env, _prefix = msys2_manager.resolve_make_env()
+
+    assert env["PATH"].split(":")[0] == str(user_bin)

@@ -1,7 +1,8 @@
 """vial_to_qmk.py — keymap Vial → couches prêtes pour le `LAYOUT()` de QMK.
 
-Les keycodes d'un fichier Vial sont déjà du QMK : il n'y a pas de traduction,
-seulement une **remise en ordre**. Vial stocke une matrice
+Les keycodes d'un fichier Vial sont déjà du QMK : pas de traduction, sauf les
+anciens noms d'avant 2022 que Vial écrit encore (voir `qmk_legacy_keycodes`), et
+une **remise en ordre**. Vial stocke une matrice
 `layout[couche][ligne][colonne]`, alors que `keymap.c` attend les touches dans
 l'ordre du layout macro, celui de `vial_keys` côté générateur.
 
@@ -11,9 +12,11 @@ keymap fourni) devient `KC_TRNS` et alimente le rapport de conversion.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from modules.keymap_importer.common import ConversionReport
+from modules.keymap_importer.qmk_legacy_keycodes import LEGACY_KEYCODES
 
 logger = logging.getLogger(__name__)
 
@@ -64,10 +67,15 @@ def convert_vial_to_qmk_layers(
                 row.append("KC_TRNS")
             else:
                 report.converted += 1
-                row.append(kc)
+                row.append(modernize_keycode(kc))
         qmk_layers.append(row)
 
     return qmk_layers, report
+
+
+def modernize_keycode(kc: str) -> str:
+    """Remplace les anciens noms par les actuels, y compris dans `LT(1, KC_BSPACE)`."""
+    return re.sub(r"\b[A-Z][A-Z0-9_]*\b", lambda m: LEGACY_KEYCODES.get(m.group(0), m.group(0)), kc)
 
 
 def _lookup(matrix: Any, row: Any, col: Any) -> str | None:

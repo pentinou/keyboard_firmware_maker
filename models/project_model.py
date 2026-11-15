@@ -207,6 +207,40 @@ class OledImageItem:
         )
 
 
+# Informations et widgets qu'on peut placer plusieurs fois sur un même écran
+# (les animations, qui gardent un état global, restent à un exemplaire).
+OLED_REPEATABLE_KINDS = (
+    "layer", "caps_lock", "wpm", "rgb_mode", "kfm",
+    "zmk_battery", "zmk_output", "zmk_layer", "zmk_peripheral",
+)
+
+
+@dataclass
+class OledExtraItem:
+    """Exemplaire supplémentaire d'une information déjà placée sur l'écran.
+
+    Le premier exemplaire reste dans le champ dédié (`layer`, `wpm`…) : les anciens
+    projets n'ont rien à migrer. `show_peer` ne sert qu'au widget `zmk_battery`.
+    """
+
+    kind: str = "wpm"
+    col: int = 0
+    line: int = 0
+    show_peer: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"kind": self.kind, "col": self.col, "line": self.line, "show_peer": self.show_peer}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "OledExtraItem":
+        return cls(
+            kind=str(data.get("kind", "wpm")),
+            col=_as_int(data, "col", 0),
+            line=_as_int(data, "line", 0),
+            show_peer=bool(data.get("show_peer", False)),
+        )
+
+
 @dataclass
 class OledSideConfig:
     """Configuration OLED d'une moitié du clavier split.
@@ -236,6 +270,15 @@ class OledSideConfig:
     zmk_output: OledOverlayItem = field(default_factory=OledOverlayItem)
     zmk_layer: OledOverlayItem = field(default_factory=OledOverlayItem)
     zmk_peripheral: OledOverlayItem = field(default_factory=OledOverlayItem)
+    # Exemplaires supplémentaires des informations ci-dessus (voir OledExtraItem).
+    extras: list[OledExtraItem] = field(default_factory=list)
+
+    def instances(self, kind: str) -> list[OledExtraItem]:
+        """Tous les exemplaires placés d'une information : le champ dédié s'il est activé,
+        puis les exemplaires supplémentaires."""
+        first = getattr(self, kind)
+        placed = [OledExtraItem(kind, first.col, first.line, getattr(first, "show_peer", False))] if first.enabled else []
+        return placed + [e for e in self.extras if e.kind == kind]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -259,6 +302,7 @@ class OledSideConfig:
             "zmk_output": self.zmk_output.to_dict(),
             "zmk_layer": self.zmk_layer.to_dict(),
             "zmk_peripheral": self.zmk_peripheral.to_dict(),
+            "extras": [e.to_dict() for e in self.extras],
         }
 
     @classmethod
@@ -308,6 +352,10 @@ class OledSideConfig:
             zmk_output=OledOverlayItem.from_dict(data.get("zmk_output") or {}),
             zmk_layer=OledOverlayItem.from_dict(data.get("zmk_layer") or {}),
             zmk_peripheral=OledOverlayItem.from_dict(data.get("zmk_peripheral") or {}),
+            extras=[
+                OledExtraItem.from_dict(d) for d in data.get("extras") or []
+                if isinstance(d, dict) and d.get("kind") in OLED_REPEATABLE_KINDS
+            ],
         )
 
 

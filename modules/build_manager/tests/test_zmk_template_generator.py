@@ -919,11 +919,27 @@ class TestZmkOledWidgets:
         zmk_gen.generate(sofle_with_widgets_left, tmp_path)
         screen = (tmp_path / "config" / "boards" / "shields" / "sofle_v2" / "status_screen_left.c").read_text()
         # battery widget : col=0, line=0
-        assert "lv_obj_set_pos(zmk_widget_battery_status_obj(&battery_widget), 0, 20)" in screen
+        assert "lv_obj_set_pos(zmk_widget_battery_status_obj(&battery_widget_0), 0, 20)" in screen
         # output widget : col=1, line=4 → lvgl (32, max(0, 32-6-12)=14)
-        assert "lv_obj_set_pos(zmk_widget_output_status_obj(&output_widget), 32, 14)" in screen
+        assert "lv_obj_set_pos(zmk_widget_output_status_obj(&output_widget_1), 32, 14)" in screen
         # layer widget : col=2, line=8 → lvgl (64, max(0, 32-12-12)=8)
-        assert "lv_obj_set_pos(zmk_widget_layer_status_obj(&layer_widget), 64, 8)" in screen
+        assert "lv_obj_set_pos(zmk_widget_layer_status_obj(&layer_widget_2), 64, 8)" in screen
+
+    def test_same_widget_twice_on_one_screen(self, zmk_gen, tmp_path):
+        """Deux batteries sur l'écran gauche : deux instances, chacune sa variable et sa position."""
+        from models.project_model import OledExtraItem
+        m = ProjectModel()
+        m.keyboard.model = "sofle-v2"
+        m.keyboard.mcu = "nice_nano_v2"
+        m.keyboard.oled_sides = ["left"]
+        m.oled.left.zmk_battery.enabled = True
+        m.oled.left.extras.append(OledExtraItem("zmk_battery", col=0, line=8))
+        zmk_gen.generate(m, tmp_path)
+        screen = (tmp_path / "config" / "boards" / "shields" / "sofle_v2" / "status_screen_left.c").read_text()
+        assert "static struct zmk_widget_battery_status battery_widget_0;" in screen
+        assert "static struct zmk_widget_battery_status battery_widget_1;" in screen
+        assert "lv_obj_set_pos(zmk_widget_battery_status_obj(&battery_widget_0), 0, 20)" in screen
+        assert "lv_obj_set_pos(zmk_widget_battery_status_obj(&battery_widget_1), 64, 20)" in screen
 
     def test_peripheral_widget_only_on_right_half(self, zmk_gen, tmp_path):
         """Peripheral activé sur les deux côtés — il ne doit s'instancier QUE côté droit.

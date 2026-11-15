@@ -225,6 +225,14 @@ class TestVialToQmkLayers:
         assert layers[1] == ["KC_F1", "KC_TRNS", "KC_NO", "KC_C"]
         assert report.has_losses is False
 
+    def test_legacy_vial_names_become_current_qmk_names(self):
+        """Vial écrit encore KC_BSPACE, KC_LSHIFT… que QMK ne compile plus."""
+        vial = {"layout": [[["KC_BSPACE", "LT(1, KC_SCOLON)"], ["LSFT(KC_BSLASH)", "KC_A"]]]}
+
+        layers, _ = convert_vial_to_qmk_layers(vial, self.KEYS, max_layers=1)
+
+        assert layers[0] == ["KC_BACKSPACE", "LT(1, KC_SEMICOLON)", "LSFT(KC_BACKSLASH)", "KC_A"]
+
     def test_missing_position_becomes_transparent(self):
         keys = self.KEYS + [{"matrix_row": 9, "matrix_col": 9}]
 

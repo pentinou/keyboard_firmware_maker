@@ -23,6 +23,16 @@ class TestClassifyBuildError:
         assert "toolchain" in result.message.lower() or "arm" in result.message.lower()
         assert result.diagnosis  # non vide
 
+    def test_qmk_cli_missing_wins_over_no_rule(self):
+        """Sans la commande qmk, make finit sur « No rule to make target » : ce n'est pas le cache."""
+        log = ["/bin/sh: 1: qmk: not found", "make: qmk: No such file or directory",
+               "make: *** No rule to make target 'keyboard_firmware_maker:default'. Stop."]
+        assert classify_build_error(log).pattern_matched == "qmk_cli_missing"
+
+    def test_unknown_keycode_from_gcc(self):
+        log = ["keymap.c:15:171: error: 'KC_BSPACE' undeclared here (not in a function); did you mean 'KC_SPACE'?"]
+        assert classify_build_error(log).pattern_matched == "keycode_unknown"
+
     def test_toolchain_not_found_variant(self):
         log = ["make: arm-none-eabi-gcc: No such file or directory"]
         result = classify_build_error(log)

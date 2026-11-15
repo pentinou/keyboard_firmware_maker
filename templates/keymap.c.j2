@@ -9,6 +9,23 @@
 #define _RAISE 2
 
 {% if keymap_layers %}
+/* Macros Vial à paramètre retirées de QMK (cf. vial-qmk quantum/vial_ensure_keycode.h) */
+#ifndef C_S
+#define C_S(kc) C(S(kc))
+#endif
+#ifndef LCG
+#define LCG(kc) C(G(kc))
+#endif
+#ifndef RCG
+#define RCG(kc) RCTL(RGUI(kc))
+#endif
+#ifndef LCG_T
+#define LCG_T(kc) MT(MOD_LCTL | MOD_LGUI, kc)
+#endif
+#ifndef RCG_T
+#define RCG_T(kc) MT(MOD_RCTL | MOD_RGUI, kc)
+#endif
+
 /* {{ layout_macro }} : {{ vial_keys | length }} keys — imported keymap, editable in Vial */
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 {% for layer in ["_BASE", "_LOWER", "_RAISE"] %}
@@ -84,7 +101,7 @@ oled_rotation_t oled_init_user(oled_rotation_t rotation) {
 {% endif %}
 }
 
-{% if left_rgb_mode.enabled or right_rgb_mode.enabled %}
+{% if left_rgb_mode or right_rgb_mode %}
 /* RGB mode abbreviated names — 2 lines × 5 chars, generated in QMK enum order */
 static const char PROGMEM rgb_name[][11] = {
 /*  0 */ "          ",  /* None */
@@ -267,30 +284,30 @@ bool oled_task_user(void) {
 {% endif %}
 {% endfor %}
 {% endif %}
-{% if left_layer.enabled %}
-        oled_set_cursor({{ left_layer.col }}, {{ left_layer.line }});
+{% for o in left_layer %}
+        oled_set_cursor({{ o.col }}, {{ o.line }});
         oled_write_P(PSTR("LAYER"), false);
-        oled_set_cursor(0, {{ left_layer.line + 1 }});
+        oled_set_cursor(0, {{ o.line + 1 }});
         oled_write_raw_P(oled_sep, sizeof(oled_sep));
-        oled_set_cursor({{ left_layer.col }}, {{ left_layer.line + 2 }});
+        oled_set_cursor({{ o.col }}, {{ o.line + 2 }});
         oled_write(get_u8_str(get_highest_layer(layer_state), ' '), false);
-{% endif %}
-{% if left_caps_lock.enabled %}
-        oled_set_cursor({{ left_caps_lock.col }}, {{ left_caps_lock.line }});
+{% endfor %}
+{% for o in left_caps_lock %}
+        oled_set_cursor({{ o.col }}, {{ o.line }});
         oled_write_P(PSTR("Caps:"), false);
-        oled_set_cursor(0, {{ left_caps_lock.line + 1 }});
+        oled_set_cursor(0, {{ o.line + 1 }});
         oled_write_raw_P(oled_sep, sizeof(oled_sep));
         { led_t l = host_keyboard_led_state();
-            oled_set_cursor({{ left_caps_lock.col }}, {{ left_caps_lock.line + 2 }});
+            oled_set_cursor({{ o.col }}, {{ o.line + 2 }});
             oled_write_P(l.caps_lock ? PSTR("ON   ") : PSTR("OFF  "), false); }
-{% endif %}
-{% if left_wpm.enabled %}
-        oled_set_cursor({{ left_wpm.col }}, {{ left_wpm.line }});
+{% endfor %}
+{% for o in left_wpm %}
+        oled_set_cursor({{ o.col }}, {{ o.line }});
         oled_write(get_u8_str(get_current_wpm(), ' '), false);
-{% endif %}
-{% if left_rgb_mode.enabled %}
-        render_rgb_mode({{ left_rgb_mode.col }}, {{ left_rgb_mode.line }});
-{% endif %}
+{% endfor %}
+{% for o in left_rgb_mode %}
+        render_rgb_mode({{ o.col }}, {{ o.line }});
+{% endfor %}
 {% if left_katawajojo_enabled %}
         render_katawajojo({{ left_katawajojo_line }});
 {% endif %}
@@ -307,11 +324,11 @@ bool oled_task_user(void) {
 {% if left_crab_enabled %}
         oled_render_anim();
 {% endif %}
-{% if left_kfm.enabled %}
+{% for o in left_kfm %}
         /* KFM rendered last so it overlays on animations */
-        oled_set_cursor({{ left_kfm.col }}, {{ left_kfm.line }});
+        oled_set_cursor({{ o.col }}, {{ o.line }});
         oled_write_P(PSTR("<KFM>"), false);
-{% endif %}
+{% endfor %}
     } else {
         /* ── RIGHT OLED ─────────────────────────────── */
 {% if right_images %}
@@ -337,30 +354,30 @@ bool oled_task_user(void) {
 {% endif %}
 {% endfor %}
 {% endif %}
-{% if right_layer.enabled %}
-        oled_set_cursor({{ right_layer.col }}, {{ right_layer.line }});
+{% for o in right_layer %}
+        oled_set_cursor({{ o.col }}, {{ o.line }});
         oled_write_P(PSTR("LAYER"), false);
-        oled_set_cursor(0, {{ right_layer.line + 1 }});
+        oled_set_cursor(0, {{ o.line + 1 }});
         oled_write_raw_P(oled_sep, sizeof(oled_sep));
-        oled_set_cursor({{ right_layer.col }}, {{ right_layer.line + 2 }});
+        oled_set_cursor({{ o.col }}, {{ o.line + 2 }});
         oled_write(get_u8_str(get_highest_layer(layer_state), ' '), false);
-{% endif %}
-{% if right_caps_lock.enabled %}
-        oled_set_cursor({{ right_caps_lock.col }}, {{ right_caps_lock.line }});
+{% endfor %}
+{% for o in right_caps_lock %}
+        oled_set_cursor({{ o.col }}, {{ o.line }});
         oled_write_P(PSTR("Caps:"), false);
-        oled_set_cursor(0, {{ right_caps_lock.line + 1 }});
+        oled_set_cursor(0, {{ o.line + 1 }});
         oled_write_raw_P(oled_sep, sizeof(oled_sep));
         { led_t l = host_keyboard_led_state();
-            oled_set_cursor({{ right_caps_lock.col }}, {{ right_caps_lock.line + 2 }});
+            oled_set_cursor({{ o.col }}, {{ o.line + 2 }});
             oled_write_P(l.caps_lock ? PSTR("ON   ") : PSTR("OFF  "), false); }
-{% endif %}
-{% if right_wpm.enabled %}
-        oled_set_cursor({{ right_wpm.col }}, {{ right_wpm.line }});
+{% endfor %}
+{% for o in right_wpm %}
+        oled_set_cursor({{ o.col }}, {{ o.line }});
         oled_write(get_u8_str(get_current_wpm(), ' '), false);
-{% endif %}
-{% if right_rgb_mode.enabled %}
-        render_rgb_mode({{ right_rgb_mode.col }}, {{ right_rgb_mode.line }});
-{% endif %}
+{% endfor %}
+{% for o in right_rgb_mode %}
+        render_rgb_mode({{ o.col }}, {{ o.line }});
+{% endfor %}
 {% if right_katawajojo_enabled %}
         render_katawajojo({{ right_katawajojo_line }});
 {% endif %}
@@ -377,11 +394,11 @@ bool oled_task_user(void) {
 {% if right_crab_enabled %}
         oled_render_anim();
 {% endif %}
-{% if right_kfm.enabled %}
+{% for o in right_kfm %}
         /* KFM rendered last so it overlays on animations */
-        oled_set_cursor({{ right_kfm.col }}, {{ right_kfm.line }});
+        oled_set_cursor({{ o.col }}, {{ o.line }});
         oled_write_P(PSTR("<KFM>"), false);
-{% endif %}
+{% endfor %}
     }
 {% if anti_burnin %}
     _burnin_apply();

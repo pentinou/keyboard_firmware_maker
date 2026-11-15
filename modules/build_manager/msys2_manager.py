@@ -237,6 +237,11 @@ def resolve_make_env(
         # Linux : make direct, ajout gcc au PATH si besoin
         if gcc_path:
             env["PATH"] = str(gcc_path.parent) + os.pathsep + env.get("PATH", "")
+        # Le Makefile QMK appelle la commande `qmk`, installée par `pip install --user`
+        # dans ~/.local/bin : absent du PATH d'un service systemd ou d'un lanceur graphique.
+        user_bin = Path.home() / ".local" / "bin"
+        if not shutil.which("qmk", path=env.get("PATH")) and (user_bin / "qmk").is_file():
+            env["PATH"] = str(user_bin) + os.pathsep + env.get("PATH", "")
         return ["make"], env, ""
 
     # Windows : TOUJOURS passer par MSYS2 bash (QMK Makefile requiert un shell Unix)

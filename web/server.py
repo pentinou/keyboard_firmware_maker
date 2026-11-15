@@ -155,9 +155,10 @@ def image_info(image_path: str) -> dict:
     if jobs.UPLOADS_DIR.resolve() not in path.parents or not path.is_file():
         raise FileNotFoundError("image absente du serveur : renvoyez-la depuis l'onglet OLED")
     frames, _delays, natural_w, natural_h = convert_image_natural(path)
-    # La frame est un canevas 32×128 où l'image est centrée : on ne garde que sa zone utile.
+    # La frame est un canevas 32×128 où l'image est centrée en largeur et collée en haut
+    # (processor._convert_frame) : on ne garde que sa zone utile.
     canvas = Image.frombytes("L", (OLED_WIDTH, OLED_HEIGHT), frames[0])
-    left, top = (OLED_WIDTH - natural_w) // 2, (OLED_HEIGHT - natural_h) // 2
+    left, top = (OLED_WIDTH - natural_w) // 2, 0
     buf = io.BytesIO()
     canvas.crop((left, top, left + natural_w, top + natural_h)).save(buf, "PNG")
     return {

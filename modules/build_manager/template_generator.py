@@ -180,7 +180,7 @@ class TemplateGenerator:
         right_crab = right.crab_enabled
 
         wpm_needed = (
-            left.wpm.enabled or right.wpm.enabled
+            left.instances("wpm") or right.instances("wpm")
             or left_katawajojo or right_katawajojo
             or left_luna or right_luna
             or left_ocean_dream or right_ocean_dream
@@ -191,11 +191,7 @@ class TemplateGenerator:
         def _side_has_content(side: OledSideConfig) -> bool:
             return bool(
                 any(img.frames for img in side.images)
-                or side.layer.enabled
-                or side.caps_lock.enabled
-                or side.wpm.enabled
-                or side.rgb_mode.enabled
-                or side.kfm.enabled
+                or any(side.instances(k) for k in ("layer", "caps_lock", "wpm", "rgb_mode", "kfm"))
                 or side.katawajojo_enabled
                 or side.luna_enabled
                 or side.ocean_dream_enabled
@@ -521,11 +517,11 @@ class TemplateGenerator:
             "ocean_dream_enabled": ocean_dream_enabled,
             # Left side
             "left_images": _build_images(left),
-            "left_layer": {"enabled": left.layer.enabled, "col": left.layer.col, "line": left.layer.line},
-            "left_caps_lock": {"enabled": left.caps_lock.enabled, "col": left.caps_lock.col, "line": left.caps_lock.line},
-            "left_wpm": {"enabled": left.wpm.enabled, "col": left.wpm.col, "line": left.wpm.line},
-            "left_rgb_mode": {"enabled": left.rgb_mode.enabled and rgb_enabled, "col": left.rgb_mode.col, "line": left.rgb_mode.line},
-            "left_kfm": {"enabled": left.kfm.enabled, "col": left.kfm.col, "line": left.kfm.line},
+            "left_layer": _positions(left, "layer"),
+            "left_caps_lock": _positions(left, "caps_lock"),
+            "left_wpm": _positions(left, "wpm"),
+            "left_rgb_mode": _positions(left, "rgb_mode") if rgb_enabled else [],
+            "left_kfm": _positions(left, "kfm"),
             "left_katawajojo_enabled": left_katawajojo,
             "left_katawajojo_line": left.katawajojo_line,
             "left_luna_enabled": left_luna,
@@ -538,11 +534,11 @@ class TemplateGenerator:
             "left_crab_line": left.crab_line,
             # Right side
             "right_images": _build_images(right),
-            "right_layer": {"enabled": right.layer.enabled, "col": right.layer.col, "line": right.layer.line},
-            "right_caps_lock": {"enabled": right.caps_lock.enabled, "col": right.caps_lock.col, "line": right.caps_lock.line},
-            "right_wpm": {"enabled": right.wpm.enabled, "col": right.wpm.col, "line": right.wpm.line},
-            "right_rgb_mode": {"enabled": right.rgb_mode.enabled and rgb_enabled, "col": right.rgb_mode.col, "line": right.rgb_mode.line},
-            "right_kfm": {"enabled": right.kfm.enabled, "col": right.kfm.col, "line": right.kfm.line},
+            "right_layer": _positions(right, "layer"),
+            "right_caps_lock": _positions(right, "caps_lock"),
+            "right_wpm": _positions(right, "wpm"),
+            "right_rgb_mode": _positions(right, "rgb_mode") if rgb_enabled else [],
+            "right_kfm": _positions(right, "kfm"),
             "right_katawajojo_enabled": right_katawajojo,
             "right_katawajojo_line": right.katawajojo_line,
             "right_luna_enabled": right_luna,
@@ -641,6 +637,11 @@ def _build_qmk_keymap_layers(model: ProjectModel, vial_keys: list[dict]) -> list
 def _fit_layer(layer: list[str], size: int) -> list[str]:
     """Ajuste une couche à la taille du layout cible (troncature ou KC_TRNS)."""
     return (layer + ["KC_TRNS"] * size)[:size]
+
+
+def _positions(side: OledSideConfig, kind: str) -> list[dict[str, int]]:
+    """Positions (col, line) de chaque exemplaire d'une information sur un écran."""
+    return [{"col": e.col, "line": e.line} for e in side.instances(kind)]
 
 
 def _resolve_active_layout(kb_def: KeyboardDefinition, variant_slug: str) -> list:

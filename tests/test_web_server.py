@@ -69,6 +69,23 @@ def test_save_image_then_preview(tmp_path, monkeypatch):
         server.save_image("script.sh", b"#!/bin/sh")
 
 
+def test_preview_crops_where_the_image_really_is(tmp_path, monkeypatch):
+    """Le convertisseur colle l'image en haut du canevas 32×128 : l'aperçu doit la découper là
+    (il la cherchait au centre vertical, d'où un aperçu noir pour une image blanche)."""
+    import base64
+    import io
+
+    monkeypatch.setattr(jobs, "UPLOADS_DIR", tmp_path / "uploads")
+    src = tmp_path / "blanc.png"
+    Image.new("L", (24, 24), 255).save(src)
+
+    info = server.save_image("blanc.png", src.read_bytes())
+
+    preview = Image.open(io.BytesIO(base64.b64decode(info["preview"].split(",", 1)[1])))
+    assert preview.size == (24, 24)
+    assert preview.getextrema() == (255, 255)
+
+
 def test_load_image_frames_ignores_paths_outside_uploads(tmp_path, monkeypatch):
     """Un projet ne doit pas faire lire au serveur un fichier arbitraire."""
     monkeypatch.setattr(jobs, "UPLOADS_DIR", tmp_path / "uploads")
